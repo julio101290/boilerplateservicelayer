@@ -1,0 +1,50 @@
+{
+    "name": "julio101290/boilerplateservicelayer",
+    "description": "A CodeIgniter 4 boilerplate repository for building a service layer to integrate with SAP Business One. It includes pre-built CRUD functionality for products and companies, with features for inventory management, invoice generation (with SAT fields), and user authorization.",
+    "keywords": [
+        "codeigniter4",
+        "service-layer",
+        "sap-business-one",
+        "CRUD",
+        "products",
+        "companies",
+        "invoice",
+        "inventory",
+        "authorization",
+        "boilerplate"
+    ],
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "julio101920",
+            "email": "juliocesar101290@hotmail.com"
+        }
+    ],
+    "require": {
+        "php": "^7.3 || ^8.0",
+        "codeigniter4/framework": "^4.1",
+        "codeigniter4/translations": "^4.0",
+        "julio101290/auth": "^1.0",
+        "julio101290/boilerplate": "^1.0",
+        "julio101290/boilerplatelog": "^1.0.0",
+        "julio101290/boilerplatecompanies": "^1.0.0",
+        "tecnickcom/tcpdf": "^6.7"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^9.1",
+        "fakerphp/faker": "^1.13"
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "autoload": {
+        "psr-4": {
+            "julio101290\\boilerplateservicelayer\\": "src"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    }
+}
