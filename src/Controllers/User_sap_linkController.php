@@ -303,7 +303,7 @@ class User_sap_linkController extends BaseController {
         $response['token'] = csrf_hash();
         $idEmpresa = $postData['idEmpresa'];
 
-        $listUsers = $this->user_sap_link->mdlGetUsers($postData['searchTerm'])->getResultArray();
+        $listUsers = $this->user_sap_link->mdlGetUsers($postData['searchTerm'],$idEmpresa)->getResultArray();
 
         $data = array();
         $data[] = array(

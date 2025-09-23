@@ -28,11 +28,11 @@ class User_sap_linkModel extends Model {
                         ->whereIn('a.idEmpresa', $idEmpresas);
     }
 
-    public function mdlGetUsers($search) {
+    public function mdlGetUsers($search,$idEmpresa) {
 
         return $this->db->table('users a, usuariosempresa b')
                         ->select('a.id,a.username,a.firstname,a.lastname')
-                        ->where('b.idEmpresa', 1)
+                        ->where('b.idEmpresa', $idEmpresa)
                         ->where('b.idUsuario', 'a.id', FALSE)
                         ->groupStart()
                         ->like('a.id', '', $search)
