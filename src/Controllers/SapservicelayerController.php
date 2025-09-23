@@ -181,7 +181,7 @@ class SapservicelayerController extends BaseController {
         }
         $titulos["title"] = lang('sapservicelayer.title');
         $titulos["subtitle"] = lang('sapservicelayer.subtitle');
-        return view('sapservicelayer', $titulos);
+        return view('julio101290\boilerplateservicelayer\Views\sapservicelayer', $titulos);
     }
 
     /**
@@ -268,5 +268,76 @@ class SapservicelayerController extends BaseController {
         $logData["user"] = $userName;
         $this->log->save($logData);
         return $this->respondDeleted($found, lang('sapservicelayer.msg_delete'));
+    }
+
+    public function login($url, $port, $pass, $user, $database) {
+
+
+        $curl = curl_init();
+
+        curl_setopt_array($curl, [
+            CURLOPT_PORT => "$port",
+            CURLOPT_URL => "$url",
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_ENCODING => "",
+            CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_MAXREDIRS => 10,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+            CURLOPT_CUSTOMREQUEST => "POST",
+            CURLOPT_POSTFIELDS => "{\n    \"CompanyDB\": \"$database\",\n    \"Password\": \"$pass\",\n    \"UserName\": \"$user\"\n}\n",
+            CURLOPT_HTTPHEADER => [
+                "Accept: */*",
+                "Content-Type: application/json",
+                "User-Agent: Gisa Web Client (https://www.thunderclient.com)"
+            ],
+        ]);
+
+        $response = curl_exec($curl);
+        $err = curl_error($curl);
+
+        curl_close($curl);
+
+        if ($err) {
+            return "cURL Error #:" . $err;
+        } else {
+
+            return json_decode($response);
+        }
+    }
+
+    static public function logout($cookie, $url, $port, $pass, $user, $database) {
+
+        $curl = curl_init();
+
+        curl_setopt_array($curl, [
+            CURLOPT_PORT => $port,
+            CURLOPT_URL => $url,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_ENCODING => "",
+            CURLOPT_MAXREDIRS => 10,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_COOKIE => $cookie,
+            CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+            CURLOPT_CUSTOMREQUEST => "POST",
+            CURLOPT_HTTPHEADER => [
+                "Accept: */*",
+                "User-Agent: Gisa Web Client (https://www.thunderclient.com)"
+            ],
+        ]);
+
+        $response = curl_exec($curl);
+        $err = curl_error($curl);
+
+        curl_close($curl);
+
+        if ($err) {
+            return "cURL Error #:" . $err;
+        } else {
+            return $response;
+        }
     }
 }
