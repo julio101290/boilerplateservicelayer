@@ -274,10 +274,10 @@ class SapservicelayerController extends BaseController {
 
 
         $curl = curl_init();
-
+        $baseURL = $url."Login";
         curl_setopt_array($curl, [
             CURLOPT_PORT => "$port",
-            CURLOPT_URL => "$url",
+            CURLOPT_URL => $baseURL,
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_ENCODING => "",
             CURLOPT_SSL_VERIFYHOST => false,

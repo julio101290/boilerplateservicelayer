@@ -109,7 +109,7 @@ class User_sap_linkController extends BaseController {
         $companie = $this->empresa->where("id", $dato["idEmpresa"])->first();
 
         $dato["username"] = $userName . " " . $firstname . " " . $lastname;
-        $dato["nameCompanie"] =$companie["nombre"];
+        $dato["nameCompanie"] = $companie["nombre"];
 
         return $this->response->setJSON($dato);
     }
@@ -244,6 +244,89 @@ class User_sap_linkController extends BaseController {
         return json_decode($response, true);
     }
 
+    /**
+     * Show users for use in select2
+     * @param type $cookie
+     * @param type $search
+     * @param type $port
+     * @return array
+     */
+    public function showUsers($cookie, $search, $port) {
+        $curl = curl_init();
+
+        $baseUrl = "https://192.168.0.190:50000/b1s/v1/Users";
+        $selectParam = '$select=InternalKey,UserCode,UserName&$top=15';
+
+        // normalizar y escapar
+        $search = trim((string) $search);
+        $parts = [];
+
+        // si es solo dígitos, comparar InternalKey (USERID)
+        if ($search !== '' && ctype_digit($search)) {
+            $parts[] = "InternalKey eq {$search}";
+        }
+
+        // escapar comillas simples para OData
+        $escaped = str_replace("'", "''", $search);
+
+        if ($escaped !== '') {
+            // usar contains en UserCode y UserName
+            $parts[] = "contains(UserCode,'{$escaped}')";
+            $parts[] = "contains(UserName,'{$escaped}')";
+        }
+
+        $filterValue = '';
+        if (!empty($parts)) {
+            $filterValue = implode(' or ', $parts);
+        }
+
+        // montar URL (encode del filtro)
+        if ($filterValue !== '') {
+            $url = $baseUrl . '?' . $selectParam . '&$filter=' . rawurlencode($filterValue);
+        } else {
+            $url = $baseUrl . '?' . $selectParam;
+        }
+
+        curl_setopt_array($curl, [
+            CURLOPT_PORT => $port,
+            CURLOPT_URL => $url,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_ENCODING => "",
+            CURLOPT_COOKIE => $cookie,
+            CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_MAXREDIRS => 10,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+            CURLOPT_CUSTOMREQUEST => "GET",
+            CURLOPT_HTTPHEADER => [
+                "Accept: application/json",
+                "User-Agent: PHP cURL",
+                // Para búsqueda case-insensitive
+                "B1S-CaseInsensitive: true"
+            ],
+        ]);
+
+        $response = curl_exec($curl);
+        $err = curl_error($curl);
+        $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+
+        curl_close($curl);
+
+        if ($err) {
+            return "cURL Error #: " . $err;
+        }
+
+        if ($httpCode < 200 || $httpCode >= 300) {
+            return [
+                'httpCode' => $httpCode,
+                'body' => $response
+            ];
+        }
+
+        return json_decode($response, true);
+    }
+
     public function usersSAPSelect2() {
 
         $request = service('request');
@@ -259,7 +342,7 @@ class User_sap_linkController extends BaseController {
 
         $cookie = "B1SESSION=" . $conexionSAP->SessionId . ";  ROUTEID=.node1";
 
-        $usuariosSAP = $this->showEmployes($cookie, $postData["searchTerm"], $conectionData["port"]);
+        $usuariosSAP = $this->showUsers($cookie, $postData["searchTerm"], $conectionData["port"]);
 
         $usuariosSAPLista = $usuariosSAP["value"];
 
@@ -276,8 +359,8 @@ class User_sap_linkController extends BaseController {
 
 
             $jsonVariable .= ' {
-                    "id": "' . $valueUsuarios1["EmployeeID"] . '",
-                    "text": "' . utf8_encode($valueUsuarios1["EmployeeID"] . " - " . $valueUsuarios1["FirstName"] . " " . $valueUsuarios1["LastName"]) . '"
+                    "id": "' . $valueUsuarios1["InternalKey"] . '",
+                    "text": "' . utf8_encode($valueUsuarios1["InternalKey"] . " - " . $valueUsuarios1["UserCode"] . " " . $valueUsuarios1["UserName"]) . '"
                   },';
         }
 
@@ -303,7 +386,7 @@ class User_sap_linkController extends BaseController {
         $response['token'] = csrf_hash();
         $idEmpresa = $postData['idEmpresa'];
 
-        $listUsers = $this->user_sap_link->mdlGetUsers($postData['searchTerm'],$idEmpresa)->getResultArray();
+        $listUsers = $this->user_sap_link->mdlGetUsers($postData['searchTerm'], $idEmpresa)->getResultArray();
 
         $data = array();
         $data[] = array(

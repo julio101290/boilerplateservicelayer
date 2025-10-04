@@ -2,10 +2,6 @@
 
 $routes->group('admin', function ($routes) {
 
-
-
-
-
     $routes->resource('sapservicelayer', [
         'filter' => 'permission:servicelayer-permission',
         'controller' => 'SapservicelayerController',
@@ -47,5 +43,32 @@ $routes->group('admin', function ($routes) {
     $routes->post('user_sap_link/getUser_sap_link'
             , 'User_sap_linkController::getUser_sap_link'
             , ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
-            );
+    );
+
+    $routes->resource('servicelayer/getauthreq', [
+        'filter' => 'permission:reqauth-permission',
+        'controller' => 'RequisitionAuthController',
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+    ]);
+
+    $routes->post('servicelayer/authorizeReq'
+            , 'RequisitionAuthController::authorizeReq'
+            , ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    $routes->post('servicelayer/authorizeReq',
+            'ServiceLayerController::authorizeReq',
+            [
+                'filter' => 'permission:authorize-permission',
+                'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+            ]
+    );
+
+    $routes->post('servicelayer/showlistProductsReq',
+            'RequisitionAuthController::showReqItems',
+            [
+              
+                'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+            ]
+    );
 });

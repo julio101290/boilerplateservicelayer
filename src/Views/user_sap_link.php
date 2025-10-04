@@ -59,14 +59,7 @@
                 searchable: false,
                 targets: [7]
             }],
-        columns: [{'data': 'id'},
-            {'data': 'nombreEmpresa'},
-            {'data': 'username'},
-            {'data': 'nameusersap'},
-            {'data': 'created_at'},
-            {'data': 'updated_at'},
-            {'data': 'deleted_at'},
-
+        columns: [
             {
                 "data": function (data) {
                     return `<td class="text-right py-0 align-middle">
@@ -76,7 +69,16 @@
                          </div>
                          </td>`
                 }
-            }
+            },
+            {'data': 'DocNum'},
+            {'data': 'nombreEmpresa'},
+            {'data': 'username'},
+            {'data': 'nameusersap'},
+            {'data': 'created_at'},
+            {'data': 'updated_at'},
+            {'data': 'deleted_at'},
+
+
         ]
     });
 
