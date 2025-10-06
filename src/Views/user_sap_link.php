@@ -21,7 +21,7 @@
                     <table id="tableUser_sap_link" class="table table-striped table-hover va-middle tableUser_sap_link">
                         <thead>
                             <tr>
-                                <th>#</th>
+                                <th><?= lang('user_sap_link.fields.actions') ?></th>
                                 <th><?= lang('user_sap_link.fields.idEmpresa') ?></th>
                                 <th><?= lang('user_sap_link.fields.iduser') ?></th>
                                 <th><?= lang('user_sap_link.fields.sapuser') ?></th>
@@ -29,7 +29,7 @@
                                 <th><?= lang('user_sap_link.fields.updated_at') ?></th>
                                 <th><?= lang('user_sap_link.fields.deleted_at') ?></th>
 
-                                <th><?= lang('user_sap_link.fields.actions') ?></th>
+                              
                             </tr>
                         </thead>
                         <tbody></tbody>
@@ -55,9 +55,9 @@
         },
         columnDefs: [{
                 orderable: false,
-                targets: [7],
+                targets: [0],
                 searchable: false,
-                targets: [7]
+                targets: [0]
             }],
         columns: [
             {
@@ -70,7 +70,6 @@
                          </td>`
                 }
             },
-            {'data': 'DocNum'},
             {'data': 'nombreEmpresa'},
             {'data': 'username'},
             {'data': 'nameusersap'},
