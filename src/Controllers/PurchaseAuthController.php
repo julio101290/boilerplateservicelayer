@@ -674,6 +674,7 @@ class PurchaseAuthController extends BaseController {
 
         // usuario autenticado (ajusta si tu helper devuelve otra cosa)
         $idUser = user() ? user()->id : null;
+        $userName =user()->username;
 
         // --- 1) leer input (JSON o form)
         $inputJson = $request->getJSON(true); // array asociativo
@@ -865,6 +866,18 @@ class PurchaseAuthController extends BaseController {
 
         $decodedRow = json_decode($resp2, true);
         $updatedRow = $decodedRow['value'][0] ?? $decodedRow;
+
+        $datosBitacora["description"] = "Se autorizo la Rquisicion con los siguientes datos" . json_encode([
+                    'success' => true,
+                    'message' => "Requisición {$docNumFromSL} (DocEntry {$docEntry}) autorizada",
+                    'docEntry' => $docEntry,
+                    'docNum' => $docNumFromSL,
+                    'updatedRow' => $updatedRow
+        ]);
+
+        $datosBitacora["user"] = $userName;
+
+        $this->log->save($datosBitacora);
 
         return $this->response->setJSON([
                     'success' => true,
