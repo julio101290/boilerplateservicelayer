@@ -238,7 +238,7 @@ class PurchaseAuthController extends BaseController {
             return ['err' => $err, 'httpCode' => $httpCode, 'body' => $response];
         };
 
-        // helper curl con timeout mayor (para consultas potencialmente más largas)
+        // helper curl con timeout mayor
         $doCurlTimeout = function ($url) use ($port, $cookie) {
             $curl = curl_init();
             curl_setopt_array($curl, [
@@ -250,7 +250,7 @@ class PurchaseAuthController extends BaseController {
                 CURLOPT_SSL_VERIFYHOST => false,
                 CURLOPT_SSL_VERIFYPEER => false,
                 CURLOPT_MAXREDIRS => 10,
-                CURLOPT_TIMEOUT => 60, // 60s
+                CURLOPT_TIMEOUT => 60,
                 CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
                 CURLOPT_CUSTOMREQUEST => "GET",
                 CURLOPT_HTTPHEADER => [
@@ -289,7 +289,7 @@ class PurchaseAuthController extends BaseController {
         // 3) recordsTotal y recordsFiltered (usando $count)
         $recordsTotal = 0;
         $recordsFiltered = 0;
-        $countTotalUrl = rtrim($baseUrlRoot, '/') . "/PurchaseRequests/\$count";
+        $countTotalUrl = rtrim($baseUrlRoot, '/') . "/PurchaseOrders/\$count";
         if ($baseFilter !== '')
             $countTotalUrl .= "?%24filter=" . rawurlencode($baseFilter);
         $resCountTotal = $doCurl($countTotalUrl);
@@ -325,7 +325,6 @@ class PurchaseAuthController extends BaseController {
             if (is_array($sample))
                 $availableKeys = array_keys($sample);
         } else {
-            // fallback a campos seguros si probe falla o no hay filas
             $availableKeys = ['DocEntry', 'DocNum', 'DocDate', 'UserSign', 'U_Autorizador', 'U_WhsCode', 'U_Almacen', 'U_Creator'];
         }
 
@@ -355,7 +354,7 @@ class PurchaseAuthController extends BaseController {
                 break;
             }
 
-        // 6) construir select con campos válidos (aquí agrego CardName, DocTotal y TaxTotal SI existen)
+        // 6) construir select con campos válidos (agregamos CardName, DocTotal, TaxTotal si existen)
         $safeBase = ['DocEntry', 'DocNum', 'DocDate'];
         $selectFields = [];
         foreach ($safeBase as $s)
@@ -368,14 +367,16 @@ class PurchaseAuthController extends BaseController {
         if ($authField !== null)
             $selectFields[] = $authField;
 
-        // === campos nuevos solicitados (agregados solo si existen en availableKeys) ===
         if (in_array('CardName', $availableKeys))
             $selectFields[] = 'CardName';
+        if (in_array('CardCode', $availableKeys))
+            $selectFields[] = 'CardCode';
         if (in_array('DocTotal', $availableKeys))
             $selectFields[] = 'DocTotal';
         if (in_array('TaxTotal', $availableKeys))
             $selectFields[] = 'TaxTotal';
-        // ============================================================================
+        if (in_array('VatSum', $availableKeys))
+            $selectFields[] = 'VatSum';
 
         if (empty($selectFields))
             $selectFields = $safeBase;
@@ -433,7 +434,6 @@ class PurchaseAuthController extends BaseController {
             $resUsers = $doCurlTimeout($urlUsers);
 
             if ($resUsers['err'] || $resUsers['httpCode'] < 200 || $resUsers['httpCode'] >= 300) {
-                // fallback probe ligero
                 $probeUsers = $doCurlTimeout(rtrim($baseUrlRoot, '/') . "/Users?\$top=1");
                 if (!$probeUsers['err'] && $probeUsers['httpCode'] >= 200 && $probeUsers['httpCode'] < 300) {
                     $decU = json_decode($probeUsers['body'], true);
@@ -446,7 +446,6 @@ class PurchaseAuthController extends BaseController {
                             $usersMap[(string) $u['UserID']] = $u['Name'] ?? ($u['UserCode'] ?? '');
                     }
                 } else {
-                    // no fue posible obtener users, seguimos con usersMap vacío
                     $usersMap = [];
                 }
             } else {
@@ -487,31 +486,119 @@ class PurchaseAuthController extends BaseController {
             $authName = $usersMap[$authKey] ?? $authKey;
             $whsName = $whsMap[$almCode] ?? $almCode;
 
-            // calcular totals: usar DocTotal + TaxTotal si vienen, si no intentar sumar TaxTotal de las DocumentLines
-            $docTotal = isset($r['DocTotal']) ? (float) $r['DocTotal'] : 0.0;
-            $taxTotal = isset($r['TaxTotal']) ? (float) $r['TaxTotal'] : 0.0;
+            // --- Cálculo de totales e impuesto robusto ---
+            $docTotal = 0.0;
+            if (isset($r['DocTotal']) && $r['DocTotal'] !== '') {
+                $docTotal = is_numeric($r['DocTotal']) ? (float) $r['DocTotal'] : (float) str_replace([',', ' '], ['', ''], (string) $r['DocTotal']);
+            }
 
-            if (!isset($r['TaxTotal']) || $r['TaxTotal'] === null) {
-                // intentar sumar TaxTotal desde las DocumentLines (fallback)
+            // tax header preferido (TaxTotal o VatSum)
+            $taxTotal = null;
+            if (isset($r['TaxTotal']) && $r['TaxTotal'] !== '') {
+                $taxTotal = is_numeric($r['TaxTotal']) ? (float) $r['TaxTotal'] : (float) str_replace([',', ' '], ['', ''], (string) $r['TaxTotal']);
+            } elseif (isset($r['VatSum']) && $r['VatSum'] !== '') {
+                $taxTotal = is_numeric($r['VatSum']) ? (float) $r['VatSum'] : (float) str_replace([',', ' '], ['', ''], (string) $r['VatSum']);
+            }
+
+            // Si taxTotal no viene o es 0, intentar calcular desde líneas
+            if ($taxTotal === null || $taxTotal == 0.0) {
                 $taxCalc = 0.0;
                 $entity = 'PurchaseOrders';
-                // si los datos originales venían de PurchaseRequests, cambia a esa ruta (intento detectar)
-                if (stripos($urlData, '/PurchaseRequests') !== false)
+                if (isset($urlData) && stripos($urlData, '/PurchaseRequests') !== false) {
                     $entity = 'PurchaseRequests';
-                $linesUrl = rtrim($baseUrlRoot, '/') . "/{$entity}({$r['DocEntry']})/DocumentLines?\$select=TaxTotal";
+                }
+
+                // Traemos campos útiles de las líneas en una sola llamada
+                $linesUrl = rtrim($baseUrlRoot, '/') . '/' . $entity . "({$r['DocEntry']})/DocumentLines?\$select=LineTotal,TaxTotal,LineVatSum,UnitPrice,Quantity,VatPrcnt,Rate,VatSum,TaxAmount,PriceBefDi";
                 $resLines = $doCurlTimeout($linesUrl);
+
+                $linesArray = [];
                 if (!$resLines['err'] && $resLines['httpCode'] >= 200 && $resLines['httpCode'] < 300) {
                     $decL = json_decode($resLines['body'], true);
-                    $lines = $decL['value'] ?? [];
-                    foreach ($lines as $ln) {
-                        if (isset($ln['TaxTotal']))
-                            $taxCalc += (float) $ln['TaxTotal'];
+                    $linesArray = $decL['value'] ?? $decL;
+                    if (!is_array($linesArray))
+                        $linesArray = [];
+                }
+
+                $toFloat = function ($v) {
+                    if ($v === null || $v === '')
+                        return null;
+                    if (is_numeric($v))
+                        return (float) $v;
+                    $clean = str_replace([',', ' '], ['', ''], (string) $v);
+                    return is_numeric($clean) ? (float) $clean : null;
+                };
+
+                $sumLineTotal = 0.0;
+                $sumUnitQty = 0.0;
+                $foundLineTotal = false;
+                $foundUnitQty = false;
+
+                foreach ($linesArray as $ln) {
+                    $lineTax = $toFloat($ln['TaxTotal'] ?? ($ln['TaxAmount'] ?? null));
+                    if ($lineTax !== null) {
+                        $taxCalc += $lineTax;
+                    } else {
+                        $lineTax2 = $toFloat($ln['LineVatSum'] ?? ($ln['VatSum'] ?? null));
+                        if ($lineTax2 !== null) {
+                            $taxCalc += $lineTax2;
+                        }
                     }
+
+                    $lt = $toFloat($ln['LineTotal'] ?? null);
+                    if ($lt !== null) {
+                        $sumLineTotal += $lt;
+                        $foundLineTotal = true;
+                    }
+
+                    $price = $toFloat($ln['PriceBefDi'] ?? $ln['UnitPrice'] ?? $ln['Price'] ?? null);
+                    $qty = $toFloat($ln['Quantity'] ?? $ln['RequiredQuantity'] ?? null);
+                    if ($price !== null && $qty !== null) {
+                        $sumUnitQty += ($price * $qty);
+                        $foundUnitQty = true;
+                    }
+                }
+
+                if ($taxCalc > 0.000001) {
                     $taxTotal = $taxCalc;
+                } else {
+                    $baseSubtotal = ($foundUnitQty) ? $sumUnitQty : ($foundLineTotal ? $sumLineTotal : null);
+                    if ($baseSubtotal !== null) {
+                        if ($docTotal > $baseSubtotal) {
+                            $taxTotal = $docTotal - $baseSubtotal;
+                        } else {
+                            $taxTotal = 0.0;
+                        }
+                    } else {
+                        $taxCalc2 = 0.0;
+                        foreach ($linesArray as $ln) {
+                            $rate = $toFloat($ln['VatPrcnt'] ?? $ln['Rate'] ?? $ln['TaxRate'] ?? null);
+                            $lt = $toFloat($ln['LineTotal'] ?? null);
+                            $price = $toFloat($ln['PriceBefDi'] ?? $ln['UnitPrice'] ?? $ln['Price'] ?? null);
+                            $qty = $toFloat($ln['Quantity'] ?? $ln['RequiredQuantity'] ?? null);
+
+                            if ($lt !== null && $rate !== null) {
+                                $taxCalc2 += ($lt * ($rate / 100.0));
+                            } elseif ($price !== null && $qty !== null && $rate !== null) {
+                                $taxCalc2 += (($price * $qty) * ($rate / 100.0));
+                            }
+                        }
+                        $taxTotal = $taxCalc2 > 0 ? $taxCalc2 : 0.0;
+                    }
                 }
             }
 
-            $totalConImpuestos = $docTotal + $taxTotal;
+            // asegurar numeric y redondeo del tax
+            $taxTotal = is_numeric($taxTotal) ? (float) $taxTotal : 0.0;
+
+            // CORRECCIÓN CLAVE: DocTotal EN SAP YA INCLUYE IMPUESTOS.
+            // Usar DocTotal como "TotalConImpuestos" cuando venga (no sumarle TaxTotal otra vez).
+            if (!empty($docTotal) && $docTotal > 0.0) {
+                $totalConImpuestos = $docTotal;
+            } else {
+                // si no hay DocTotal, calcular como subtotal + tax (intento fallback)
+                $totalConImpuestos = $docTotal + $taxTotal;
+            }
 
             $out[] = [
                 'DocNum' => $r['DocNum'] ?? '',
@@ -523,10 +610,11 @@ class PurchaseAuthController extends BaseController {
                 'NombreDeUsuario' => $creatorName,
                 'AutorizadorKey' => $authKey,
                 'NombreAutorizador' => $authName,
+                'CardCode' => $r['CardCode'] ?? '',
                 'CardName' => $r['CardName'] ?? '',
-                'DocTotal' => $docTotal,
-                'TaxTotal' => $taxTotal,
-                'TotalConImpuestos' => $totalConImpuestos,
+                'DocTotal' => round((float) $docTotal - $taxTotal, 2),
+                'TaxTotal' => round((float) $taxTotal, 2),
+                'TotalConImpuestos' => round((float) $totalConImpuestos, 2),
                 '_raw' => $r
             ];
         }
