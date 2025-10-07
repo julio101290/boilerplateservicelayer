@@ -67,7 +67,37 @@ $routes->group('admin', function ($routes) {
     $routes->post('servicelayer/showlistProductsReq',
             'RequisitionAuthController::showReqItems',
             [
-              
+                'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+            ]
+    );
+
+    // Purchase Orders (mismo esquema que RequisitionAuth)
+    $routes->resource('servicelayer/getauthpo', [
+        'filter' => 'permission:poauth-permission', // cambia el permiso si quieres otro
+        'controller' => 'PurchaseAuthController',
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+    ]);
+
+// Autorizar Purchase Order (PATCH via controlador)
+    $routes->post('servicelayer/authorizePO',
+            'PurchaseAuthController::authorizeOrder',
+            [
+                'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+            ]
+    );
+
+// Obtener/mostrar líneas del PO (DataTables / modal)
+    $routes->post('servicelayer/showlistProductsPO',
+            'PurchaseAuthController::showPOItems',
+            [
+                'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+            ]
+    );
+
+// Select2 users (reutiliza el método getUsersAjaxSelect2 si lo tienes)
+    $routes->post('servicelayer/getUsersAjaxSelect2',
+            'PurchaseOrderAuthController::getUsersAjaxSelect2',
+            [
                 'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
             ]
     );
