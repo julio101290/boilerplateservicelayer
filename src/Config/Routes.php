@@ -101,4 +101,19 @@ $routes->group('admin', function ($routes) {
                 'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
             ]
     );
+
+    // Purchase Orders (mismo esquema que RequisitionAuth)
+    $routes->resource('servicelayer/pricelistsap', [
+        'filter' => 'permission:listprice-permission', // cambia el permiso si quieres otro
+        'controller' => 'PricelistController',
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+    ]);
+
+    // Select2 users (reutiliza el método getUsersAjaxSelect2 si lo tienes)
+    $routes->post('servicelayer/loaddatatable',
+            'PricelistController::loadDatatable',
+            [
+                'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+            ]
+    );
 });

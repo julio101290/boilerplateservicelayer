@@ -14,7 +14,7 @@ use julio101290\boilerplatecompanies\Models\EmpresasModel;
 use julio101290\boilerplate\Models\UserModel;
 use julio101290\boilerplatecompanies\Models\UsuariosempresaModel;
 
-class PurchaseAuthController extends BaseController {
+class PricelistController extends BaseController {
 
     use ResponseTrait;
 
@@ -46,75 +46,12 @@ class PurchaseAuthController extends BaseController {
         $empresasID = count($titulos["empresas"]) === 0 ? [0] : array_column($titulos["empresas"], "id");
 
         if ($this->request->isAJAX()) {
-            // --- Controlador (parte que llama al Service Layer) ---
-            $request = service('request');
-
-            $draw = (int) $request->getGet('draw');
-            $start = (int) $request->getGet('start');
-            $length = (int) $request->getGet('length');
-            $searchValue = $request->getGet('search')['value'] ?? '';
-            $orderColumnIndex = (int) ($request->getGet('order')[0]['column'] ?? 0);
-            $orderDir = $request->getGet('order')[0]['dir'] ?? 'asc';
-
-            // $fields debe venir definido en tu controlador (array con nombres de campos en SAP Service Layer)
-            $orderField = $fields[$orderColumnIndex] ?? 'DocEntry';
-
-            $dataSL = $this->serviceLayerModel->select("*")->first();
-
-            $conexionSap = $this->serviceLayerController->login(
-                    $dataSL["url"],
-                    $dataSL["port"],
-                    $dataSL["password"],
-                    $dataSL["username"],
-                    $dataSL["companyDB"]
-            );
-
-            $cookie = "B1SESSION=" . $conexionSap->SessionId . ";  ROUTEID=.node1";
-
-            $userLinkSap = $this->user_sap_link->select("*")->where("iduser", $idUser)->first();
-
-            $fields = [
-                'DocNum',
-                'CardName',
-                'DocDate',
-                'DocStatus'
-            ];
-
-            // Llamada que soporta pagination, orden y búsqueda
-            $result = $this->showReqWithOoutAuth(
-                    $cookie,
-                    $userLinkSap["sapuser"],
-                    $searchValue,
-                    $dataSL["url"],
-                    $dataSL["port"],
-                    $start,
-                    $length,
-                    $orderField,
-                    $orderDir,
-                    $fields // pasamos los campos para búsqueda/contains
-            );
-
-            // Manejo de errores sencillos si $result no es el esperado
-            if (isset($result['error'])) {
-                return $this->response->setStatusCode(500)->setJSON($result);
-            }
-
-            $recordsTotal = $result['recordsTotal'] ?? 0;
-            $recordsFiltered = $result['recordsFiltered'] ?? $recordsTotal;
-            $data = $result['data'] ?? [];
-
-            return $this->response->setJSON([
-                        'draw' => $draw,
-                        'recordsTotal' => (int) $recordsTotal,
-                        'recordsFiltered' => (int) $recordsFiltered,
-                        'data' => $data,
-            ]);
+            
         }
 
         $titulos["title"] = lang('authrorder.title');
         $titulos["subtitle"] = lang('authrorder.subtitle');
-        return view('julio101290\boilerplateservicelayer\Views\purchaseAuth', $titulos);
-        
+        return view('julio101290\boilerplateservicelayer\Views\pricelistSAP', $titulos);
     }
 
     public function getUser_sap_link() {
@@ -138,6 +75,94 @@ class PurchaseAuthController extends BaseController {
         $dato["nameCompanie"] = $companie["nombre"];
 
         return $this->response->setJSON($dato);
+    }
+
+    public function loadDatatable() {
+
+        helper('auth');
+
+        $idUser = user()->id;
+        $userName = user()->username;
+
+        // --- Controlador (parte que llama al Service Layer) ---
+        $request = service('request');
+
+        $draw = (int) $request->getGet('draw');
+        $start = (int) $request->getGet('start');
+        $length = (int) $request->getGet('length');
+        $searchValue = $request->getGet('search')['value'] ?? '';
+        $orderColumnIndex = (int) ($request->getGet('order')[0]['column'] ?? 0);
+        $orderDir = $request->getGet('order')[0]['dir'] ?? 'asc';
+        $itemCode = $_POST["articleCode"];
+
+// columna de orden; aquí puedes mantener tu mapeo si usas columnas para orden,
+// pero para búsqueda de precios realmente no hace falta.
+        $fields = [
+            'DocNum',
+            'CardName',
+            'DocDate',
+            'DocStatus'
+        ];
+        $orderField = $fields[$orderColumnIndex] ?? 'DocEntry';
+
+// Obtener datos de conexión al Service Layer (igual que antes)
+        $dataSL = $this->serviceLayerModel->select("*")->first();
+
+        $conexionSap = $this->serviceLayerController->login(
+                $dataSL["url"],
+                $dataSL["port"],
+                $dataSL["password"],
+                $dataSL["username"],
+                $dataSL["companyDB"]
+        );
+
+        $cookie = "B1SESSION=" . $conexionSap->SessionId . ";  ROUTEID=.node1";
+
+        $userLinkSap = $this->user_sap_link->select("*")->where("iduser", $idUser)->first();
+
+// Llamada a la función que devuelve solo precios (nota: ahora le pasamos $itemCode)
+        $result = $this->showItemPricesOnly(
+                $cookie,
+                $userLinkSap["sapuser"],
+                $searchValue, // aunque no se use internamente, lo dejamos por compatibilidad
+                $dataSL["url"],
+                $dataSL["port"],
+                $start,
+                $length,
+                $orderField,
+                $orderDir,
+                [], // fields (no necesario aquí)
+                $itemCode              // <-- código de artículo
+        );
+
+// Manejo de errores
+        if (!isset($result['success']) || $result['success'] === false) {
+            // si vino mensaje de error, devolverlo; si no, devolver un 500 genérico
+            $err = $result['error'] ?? 'Error al obtener precios del Service Layer.';
+            return $this->response->setStatusCode(500)->setJSON(['success' => false, 'error' => $err]);
+        }
+
+// Preparar respuesta compatible con DataTables
+        $prices = $result['prices'] ?? [];
+        $recordsTotal = count($prices);
+        $recordsFiltered = $recordsTotal;
+
+// Opcional: si quieres paginar en el servidor aquí puedes aplicar array_slice($prices, $start, $length)
+// ya que la función original devolvía paginación para PurchaseOrders; para precios normalmente
+// devolvemos todas las listas, pero si quieres paginar descomenta la línea siguiente:
+//
+// $pageData = ($length > 0) ? array_slice($prices, $start, $length) : $prices;
+
+        $pageData = $prices; // por defecto devolvemos todo
+
+        return $this->response->setJSON([
+                    'draw' => $draw,
+                    'recordsTotal' => (int) $recordsTotal,
+                    'recordsFiltered' => (int) $recordsFiltered,
+                    'data' => $pageData,
+                    // info adicional (útil para debug / UI)
+                    'item' => $result['item'] ?? null
+        ]);
     }
 
     public function save() {
@@ -193,438 +218,399 @@ class PurchaseAuthController extends BaseController {
         return $this->respondDeleted($registro, lang("user_sap_link.msg_delete"));
     }
 
-    public function showReqWithOoutAuth(
-            $cookie,
-            $userAuth,
-            $search,
-            $baseUrlRoot,
-            $port,
-            $start = 0,
-            $length = 10,
-            $orderField = 'DocEntry',
-            $orderDir = 'asc',
-            array $fields = []
-    ) {
-        // normalizar entradas
-        $autorizador = trim((string) $userAuth);
-        $search = trim((string) $search);
-        $orderDir = strtolower($orderDir) === 'desc' ? 'desc' : 'asc';
-        $orderField = $orderField ?: 'DocEntry';
-
-        // helper curl (usa $port y $cookie del scope)
-        $doCurl = function ($url) use ($port, $cookie) {
-            $curl = curl_init();
-            curl_setopt_array($curl, [
-                CURLOPT_PORT => $port,
-                CURLOPT_URL => $url,
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_ENCODING => "",
-                CURLOPT_COOKIE => $cookie,
-                CURLOPT_SSL_VERIFYHOST => false,
-                CURLOPT_SSL_VERIFYPEER => false,
-                CURLOPT_MAXREDIRS => 10,
-                CURLOPT_TIMEOUT => 30,
-                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-                CURLOPT_CUSTOMREQUEST => "GET",
-                CURLOPT_HTTPHEADER => [
-                    "Accept: application/json",
-                    "User-Agent: PHP cURL",
-                    "B1S-CaseInsensitive: true"
-                ],
-            ]);
-            $response = curl_exec($curl);
-            $err = curl_error($curl);
-            $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
-            curl_close($curl);
-            return ['err' => $err, 'httpCode' => $httpCode, 'body' => $response];
-        };
-
-        // helper curl con timeout mayor
-        $doCurlTimeout = function ($url) use ($port, $cookie) {
-            $curl = curl_init();
-            curl_setopt_array($curl, [
-                CURLOPT_PORT => $port,
-                CURLOPT_URL => $url,
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_ENCODING => "",
-                CURLOPT_COOKIE => $cookie,
-                CURLOPT_SSL_VERIFYHOST => false,
-                CURLOPT_SSL_VERIFYPEER => false,
-                CURLOPT_MAXREDIRS => 10,
-                CURLOPT_TIMEOUT => 60,
-                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-                CURLOPT_CUSTOMREQUEST => "GET",
-                CURLOPT_HTTPHEADER => [
-                    "Accept: application/json",
-                    "User-Agent: PHP cURL",
-                    "B1S-CaseInsensitive: true"
-                ],
-            ]);
-            $response = curl_exec($curl);
-            $err = curl_error($curl);
-            $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
-            curl_close($curl);
-            return ['err' => $err, 'httpCode' => $httpCode, 'body' => $response];
-        };
-
-        // 1) filtro base (autorizador + startswith)
-        $filterParts = ["startswith(U_Authorized,'U')"];
-        if ($autorizador !== '') {
-            $escaped = str_replace("'", "''", $autorizador);
-            $filterParts[] = ctype_digit($escaped) ? "U_Autorizador eq {$escaped}" : "U_Autorizador eq '{$escaped}'";
-        }
-        $baseFilter = implode(' and ', $filterParts);
-
-        // 2) búsqueda global (si aplica)
-        $fullFilter = $baseFilter;
-        if ($search !== '') {
-            $searchEsc = str_replace("'", "''", $search);
-            $searchParts = [];
-            $candidateFields = empty($fields) ? ['DocNum', 'DocEntry', 'U_WhsCode', 'U_Almacen', 'U_Autorizador', 'UserSign', 'U_Creator'] : $fields;
-            foreach ($candidateFields as $f)
-                $searchParts[] = "contains({$f},'{$searchEsc}')";
-            $searchFilter = '(' . implode(' or ', $searchParts) . ')';
-            $fullFilter = $baseFilter !== '' ? ($baseFilter . ' and ' . $searchFilter) : $searchFilter;
-        }
-
-        // 3) recordsTotal y recordsFiltered (usando $count)
-        $recordsTotal = 0;
-        $recordsFiltered = 0;
-        $countTotalUrl = rtrim($baseUrlRoot, '/') . "/PurchaseOrders/\$count";
-        if ($baseFilter !== '')
-            $countTotalUrl .= "?%24filter=" . rawurlencode($baseFilter);
-        $resCountTotal = $doCurl($countTotalUrl);
-        if ($resCountTotal['err'])
-            return ['error' => "cURL Error #: " . $resCountTotal['err']];
-        if ($resCountTotal['httpCode'] < 200 || $resCountTotal['httpCode'] >= 300) {
-            return ['error' => 'Service Layer HTTP error (count total)', 'httpCode' => $resCountTotal['httpCode'], 'body' => $resCountTotal['body']];
-        }
-        $recordsTotal = (int) trim($resCountTotal['body']);
-
-        if ($fullFilter !== '') {
-            $countFilteredUrl = rtrim($baseUrlRoot, '/') . "/PurchaseOrders/\$count?%24filter=" . rawurlencode($fullFilter);
-            $resCountFiltered = $doCurl($countFilteredUrl);
-            if ($resCountFiltered['err'])
-                return ['error' => "cURL Error #: " . $resCountFiltered['err']];
-            if ($resCountFiltered['httpCode'] < 200 || $resCountFiltered['httpCode'] >= 300) {
-                return ['error' => 'Service Layer HTTP error (count filtered)', 'httpCode' => $resCountFiltered['httpCode'], 'body' => $resCountFiltered['body']];
-            }
-            $recordsFiltered = (int) trim($resCountFiltered['body']);
-        } else {
-            $recordsFiltered = $recordsTotal;
-        }
-
-        // 4) Probe para detectar campos válidos
-        $probeUrl = rtrim($baseUrlRoot, '/') . "/PurchaseOrders?\$top=1";
-        if ($fullFilter !== '')
-            $probeUrl .= '&%24filter=' . rawurlencode($fullFilter);
-        $resProbe = $doCurl($probeUrl);
-        $availableKeys = [];
-        if (!$resProbe['err'] && $resProbe['httpCode'] >= 200 && $resProbe['httpCode'] < 300) {
-            $decProbe = json_decode($resProbe['body'], true);
-            $sample = $decProbe['value'][0] ?? null;
-            if (is_array($sample))
-                $availableKeys = array_keys($sample);
-        } else {
-            $availableKeys = ['DocEntry', 'DocNum', 'DocDate', 'UserSign', 'U_Autorizador', 'U_WhsCode', 'U_Almacen', 'U_Creator'];
-        }
-
-        // 5) detectar campos disponibles para whs/creator/auth
-        $possibleWhsFields = ['U_WhsCode', 'U_Almacen', 'U_Whs', 'WhsCode'];
-        $possibleCreatorFields = ['U_Creator', 'UserSign', 'Creator', 'UserCode'];
-        $possibleAuthFields = ['U_Autorizador', 'Autorizador', 'U_Authorizer'];
-
-        $whsField = null;
-        foreach ($possibleWhsFields as $f)
-            if (in_array($f, $availableKeys)) {
-                $whsField = $f;
-                break;
-            }
-
-        $creatorField = null;
-        foreach ($possibleCreatorFields as $f)
-            if (in_array($f, $availableKeys)) {
-                $creatorField = $f;
-                break;
-            }
-
-        $authField = null;
-        foreach ($possibleAuthFields as $f)
-            if (in_array($f, $availableKeys)) {
-                $authField = $f;
-                break;
-            }
-
-        // 6) construir select con campos válidos (agregamos CardName, DocTotal, TaxTotal si existen)
-        $safeBase = ['DocEntry', 'DocNum', 'DocDate'];
-        $selectFields = [];
-        foreach ($safeBase as $s)
-            if (in_array($s, $availableKeys))
-                $selectFields[] = $s;
-        if ($whsField !== null)
-            $selectFields[] = $whsField;
-        if ($creatorField !== null)
-            $selectFields[] = $creatorField;
-        if ($authField !== null)
-            $selectFields[] = $authField;
-
-        if (in_array('CardName', $availableKeys))
-            $selectFields[] = 'CardName';
-        if (in_array('CardCode', $availableKeys))
-            $selectFields[] = 'CardCode';
-        if (in_array('DocTotal', $availableKeys))
-            $selectFields[] = 'DocTotal';
-        if (in_array('TaxTotal', $availableKeys))
-            $selectFields[] = 'TaxTotal';
-        if (in_array('VatSum', $availableKeys))
-            $selectFields[] = 'VatSum';
-
-        if (empty($selectFields))
-            $selectFields = $safeBase;
-
-        $selectParam = '%24select=' . rawurlencode(implode(',', $selectFields));
-        $orderbyParam = '%24orderby=' . rawurlencode($orderField . ' ' . $orderDir);
-        $queryParts = [$selectParam, $orderbyParam];
-        if ($length > 0) {
-            $queryParts[] = '%24skip=' . (int) $start;
-            $queryParts[] = '%24top=' . (int) $length;
-        }
-        if ($fullFilter !== '')
-            $queryParts[] = '%24filter=' . rawurlencode($fullFilter);
-
-        $urlData = rtrim($baseUrlRoot, '/') . '/PurchaseOrders?' . implode('&', $queryParts);
-        $resData = $doCurl($urlData);
-        if ($resData['err'])
-            return ['error' => "cURL Error #: " . $resData['err']];
-        if ($resData['httpCode'] < 200 || $resData['httpCode'] >= 300) {
-            return ['error' => 'Service Layer HTTP error (data fetch)', 'httpCode' => $resData['httpCode'], 'body' => $resData['body']];
-        }
-        $decData = json_decode($resData['body'], true);
-        $rows = $decData['value'] ?? [];
-
-        // --------- 7) Traer Users solo para las claves presentes en $rows (filtrado) ----------
-        $usersMap = [];
-        $userKeys = [];
-        if (!empty($rows)) {
-            foreach ($rows as $r) {
-                if (!empty($creatorField) && !empty($r[$creatorField]))
-                    $userKeys[(string) $r[$creatorField]] = true;
-                if (!empty($authField) && !empty($r[$authField]))
-                    $userKeys[(string) $r[$authField]] = true;
-            }
-        }
-
-        if (!empty($userKeys)) {
-            $filters = [];
-            foreach (array_keys($userKeys) as $k) {
-                $k = (string) $k;
-                if (ctype_digit($k)) {
-                    $filters[] = "InternalKey eq {$k}";
-                    $filters[] = "UserID eq {$k}";
-                    $filters[] = "USERID eq {$k}";
-                } else {
-                    $escaped = str_replace("'", "''", $k);
-                    $filters[] = "UserCode eq '{$escaped}'";
-                }
-            }
-            $filters = array_unique($filters);
-            $filterUsers = implode(' or ', array_slice($filters, 0, 200)); // limit conditions
-
-            $urlUsers = rtrim($baseUrlRoot, '/') . "/Users?\$select=UserCode,Name&\$filter=" . rawurlencode($filterUsers);
-
-            $resUsers = $doCurlTimeout($urlUsers);
-
-            if ($resUsers['err'] || $resUsers['httpCode'] < 200 || $resUsers['httpCode'] >= 300) {
-                $probeUsers = $doCurlTimeout(rtrim($baseUrlRoot, '/') . "/Users?\$top=1");
-                if (!$probeUsers['err'] && $probeUsers['httpCode'] >= 200 && $probeUsers['httpCode'] < 300) {
-                    $decU = json_decode($probeUsers['body'], true);
-                    foreach ($decU['value'] ?? [] as $u) {
-                        if (isset($u['UserCode']))
-                            $usersMap[(string) $u['UserCode']] = $u['Name'] ?? $u['UserCode'];
-                        if (isset($u['InternalKey']))
-                            $usersMap[(string) $u['InternalKey']] = $u['Name'] ?? ($u['UserCode'] ?? '');
-                        if (isset($u['UserID']))
-                            $usersMap[(string) $u['UserID']] = $u['Name'] ?? ($u['UserCode'] ?? '');
-                    }
-                } else {
-                    $usersMap = [];
-                }
-            } else {
-                $decU = json_decode($resUsers['body'], true);
-                foreach ($decU['value'] ?? [] as $u) {
-                    if (isset($u['UserCode']))
-                        $usersMap[(string) $u['UserCode']] = $u['Name'] ?? $u['UserCode'];
-                    if (isset($u['InternalKey']))
-                        $usersMap[(string) $u['InternalKey']] = $u['Name'] ?? ($u['UserCode'] ?? '');
-                    if (isset($u['UserID']))
-                        $usersMap[(string) $u['UserID']] = $u['Name'] ?? ($u['UserCode'] ?? '');
-                }
-            }
-        }
-
-        // 8) Traer Warehouses (una sola vez)
-        $whsMap = [];
-        $resWhs = $doCurl(rtrim($baseUrlRoot, '/') . "/Warehouses?\$select=WhsCode,WhsName");
-        if (!$resWhs['err'] && $resWhs['httpCode'] >= 200 && $resWhs['httpCode'] < 300) {
-            $decW = json_decode($resWhs['body'], true);
-            foreach ($decW['value'] ?? [] as $w) {
-                if (isset($w['WhsCode']))
-                    $whsMap[(string) $w['WhsCode']] = $w['WhsName'] ?? $w['WhsCode'];
-            }
-        }
-
-        // 9) Mapear resultados y devolver
-        $out = [];
-        foreach ($rows as $r) {
-            $almCode = '';
-            if ($whsField !== null && !empty($r[$whsField]))
-                $almCode = (string) $r[$whsField];
-
-            $creatorKey = $creatorField !== null && !empty($r[$creatorField]) ? (string) $r[$creatorField] : '';
-            $authKey = $authField !== null && !empty($r[$authField]) ? (string) $r[$authField] : '';
-
-            $creatorName = $usersMap[$creatorKey] ?? $creatorKey;
-            $authName = $usersMap[$authKey] ?? $authKey;
-            $whsName = $whsMap[$almCode] ?? $almCode;
-
-            // --- Cálculo de totales e impuesto robusto ---
-            $docTotal = 0.0;
-            if (isset($r['DocTotal']) && $r['DocTotal'] !== '') {
-                $docTotal = is_numeric($r['DocTotal']) ? (float) $r['DocTotal'] : (float) str_replace([',', ' '], ['', ''], (string) $r['DocTotal']);
-            }
-
-            // tax header preferido (TaxTotal o VatSum)
-            $taxTotal = null;
-            if (isset($r['TaxTotal']) && $r['TaxTotal'] !== '') {
-                $taxTotal = is_numeric($r['TaxTotal']) ? (float) $r['TaxTotal'] : (float) str_replace([',', ' '], ['', ''], (string) $r['TaxTotal']);
-            } elseif (isset($r['VatSum']) && $r['VatSum'] !== '') {
-                $taxTotal = is_numeric($r['VatSum']) ? (float) $r['VatSum'] : (float) str_replace([',', ' '], ['', ''], (string) $r['VatSum']);
-            }
-
-            // Si taxTotal no viene o es 0, intentar calcular desde líneas
-            if ($taxTotal === null || $taxTotal == 0.0) {
-                $taxCalc = 0.0;
-                $entity = 'PurchaseOrders';
-                if (isset($urlData) && stripos($urlData, '/PurchaseRequests') !== false) {
-                    $entity = 'PurchaseRequests';
-                }
-
-                // Traemos campos útiles de las líneas en una sola llamada
-                $linesUrl = rtrim($baseUrlRoot, '/') . '/' . $entity . "({$r['DocEntry']})/DocumentLines?\$select=LineTotal,TaxTotal,LineVatSum,UnitPrice,Quantity,VatPrcnt,Rate,VatSum,TaxAmount,PriceBefDi";
-                $resLines = $doCurlTimeout($linesUrl);
-
-                $linesArray = [];
-                if (!$resLines['err'] && $resLines['httpCode'] >= 200 && $resLines['httpCode'] < 300) {
-                    $decL = json_decode($resLines['body'], true);
-                    $linesArray = $decL['value'] ?? $decL;
-                    if (!is_array($linesArray))
-                        $linesArray = [];
-                }
-
-                $toFloat = function ($v) {
-                    if ($v === null || $v === '')
-                        return null;
-                    if (is_numeric($v))
-                        return (float) $v;
-                    $clean = str_replace([',', ' '], ['', ''], (string) $v);
-                    return is_numeric($clean) ? (float) $clean : null;
-                };
-
-                $sumLineTotal = 0.0;
-                $sumUnitQty = 0.0;
-                $foundLineTotal = false;
-                $foundUnitQty = false;
-
-                foreach ($linesArray as $ln) {
-                    $lineTax = $toFloat($ln['TaxTotal'] ?? ($ln['TaxAmount'] ?? null));
-                    if ($lineTax !== null) {
-                        $taxCalc += $lineTax;
-                    } else {
-                        $lineTax2 = $toFloat($ln['LineVatSum'] ?? ($ln['VatSum'] ?? null));
-                        if ($lineTax2 !== null) {
-                            $taxCalc += $lineTax2;
-                        }
-                    }
-
-                    $lt = $toFloat($ln['LineTotal'] ?? null);
-                    if ($lt !== null) {
-                        $sumLineTotal += $lt;
-                        $foundLineTotal = true;
-                    }
-
-                    $price = $toFloat($ln['PriceBefDi'] ?? $ln['UnitPrice'] ?? $ln['Price'] ?? null);
-                    $qty = $toFloat($ln['Quantity'] ?? $ln['RequiredQuantity'] ?? null);
-                    if ($price !== null && $qty !== null) {
-                        $sumUnitQty += ($price * $qty);
-                        $foundUnitQty = true;
-                    }
-                }
-
-                if ($taxCalc > 0.000001) {
-                    $taxTotal = $taxCalc;
-                } else {
-                    $baseSubtotal = ($foundUnitQty) ? $sumUnitQty : ($foundLineTotal ? $sumLineTotal : null);
-                    if ($baseSubtotal !== null) {
-                        if ($docTotal > $baseSubtotal) {
-                            $taxTotal = $docTotal - $baseSubtotal;
-                        } else {
-                            $taxTotal = 0.0;
-                        }
-                    } else {
-                        $taxCalc2 = 0.0;
-                        foreach ($linesArray as $ln) {
-                            $rate = $toFloat($ln['VatPrcnt'] ?? $ln['Rate'] ?? $ln['TaxRate'] ?? null);
-                            $lt = $toFloat($ln['LineTotal'] ?? null);
-                            $price = $toFloat($ln['PriceBefDi'] ?? $ln['UnitPrice'] ?? $ln['Price'] ?? null);
-                            $qty = $toFloat($ln['Quantity'] ?? $ln['RequiredQuantity'] ?? null);
-
-                            if ($lt !== null && $rate !== null) {
-                                $taxCalc2 += ($lt * ($rate / 100.0));
-                            } elseif ($price !== null && $qty !== null && $rate !== null) {
-                                $taxCalc2 += (($price * $qty) * ($rate / 100.0));
-                            }
-                        }
-                        $taxTotal = $taxCalc2 > 0 ? $taxCalc2 : 0.0;
-                    }
-                }
-            }
-
-            // asegurar numeric y redondeo del tax
-            $taxTotal = is_numeric($taxTotal) ? (float) $taxTotal : 0.0;
-
-            // CORRECCIÓN CLAVE: DocTotal EN SAP YA INCLUYE IMPUESTOS.
-            // Usar DocTotal como "TotalConImpuestos" cuando venga (no sumarle TaxTotal otra vez).
-            if (!empty($docTotal) && $docTotal > 0.0) {
-                $totalConImpuestos = $docTotal;
-            } else {
-                // si no hay DocTotal, calcular como subtotal + tax (intento fallback)
-                $totalConImpuestos = $docTotal + $taxTotal;
-            }
-
-            $out[] = [
-                'DocNum' => $r['DocNum'] ?? '',
-                'DocEntry' => $r['DocEntry'] ?? '',
-                'DocDate' => $r['DocDate'] ?? '',
-                'Almacen' => $almCode,
-                'AlmacenName' => $whsName,
-                'UsuarioKey' => $creatorKey,
-                'NombreDeUsuario' => $creatorName,
-                'AutorizadorKey' => $authKey,
-                'NombreAutorizador' => $authName,
-                'CardCode' => $r['CardCode'] ?? '',
-                'CardName' => $r['CardName'] ?? '',
-                'DocTotal' => round((float) $docTotal - $taxTotal, 2),
-                'TaxTotal' => round((float) $taxTotal, 2),
-                'TotalConImpuestos' => round((float) $totalConImpuestos, 2),
-                '_raw' => $r
-            ];
-        }
-
+    /**
+     * Adaptado por julio101290
+     *
+     * Obtiene exclusivamente los precios de todas las listas para un artículo dado.
+     * Firma compatible con la función original; se agregó $itemCode al final.
+     *
+     * Devuelve:
+     * [
+     *   'success' => true|false,
+     *   'item' => [ 'ItemCode' => '', 'ItemName' => '' ],
+     *   'prices' => [ { PriceListKey, PriceListName, ItemName, Price, Currency?, _raw } , ... ],
+     *   'error' => 'mensaje' (solo cuando success = false)
+     * ]
+     */
+  public function showItemPricesOnly(
+    $cookie,
+    $userAuth,
+    $search,
+    $baseUrlRoot,
+    $port,
+    $start = 0,
+    $length = 10,
+    $orderField = 'DocEntry',
+    $orderDir = 'asc',
+    array $fields = [],
+    $itemCode = '',
+    $debug = false
+) {
+    $itemCode = trim((string)$itemCode);
+    if ($itemCode === '') {
         return [
-            'recordsTotal' => $recordsTotal,
-            'recordsFiltered' => $recordsFiltered,
-            'data' => $out
+            'success' => false,
+            'item' => null,
+            'prices' => [],
+            'error' => 'No se proporcionó código de artículo (itemCode).'
         ];
+    }
+
+    // cURL helpers
+    $doCurl = function ($url) use ($port, $cookie) {
+        $curl = curl_init();
+        curl_setopt_array($curl, [
+            CURLOPT_PORT => $port,
+            CURLOPT_URL => $url,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_ENCODING => "",
+            CURLOPT_COOKIE => $cookie,
+            CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_MAXREDIRS => 10,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+            CURLOPT_CUSTOMREQUEST => "GET",
+            CURLOPT_HTTPHEADER => [
+                "Accept: application/json",
+                "User-Agent: PHP cURL",
+                "B1S-CaseInsensitive: true"
+            ],
+        ]);
+        $response = curl_exec($curl);
+        $err = curl_error($curl);
+        $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+        curl_close($curl);
+        return ['err' => $err, 'httpCode' => $httpCode, 'body' => $response];
+    };
+
+    $doCurlTimeout = function ($url) use ($port, $cookie) {
+        $curl = curl_init();
+        curl_setopt_array($curl, [
+            CURLOPT_PORT => $port,
+            CURLOPT_URL => $url,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_ENCODING => "",
+            CURLOPT_COOKIE => $cookie,
+            CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_MAXREDIRS => 10,
+            CURLOPT_TIMEOUT => 60,
+            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+            CURLOPT_CUSTOMREQUEST => "GET",
+            CURLOPT_HTTPHEADER => [
+                "Accept: application/json",
+                "User-Agent: PHP cURL",
+                "B1S-CaseInsensitive: true"
+            ],
+        ]);
+        $response = curl_exec($curl);
+        $err = curl_error($curl);
+        $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+        curl_close($curl);
+        return ['err' => $err, 'httpCode' => $httpCode, 'body' => $response];
+    };
+
+    // 1) Intentar traer PriceLists (map: key -> name). Hacemos intento con select y luego fallback a todo.
+    $priceListsMap = [];
+    $allPriceLists = []; // guardamos todo por debug/fallback
+    $resPL = $doCurl(rtrim($baseUrlRoot, '/') . "/PriceLists?\$select=ListNum,ListName,PriceList,PriceListName,Name");
+    if (!$resPL['err'] && $resPL['httpCode'] >= 200 && $resPL['httpCode'] < 300) {
+        $decPL = json_decode($resPL['body'], true);
+        foreach ($decPL['value'] ?? [] as $pl) {
+            $key = $pl['ListNum'] ?? $pl['PriceList'] ?? null;
+            $name = $pl['ListName'] ?? $pl['PriceListName'] ?? $pl['Name'] ?? '';
+            if (!is_null($key)) $priceListsMap[(string)$key] = trim((string)$name);
+            $allPriceLists[] = $pl;
+        }
+    } else {
+        // fallback: intentar sin select (mayor cobertura)
+        $resPL2 = $doCurl(rtrim($baseUrlRoot, '/') . "/PriceLists");
+        if (!$resPL2['err'] && $resPL2['httpCode'] >= 200 && $resPL2['httpCode'] < 300) {
+            $decPL = json_decode($resPL2['body'], true);
+            foreach ($decPL['value'] ?? [] as $pl) {
+                $key = $pl['ListNum'] ?? $pl['PriceList'] ?? null;
+                $name = $pl['ListName'] ?? $pl['PriceListName'] ?? $pl['Name'] ?? '';
+                if (!is_null($key)) $priceListsMap[(string)$key] = trim((string)$name);
+                $allPriceLists[] = $pl;
+            }
+        }
+    }
+
+    // Si priceListsMap está vacío, guardamos allPriceLists para debug y seguiremos con intentos específicos.
+    // Cache local para nombres solicitados que no estan en el map inicial
+    $priceListFetchCache = [];
+
+    // Función robusta para resolver nombre por clave
+    $resolvePriceListName = function ($rawKey) use (&$priceListsMap, &$priceListFetchCache, &$allPriceLists, $doCurlTimeout, $baseUrlRoot) {
+        // normalizar input
+        if (is_array($rawKey) || is_object($rawKey)) {
+            // si trae directamente ListName o PriceListName
+            $kArr = (array)$rawKey;
+            if (!empty($kArr['ListName'])) return trim((string)$kArr['ListName']);
+            if (!empty($kArr['PriceListName'])) return trim((string)$kArr['PriceListName']);
+            if (!empty($kArr['Name'])) return trim((string)$kArr['Name']);
+            // intentar extraer ListNum/PriceList
+            if (!empty($kArr['ListNum'])) $rawKey = (string)$kArr['ListNum'];
+            elseif (!empty($kArr['PriceList'])) $rawKey = (string)$kArr['PriceList'];
+            else $rawKey = '';
+        }
+
+        $rawKeyStr = trim((string)$rawKey);
+        if ($rawKeyStr === '') return '';
+
+        // ya en mapa directo
+        if (isset($priceListsMap[$rawKeyStr]) && $priceListsMap[$rawKeyStr] !== '') {
+            return $priceListsMap[$rawKeyStr];
+        }
+        if (isset($priceListFetchCache[$rawKeyStr])) return $priceListFetchCache[$rawKeyStr];
+
+        $foundName = '';
+
+        // 1) si tenemos listado completo ($allPriceLists), intentar match por campos
+        if (!empty($allPriceLists)) {
+            // si rawKey es numérico, comparar con ListNum
+            if (ctype_digit($rawKeyStr)) {
+                foreach ($allPriceLists as $pl) {
+                    $listnum = isset($pl['ListNum']) ? (string)$pl['ListNum'] : (isset($pl['PriceList']) ? (string)$pl['PriceList'] : '');
+                    if ($listnum !== '' && ((string)$listnum === $rawKeyStr || (int)$listnum === (int)$rawKeyStr)) {
+                        $foundName = trim((string)($pl['ListName'] ?? $pl['PriceListName'] ?? $pl['Name'] ?? ''));
+                        break;
+                    }
+                }
+            }
+            // si no numerico o no encontrado, intentar match por PriceList exacto o ListName contains
+            if ($foundName === '') {
+                foreach ($allPriceLists as $pl) {
+                    $plPriceList = (string)($pl['PriceList'] ?? '');
+                    $plListName = (string)($pl['ListName'] ?? $pl['PriceListName'] ?? $pl['Name'] ?? '');
+                    if ($plPriceList !== '' && strtolower($plPriceList) === strtolower($rawKeyStr)) {
+                        $foundName = trim($plListName);
+                        break;
+                    }
+                    if ($plListName !== '' && stripos($plListName, $rawKeyStr) !== false) {
+                        $foundName = trim($plListName);
+                        break;
+                    }
+                }
+            }
+        }
+
+        // 2) si no encontrado, probar endpoints puntuales (numérico preferente)
+        if ($foundName === '' && ctype_digit($rawKeyStr)) {
+            $num = (int)$rawKeyStr;
+            $tries = [
+                rtrim($baseUrlRoot, '/') . "/PriceLists(ListNum={$num})",
+                rtrim($baseUrlRoot, '/') . "/PriceLists({$num})"
+            ];
+            foreach ($tries as $u) {
+                $r = $doCurlTimeout($u . "?\$select=ListNum,ListName,PriceList,PriceListName,Name");
+                if ($r['err'] || $r['httpCode'] < 200 || $r['httpCode'] >= 300) continue;
+                $dec = json_decode($r['body'], true);
+                $rec = null;
+                if (is_array($dec) && isset($dec['value']) && is_array($dec['value'])) $rec = $dec['value'][0] ?? null;
+                elseif (is_array($dec)) $rec = $dec;
+                if (is_array($rec)) {
+                    $foundName = trim((string)($rec['ListName'] ?? $rec['PriceListName'] ?? $rec['Name'] ?? ''));
+                    if ($foundName !== '') break;
+                }
+            }
+        }
+
+        // 3) si no encontrado, intentar filter exacto por PriceList
+        if ($foundName === '') {
+            $u = rtrim($baseUrlRoot, '/') . "/PriceLists?\$filter=PriceList eq '" . str_replace("'", "''", $rawKeyStr) . "'&\$select=ListNum,ListName,PriceList,PriceListName,Name";
+            $r = $doCurlTimeout($u);
+            if (!$r['err'] && $r['httpCode'] >= 200 && $r['httpCode'] < 300) {
+                $dec = json_decode($r['body'], true);
+                $v0 = $dec['value'][0] ?? null;
+                if (is_array($v0)) $foundName = trim((string)($v0['ListName'] ?? $v0['PriceListName'] ?? $v0['Name'] ?? ''));
+            }
+        }
+
+        // 4) contains en ListName
+        if ($foundName === '') {
+            $cand = str_replace("'", "''", $rawKeyStr);
+            $u = rtrim($baseUrlRoot, '/') . "/PriceLists?\$filter=contains(tolower(ListName),tolower('" . $cand . "'))&\$select=ListNum,ListName,PriceList,PriceListName,Name";
+            $r = $doCurlTimeout($u);
+            if (!$r['err'] && $r['httpCode'] >= 200 && $r['httpCode'] < 300) {
+                $dec = json_decode($r['body'], true);
+                $v0 = $dec['value'][0] ?? null;
+                if (is_array($v0)) $foundName = trim((string)($v0['ListName'] ?? $v0['PriceListName'] ?? $v0['Name'] ?? ''));
+            }
+        }
+
+        if ($foundName === '') $foundName = "Lista #{$rawKeyStr}";
+
+        // cachear y actualizar mapa principal
+        $priceListFetchCache[$rawKeyStr] = $foundName;
+        $priceListsMap[$rawKeyStr] = $foundName;
+
+        return $foundName;
+    };
+
+    // 2) Obtener item y sus precios
+    $pricesOut = [];
+    $itemInfo = ['ItemCode' => $itemCode, 'ItemName' => ''];
+    $itemUrl = rtrim($baseUrlRoot, '/') . "/Items(ItemCode='" . rawurlencode($itemCode) . "')?\$select=ItemCode,ItemName,ItemPrices";
+    $resItem = $doCurlTimeout($itemUrl);
+    if ($resItem['err'] || $resItem['httpCode'] < 200 || $resItem['httpCode'] >= 300) {
+        $itemUrlAlt = rtrim($baseUrlRoot, '/') . "/Items('" . rawurlencode($itemCode) . "')?\$select=ItemCode,ItemName,ItemPrices";
+        $resItem = $doCurlTimeout($itemUrlAlt);
+    }
+    if ($resItem['err']) {
+        return ['success' => false, 'item' => $itemInfo, 'prices' => [], 'error' => 'cURL Error #: ' . $resItem['err']];
+    }
+    if ($resItem['httpCode'] < 200 || $resItem['httpCode'] >= 300) {
+        return ['success' => false, 'item' => $itemInfo, 'prices' => [], 'error' => 'Service Layer HTTP error (item fetch). Código: ' . $resItem['httpCode']];
+    }
+
+    $decItem = json_decode($resItem['body'], true);
+    if (isset($decItem['value']) && is_array($decItem['value'])) $decItem = $decItem['value'][0] ?? $decItem;
+    if (!is_array($decItem)) return ['success' => false, 'item' => $itemInfo, 'prices' => [], 'error' => 'Respuesta inesperada al obtener el item.'];
+
+    if (!empty($decItem['ItemName'])) $itemInfo['ItemName'] = $decItem['ItemName'];
+    if (!empty($decItem['ItemCode'])) $itemInfo['ItemCode'] = $decItem['ItemCode'];
+
+    // extraer itemprices
+    $rawPrices = [];
+    if (isset($decItem['ItemPrices'])) {
+        $rawPrices = $decItem['ItemPrices'];
+        if (isset($rawPrices['value']) && is_array($rawPrices['value'])) $rawPrices = $rawPrices['value'];
+    } elseif (isset($decItem['value']) && is_array($decItem['value']) && isset($decItem['value'][0]['ItemPrices'])) {
+        $rawPrices = $decItem['value'][0]['ItemPrices'];
+        if (isset($rawPrices['value'])) $rawPrices = $rawPrices['value'];
+    }
+    if (!is_array($rawPrices)) $rawPrices = [];
+
+    $toFloat = function ($v) {
+        if ($v === null || $v === '') return null;
+        if (is_numeric($v)) return (float)$v;
+        $clean = str_replace([',', ' '], ['', ''], (string)$v);
+        return is_numeric($clean) ? (float)$clean : null;
+    };
+
+    foreach ($rawPrices as $ip) {
+        if (!is_array($ip) && !is_object($ip)) continue;
+
+        // obtener raw key posible (puede ser array, object o string)
+        $plKeyRaw = $ip['PriceList'] ?? $ip['ListNum'] ?? $ip['PriceListNum'] ?? $ip['PriceListId'] ?? $ip['PriceListNo'] ?? null;
+
+        // si viene como objeto/array con ListName, usamos el nombre directo
+        if (is_array($plKeyRaw) || is_object($plKeyRaw)) {
+            $karr = (array)$plKeyRaw;
+            if (!empty($karr['ListName'])) {
+                $plKeyResolved = (string)($karr['ListNum'] ?? $karr['PriceList'] ?? '');
+                $pricesOut[] = [
+                    'PriceListKey' => $plKeyResolved,
+                    'PriceListName' => trim((string)$karr['ListName']),
+                    'ItemName' => $ip['ItemName'] ?? $itemInfo['ItemName'] ?? $itemCode,
+                    'Price' => $toFloat($ip['Price'] ?? $ip['PriceListPrice'] ?? $ip['ListPrice'] ?? $ip['ItemPrice'] ?? $ip['UnitPrice'] ?? null) ?? ($ip['Price'] ?? ''),
+                    'Currency' => $ip['Currency'] ?? '',
+                    '_raw' => $ip
+                ];
+                continue;
+            }
+        }
+
+        // si viene como string con @odata.id o ruta, extraer numero: PriceLists(...number...)
+        $plKeyCandidate = '';
+        if (is_string($plKeyRaw)) {
+            $plKeyCandidate = trim($plKeyRaw);
+            if (preg_match('/PriceLists.*?([0-9]+)/i', $plKeyCandidate, $m)) {
+                $plKeyCandidate = (string)$m[1];
+            }
+        }
+
+        // resolver nombre usando la función (intenta mapa, allPriceLists y endpoints)
+        $plName = $resolvePriceListName($plKeyCandidate !== '' ? $plKeyCandidate : $plKeyRaw);
+
+        // determinar key string para salida
+        $plKeyStr = '';
+        if (is_string($plKeyRaw) && $plKeyRaw !== '') $plKeyStr = (string)$plKeyRaw;
+        elseif (is_numeric($plKeyCandidate)) $plKeyStr = (string)$plKeyCandidate;
+        else $plKeyStr = (string)($ip['PriceList'] ?? $ip['ListNum'] ?? '');
+
+        $priceVal = $ip['Price'] ?? $ip['PriceListPrice'] ?? $ip['ListPrice'] ?? $ip['ItemPrice'] ?? $ip['UnitPrice'] ?? null;
+        $priceNumeric = $toFloat($priceVal);
+
+        $pricesOut[] = [
+            'PriceListKey' => $plKeyStr,
+            'PriceListName' => $plName ?: ($ip['PriceListName'] ?? $ip['ListName'] ?? ($plKeyStr !== '' ? "Lista #{$plKeyStr}" : 'Sin nombre')),
+            'ItemName' => $ip['ItemName'] ?? $itemInfo['ItemName'] ?? $itemCode,
+            'Price' => is_null($priceNumeric) ? ($priceVal ?? '') : $priceNumeric,
+            'Currency' => $ip['Currency'] ?? '',
+            '_raw' => $ip
+        ];
+    }
+
+    // fallback alternativo si no encontró nada (igual que antes)
+    if (empty($pricesOut)) {
+        $tryPaths = [
+            rtrim($baseUrlRoot, '/') . "/Items('" . rawurlencode($itemCode) . "')/ItemPrices",
+            rtrim($baseUrlRoot, '/') . "/ItemPrices?\$filter=ItemCode eq '" . str_replace("'", "''", $itemCode) . "'"
+        ];
+        foreach ($tryPaths as $p) {
+            $resAlt = $doCurlTimeout($p . "?\$select=PriceList,Price,Currency,ItemName,PriceListName,ListName,Name,ListNum");
+            if ($resAlt['err'] || $resAlt['httpCode'] < 200 || $resAlt['httpCode'] >= 300) continue;
+            $decAlt = json_decode($resAlt['body'], true);
+            $altValues = $decAlt['value'] ?? $decAlt;
+            if (!is_array($altValues)) $altValues = [];
+            foreach ($altValues as $ip) {
+                $plKey = $ip['PriceList'] ?? $ip['ListNum'] ?? null;
+                if (is_array($plKey)) $plKey = $plKey['ListNum'] ?? null;
+                if (is_object($plKey)) $plKey = property_exists($plKey, 'ListNum') ? $plKey->ListNum : null;
+                $plKeyStr = is_null($plKey) ? '' : (string)$plKey;
+                $plName = $priceListsMap[$plKeyStr] ?? ($ip['PriceListName'] ?? $ip['ListName'] ?? $ip['Name'] ?? '');
+                if ($plName === '' && $plKeyStr !== '') $plName = "Lista #{$plKeyStr}";
+                $priceNumeric = $toFloat($ip['Price'] ?? $ip['ListPrice'] ?? null);
+                $pricesOut[] = [
+                    'PriceListKey' => $plKeyStr,
+                    'PriceListName' => $plName,
+                    'ItemName' => $ip['ItemName'] ?? $itemInfo['ItemName'] ?? $itemCode,
+                    'Price' => is_null($priceNumeric) ? ($ip['Price'] ?? '') : $priceNumeric,
+                    'Currency' => $ip['Currency'] ?? '',
+                    '_raw' => $ip
+                ];
+            }
+            if (!empty($pricesOut)) break;
+        }
+    }
+
+    // ordenar por clave
+    usort($pricesOut, function ($a, $b) {
+        return strcmp((string)($a['PriceListKey'] ?? ''), (string)($b['PriceListKey'] ?? ''));
+    });
+
+    $result = ['success' => true, 'item' => $itemInfo, 'prices' => $pricesOut];
+    if ($debug) {
+        $result['debug'] = [
+            'priceListsMap' => $priceListsMap,
+            'firstRawPrice' => $rawPrices[0] ?? null,
+            'allPriceLists' => $allPriceLists,
+            'priceListFetchCache' => $priceListFetchCache
+        ];
+    }
+    return $result;
+}
+
+    /**
+     * Ejecuta un callable y atrapa cualquier excepción/throwable,
+     * devolviendo string vacío en caso de error.
+     */
+    private function invokeIgnoreCallable(callable $fn) {
+        try {
+            return $fn();
+        } catch (\Throwable $e) {
+            // Opcional: log para debugging
+            if (function_exists('log_message')) {
+                // Si usas CodeIgniter
+                log_message('error', 'invokeIgnoreCallable: ' . $e->getMessage());
+            } else {
+                error_log('invokeIgnoreCallable: ' . $e->getMessage());
+            }
+            return '';
+        }
     }
 
     /**
@@ -675,7 +661,7 @@ class PurchaseAuthController extends BaseController {
 
         // usuario autenticado (ajusta si tu helper devuelve otra cosa)
         $idUser = user() ? user()->id : null;
-        $userName =user()->username;
+        $userName = user()->username;
 
         // --- 1) leer input (JSON o form)
         $inputJson = $request->getJSON(true); // array asociativo
