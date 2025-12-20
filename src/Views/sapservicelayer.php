@@ -157,6 +157,10 @@
         var companyDB = $("#companyDB").val();
         var password = $("#password").val();
         var username = $("#username").val();
+        
+        var nameODBC = $("#nameODBC").val();
+        var userODBC = $("#userODBC").val();
+        var passwordODBC = $("#passwordODBC").val();
 
         $("#btnSaveSapservicelayer").attr("disabled", true);
 
@@ -170,7 +174,10 @@
         datos.append("password", password);
         datos.append("username", username);
 
-
+        datos.append("nameODBC", nameODBC);
+        datos.append("userODBC", userODBC);
+        datos.append("passwordODBC", passwordODBC);
+        
         $.ajax({
 
             url: "<?= base_url('admin/sapservicelayer/save') ?>",
@@ -324,6 +331,10 @@
                 $("#companyDB").val(respuesta["companyDB"]);
                 $("#password").val(respuesta["password"]);
                 $("#username").val(respuesta["username"]);
+                
+                $("#nameODBC").val(respuesta["nameODBC"]);
+                $("#userODBC").val(respuesta["userODBC"]);
+                $("#passwordODBC").val(respuesta["passwordODBC"]);
 
 
             }

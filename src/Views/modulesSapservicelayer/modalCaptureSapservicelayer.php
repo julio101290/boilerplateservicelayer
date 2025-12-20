@@ -101,6 +101,43 @@
                         </div>
                     </div>
 
+                    <div class="form-group row">
+                        <label for="username" class="col-sm-2 col-form-label"><?= lang('sapservicelayer.fields.nameODBC') ?></label>
+                        <div class="col-sm-10">
+                            <div class="input-group">
+                                <div class="input-group-prepend">
+                                    <span class="input-group-text"><i class="fas fa-pencil-alt"></i></span>
+                                </div>
+                                <input type="text" name="nameODBC" id="nameODBC" class="form-control <?= session('error.nameODBC') ? 'is-invalid' : '' ?>" value="<?= old('nameODBC') ?>" placeholder="<?= lang('sapservicelayer.fields.nameODBC') ?>" autocomplete="off">
+                            </div>
+                        </div>
+                    </div>
+
+
+                    <div class="form-group row">
+                        <label for="username" class="col-sm-2 col-form-label"><?= lang('sapservicelayer.fields.userODBC') ?></label>
+                        <div class="col-sm-10">
+                            <div class="input-group">
+                                <div class="input-group-prepend">
+                                    <span class="input-group-text"><i class="fas fa-pencil-alt"></i></span>
+                                </div>
+                                <input type="text" name="userODBC" id="userODBC" class="form-control <?= session('error.nameODBC') ? 'is-invalid' : '' ?>" value="<?= old('nameODBC') ?>" placeholder="<?= lang('sapservicelayer.fields.nameODBC') ?>" autocomplete="off">
+                            </div>
+                        </div>
+                    </div>
+
+
+                    <div class="form-group row">
+                        <label for="username" class="col-sm-2 col-form-label"><?= lang('sapservicelayer.fields.passwordODBC') ?></label>
+                        <div class="col-sm-10">
+                            <div class="input-group">
+                                <div class="input-group-prepend">
+                                    <span class="input-group-text"><i class="fas fa-pencil-alt"></i></span>
+                                </div>
+                                <input type="text" name="passwordODBC" id="passwordODBC" class="form-control <?= session('error.passwordODBC') ? 'is-invalid' : '' ?>" value="<?= old('passwordODBC') ?>" placeholder="<?= lang('sapservicelayer.fields.passwordODBC') ?>" autocomplete="off">
+                            </div>
+                        </div>
+                    </div>
 
                 </form>
             </div>

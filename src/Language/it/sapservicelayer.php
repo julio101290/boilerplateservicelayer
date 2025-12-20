@@ -1,32 +1,36 @@
- <?php
+<?php
 
-$sapservicelayer["logDescription"] = "The sapservicelayer was saved with the following data:";
-$sapservicelayer["logUpdate"] = "The sapservicelayer was updated  with the following data:";
-$sapservicelayer["logDeleted"] = "The sapservicelayer was deleted  with the following data:";
-$sapservicelayer["msg_delete"] = "The sapservicelayer was deleted  correctly:";
+$sapservicelayer["logDescription"] = "Il sapservicelayer è stato salvato con i seguenti dati:";
+$sapservicelayer["logUpdate"] = "Il sapservicelayer è stato aggiornato con i seguenti dati:";
+$sapservicelayer["logDeleted"] = "Il sapservicelayer è stato eliminato con i seguenti dati:";
+$sapservicelayer["msg_delete"] = "Il sapservicelayer è stato eliminato correttamente:";
 
-$sapservicelayer["add"] = "Add Sapservicelayer";
-$sapservicelayer["edit"] = "Edit sapservicelayer";
-$sapservicelayer["createEdit"] = "Create / Edit";
-$sapservicelayer["title"] = "sapservicelayer management";
-$sapservicelayer["subtitle"] = "sapservicelayer list";
-$sapservicelayer["fields"]["idEmpresa"] = "IdEmpresa";
-$sapservicelayer["fields"]["description"] = "Description";
+$sapservicelayer["add"] = "Aggiungi Sapservicelayer";
+$sapservicelayer["edit"] = "Modifica sapservicelayer";
+$sapservicelayer["createEdit"] = "Crea / Modifica";
+$sapservicelayer["title"] = "Gestione sapservicelayer";
+$sapservicelayer["subtitle"] = "Elenco sapservicelayer";
+$sapservicelayer["fields"]["idEmpresa"] = "ID Azienda";
+$sapservicelayer["fields"]["description"] = "Descrizione";
 $sapservicelayer["fields"]["url"] = "Url";
-$sapservicelayer["fields"]["port"] = "Port";
-$sapservicelayer["fields"]["companyDB"] = "CompanyDB";
+$sapservicelayer["fields"]["port"] = "Porta";
+$sapservicelayer["fields"]["companyDB"] = "Database aziendale";
 $sapservicelayer["fields"]["password"] = "Password";
-$sapservicelayer["fields"]["username"] = "Username";
-$sapservicelayer["fields"]["created_at"] = "Created_at";
-$sapservicelayer["fields"]["updated_at"] = "Updated_at";
-$sapservicelayer["fields"]["deleted_at"] = "Deleted_at";
+$sapservicelayer["fields"]["username"] = "Nome utente";
 
-$sapservicelayer["fields"]["actions"] = "Actions";
-$sapservicelayer["msg"]["msg_insert"] = "The sapservicelayer has been correctly added.";
-$sapservicelayer["msg"]["msg_update"] = "The sapservicelayer has been correctly modified.";
-$sapservicelayer["msg"]["msg_delete"] = "The sapservicelayer has been correctly deleted.";
-$sapservicelayer["msg"]["msg_get"] = "The Sapservicelayer has been successfully get.";
-$sapservicelayer["msg"]["msg_get_fail"] = "The sapservicelayer not found or already deleted.";
+$sapservicelayer["fields"]["nameODBC"] = "Nome ODBC";
+$sapservicelayer["fields"]["userODBC"] = "Utente ODBC";
+$sapservicelayer["fields"]["passwordODBC"] = "Password ODBC";
+
+$sapservicelayer["fields"]["created_at"] = "Creato il";
+$sapservicelayer["fields"]["updated_at"] = "Aggiornato il";
+$sapservicelayer["fields"]["deleted_at"] = "Eliminato il";
+
+$sapservicelayer["fields"]["actions"] = "Azioni";
+$sapservicelayer["msg"]["msg_insert"] = "Il sapservicelayer è stato aggiunto correttamente.";
+$sapservicelayer["msg"]["msg_update"] = "Il sapservicelayer è stato modificato correttamente.";
+$sapservicelayer["msg"]["msg_delete"] = "Il sapservicelayer è stato eliminato correttamente.";
+$sapservicelayer["msg"]["msg_get"] = "Il sapservicelayer è stato ottenuto con successo.";
+$sapservicelayer["msg"]["msg_get_fail"] = "Il sapservicelayer non è stato trovato o è già stato eliminato.";
 
 return $sapservicelayer;
-        

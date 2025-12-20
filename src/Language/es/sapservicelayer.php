@@ -17,6 +17,11 @@ $sapservicelayer["fields"]["port"] = "Puerto";
 $sapservicelayer["fields"]["companyDB"] = "Base de datos de la compañía";
 $sapservicelayer["fields"]["password"] = "Contraseña";
 $sapservicelayer["fields"]["username"] = "Nombre de usuario";
+
+$sapservicelayer["fields"]["nameODBC"] = "Nombre ODBC";
+$sapservicelayer["fields"]["userODBC"] = "Usuario ODBC";
+$sapservicelayer["fields"]["passwordODBC"] = "Contraseña ODBC";
+
 $sapservicelayer["fields"]["created_at"] = "Creado el";
 $sapservicelayer["fields"]["updated_at"] = "Actualizado el";
 $sapservicelayer["fields"]["deleted_at"] = "Eliminado el";

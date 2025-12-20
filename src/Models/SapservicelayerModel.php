@@ -12,9 +12,16 @@ class SapservicelayerModel extends Model {
     protected $returnType = 'array';
     protected $useSoftDeletes = true;
     protected $allowedFields = [
-        'id', 'idEmpresa', 'description', 'url', 'port',
-        'companyDB', 'password', 'username', 'created_at',
-        'updated_at', 'deleted_at'
+        'id'
+        , 'idEmpresa'
+        , 'description'
+        , 'url'
+        , 'port'
+        , 'nameODBC'
+        , 'userODBC'
+        , 'passwordODBC'
+        , 'updated_at'
+        , 'deleted_at'
     ];
     protected $useTimestamps = true;
     protected $createdField = 'created_at';
@@ -33,7 +40,18 @@ class SapservicelayerModel extends Model {
 
     public function mdlGetSapservicelayer($idEmpresas) {
         $result = $this->db->table('sapservicelayer a, empresas b')
-                ->select('a.id,a.idEmpresa,a.description,a.url,a.port,a.companyDB,a.password,a.username,a.created_at,a.updated_at,a.deleted_at, b.nombre as nombreEmpresa')
+                ->select('a.id'
+                        . ',a.idEmpresa'
+                        . ',a.description'
+                        . ',a.url'
+                        . ',a.port'
+                        . ',a.companyDB'
+                        . ',a.password'
+                        . ',a.username'
+                        . ',a.created_at'
+                        . ',a.updated_at'
+                        . ',a.deleted_at'
+                        . ', b.nombre as nombreEmpresa')
                 ->where('a.idEmpresa', 'b.id', false)
                 ->whereIn('a.idEmpresa', $idEmpresas);
 
