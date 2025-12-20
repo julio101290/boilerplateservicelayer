@@ -64,10 +64,9 @@ class PurchaseAuthController extends BaseController {
             ];
 
             $orderField = $columns[$orderColumnIndex] ?? 'DocEntry';
-            
-            
+
             //GET SAP CONECTION DATA
-            
+
             $dataConect = $this->serviceLayerModel->first();
 
             // Usuario SAP ligado al usuario del sistema
@@ -222,7 +221,7 @@ class PurchaseAuthController extends BaseController {
             }
 
             // 🔥 FIJAR SCHEMA (OBLIGATORIO EN HANA)
-            if (!odbc_exec($conn, 'SET SCHEMA "TEST_GUSA3_5"')) {
+            if (!odbc_exec($conn, 'SET SCHEMA "' . $dataConect["companyDB"] . '"')) {
                 throw new \Exception('Error SET SCHEMA: ' . odbc_errormsg($conn));
             }
 
@@ -266,7 +265,7 @@ class PurchaseAuthController extends BaseController {
                     WHERE
                         OPOR."CANCELED" = \'N\'
                         AND OPOR."U_Authorized" = \'U\'
-                        AND OPOR."U_Autorizador" = \''.$userAuth.'\'
+                        AND OPOR."U_Autorizador" = \'' . $userAuth . '\'
 
                     GROUP BY
                         OPOR."DocEntry",
@@ -633,9 +632,9 @@ class PurchaseAuthController extends BaseController {
 
         $dataConect = $this->serviceLayerModel->first();
         // --- Conexión ODBC ---
-                
-        $conn = odbc_connect($dataConect["nameODBC"], $dataConect["userODBC"],  $dataConect["passwordODBC"]);
-        
+
+        $conn = odbc_connect($dataConect["nameODBC"], $dataConect["userODBC"], $dataConect["passwordODBC"]);
+
         if (!$conn) {
             return $this->response->setStatusCode(500)->setJSON([
                         'draw' => $draw,
@@ -644,6 +643,11 @@ class PurchaseAuthController extends BaseController {
                         'data' => [],
                         'error' => 'No se pudo conectar a HANA vía ODBC'
             ]);
+        }
+
+        // 🔥 FIJAR SCHEMA (OBLIGATORIO EN HANA)
+        if (!odbc_exec($conn, 'SET SCHEMA "' . $dataConect["companyDB"] . '"')) {
+            throw new \Exception('Error SET SCHEMA: ' . odbc_errormsg($conn));
         }
 
         // --- Query líneas de orden ---

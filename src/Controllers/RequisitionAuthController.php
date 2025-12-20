@@ -227,7 +227,7 @@ class RequisitionAuthController extends BaseController {
             }
 
             // 🔥 Fijar schema
-            if (!odbc_exec($conn, 'SET SCHEMA "TEST_GUSA3_5"')) {
+            if (!odbc_exec($conn, 'SET SCHEMA "' . $dataConect["companyDB"] . '"')) {
                 throw new \Exception('Error SET SCHEMA: ' . odbc_errormsg($conn));
             }
 
@@ -637,7 +637,7 @@ class RequisitionAuthController extends BaseController {
             }
 
             // 🔥 Fijar schema HANA
-            if (!odbc_exec($conn, 'SET SCHEMA "TEST_GUSA3_5"')) {
+            if (!odbc_exec($conn, 'SET SCHEMA "' . $dataConect["companyDB"] . '"')) {
                 throw new \Exception('Error SET SCHEMA: ' . odbc_errormsg($conn));
             }
 
