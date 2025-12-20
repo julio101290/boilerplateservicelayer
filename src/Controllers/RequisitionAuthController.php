@@ -204,298 +204,131 @@ class RequisitionAuthController extends BaseController {
             $orderDir = 'asc',
             array $fields = []
     ) {
-        // normalizar entradas
-        $autorizador = trim((string) $userAuth);
-        $search = trim((string) $search);
-        $orderDir = strtolower($orderDir) === 'desc' ? 'desc' : 'asc';
-        $orderField = $orderField ?: 'DocEntry';
+        try {
+            // -----------------------------
+            // 1) Normalizar entradas
+            // -----------------------------
+            $autorizador = trim((string) $userAuth);
+            $search = trim((string) $search);
+            $orderDir = strtolower($orderDir) === 'desc' ? 'DESC' : 'ASC';
+            $orderField = $orderField ?: 'DocEntry';
 
-        // helper curl (usa $port y $cookie del scope)
-        $doCurl = function ($url) use ($port, $cookie) {
-            $curl = curl_init();
-            curl_setopt_array($curl, [
-                CURLOPT_PORT => $port,
-                CURLOPT_URL => $url,
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_ENCODING => "",
-                CURLOPT_COOKIE => $cookie,
-                CURLOPT_SSL_VERIFYHOST => false,
-                CURLOPT_SSL_VERIFYPEER => false,
-                CURLOPT_MAXREDIRS => 10,
-                CURLOPT_TIMEOUT => 30,
-                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-                CURLOPT_CUSTOMREQUEST => "GET",
-                CURLOPT_HTTPHEADER => [
-                    "Accept: application/json",
-                    "User-Agent: PHP cURL",
-                    "B1S-CaseInsensitive: true"
-                ],
-            ]);
-            $response = curl_exec($curl);
-            $err = curl_error($curl);
-            $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
-            curl_close($curl);
-            return ['err' => $err, 'httpCode' => $httpCode, 'body' => $response];
-        };
-
-        // helper curl con timeout mayor (para consultas potencialmente más largas)
-        $doCurlTimeout = function ($url) use ($port, $cookie) {
-            $curl = curl_init();
-            curl_setopt_array($curl, [
-                CURLOPT_PORT => $port,
-                CURLOPT_URL => $url,
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_ENCODING => "",
-                CURLOPT_COOKIE => $cookie,
-                CURLOPT_SSL_VERIFYHOST => false,
-                CURLOPT_SSL_VERIFYPEER => false,
-                CURLOPT_MAXREDIRS => 10,
-                CURLOPT_TIMEOUT => 60, // 60s
-                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-                CURLOPT_CUSTOMREQUEST => "GET",
-                CURLOPT_HTTPHEADER => [
-                    "Accept: application/json",
-                    "User-Agent: PHP cURL",
-                    "B1S-CaseInsensitive: true"
-                ],
-            ]);
-            $response = curl_exec($curl);
-            $err = curl_error($curl);
-            $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
-            curl_close($curl);
-            return ['err' => $err, 'httpCode' => $httpCode, 'body' => $response];
-        };
-
-        // 1) filtro base (autorizador + startswith)
-        $filterParts = ["startswith(U_Authorized,'U')"];
-        if ($autorizador !== '') {
-            $escaped = str_replace("'", "''", $autorizador);
-            $filterParts[] = ctype_digit($escaped) ? "U_Autorizador eq {$escaped}" : "U_Autorizador eq '{$escaped}'";
-        }
-        $baseFilter = implode(' and ', $filterParts);
-
-        // 2) búsqueda global (si aplica)
-        $fullFilter = $baseFilter;
-        if ($search !== '') {
-            $searchEsc = str_replace("'", "''", $search);
-            $searchParts = [];
-            $candidateFields = empty($fields) ? ['DocNum', 'DocEntry', 'U_WhsCode', 'U_Almacen', 'U_Autorizador', 'UserSign', 'U_Creator'] : $fields;
-            foreach ($candidateFields as $f)
-                $searchParts[] = "contains({$f},'{$searchEsc}')";
-            $searchFilter = '(' . implode(' or ', $searchParts) . ')';
-            $fullFilter = $baseFilter !== '' ? ($baseFilter . ' and ' . $searchFilter) : $searchFilter;
-        }
-
-        // 3) recordsTotal y recordsFiltered (usando $count)
-        $recordsTotal = 0;
-        $recordsFiltered = 0;
-        $countTotalUrl = rtrim($baseUrlRoot, '/') . "/PurchaseRequests/\$count";
-        if ($baseFilter !== '')
-            $countTotalUrl .= "?%24filter=" . rawurlencode($baseFilter);
-        $resCountTotal = $doCurl($countTotalUrl);
-        if ($resCountTotal['err'])
-            return ['error' => "cURL Error #: " . $resCountTotal['err']];
-        if ($resCountTotal['httpCode'] < 200 || $resCountTotal['httpCode'] >= 300) {
-            return ['error' => 'Service Layer HTTP error (count total)', 'httpCode' => $resCountTotal['httpCode'], 'body' => $resCountTotal['body']];
-        }
-        $recordsTotal = (int) trim($resCountTotal['body']);
-
-        if ($fullFilter !== '') {
-            $countFilteredUrl = rtrim($baseUrlRoot, '/') . "/PurchaseRequests/\$count?%24filter=" . rawurlencode($fullFilter);
-            $resCountFiltered = $doCurl($countFilteredUrl);
-            if ($resCountFiltered['err'])
-                return ['error' => "cURL Error #: " . $resCountFiltered['err']];
-            if ($resCountFiltered['httpCode'] < 200 || $resCountFiltered['httpCode'] >= 300) {
-                return ['error' => 'Service Layer HTTP error (count filtered)', 'httpCode' => $resCountFiltered['httpCode'], 'body' => $resCountFiltered['body']];
-            }
-            $recordsFiltered = (int) trim($resCountFiltered['body']);
-        } else {
-            $recordsFiltered = $recordsTotal;
-        }
-
-        // 4) Probe para detectar campos válidos
-        $probeUrl = rtrim($baseUrlRoot, '/') . "/PurchaseRequests?\$top=1";
-        if ($fullFilter !== '')
-            $probeUrl .= '&%24filter=' . rawurlencode($fullFilter);
-        $resProbe = $doCurl($probeUrl);
-        $availableKeys = [];
-        if (!$resProbe['err'] && $resProbe['httpCode'] >= 200 && $resProbe['httpCode'] < 300) {
-            $decProbe = json_decode($resProbe['body'], true);
-            $sample = $decProbe['value'][0] ?? null;
-            if (is_array($sample))
-                $availableKeys = array_keys($sample);
-        } else {
-            // fallback a campos seguros si probe falla o no hay filas
-            $availableKeys = ['DocEntry', 'DocNum', 'DocDate', 'UserSign', 'U_Autorizador', 'U_WhsCode', 'U_Almacen', 'U_Creator'];
-        }
-
-        // 5) detectar campos disponibles para whs/creator/auth
-        $possibleWhsFields = ['U_WhsCode', 'U_Almacen', 'U_Whs', 'WhsCode'];
-        $possibleCreatorFields = ['U_Creator', 'UserSign', 'Creator', 'UserCode'];
-        $possibleAuthFields = ['U_Autorizador', 'Autorizador', 'U_Authorizer'];
-
-        $whsField = null;
-        foreach ($possibleWhsFields as $f)
-            if (in_array($f, $availableKeys)) {
-                $whsField = $f;
-                break;
+            $dataConect = $this->serviceLayerModel->first();
+            // -----------------------------
+            // 2) Conexión ODBC a HANA
+            // -----------------------------
+            $conn = odbc_connect(
+                    $dataConect["nameODBC"],
+                    $dataConect["userODBC"],
+                    $dataConect["passwordODBC"]
+            );
+            if (!$conn) {
+                throw new \Exception('Error conexión ODBC: ' . odbc_errormsg());
             }
 
-        $creatorField = null;
-        foreach ($possibleCreatorFields as $f)
-            if (in_array($f, $availableKeys)) {
-                $creatorField = $f;
-                break;
+            // 🔥 Fijar schema
+            if (!odbc_exec($conn, 'SET SCHEMA "TEST_GUSA3_5"')) {
+                throw new \Exception('Error SET SCHEMA: ' . odbc_errormsg($conn));
             }
 
-        $authField = null;
-        foreach ($possibleAuthFields as $f)
-            if (in_array($f, $availableKeys)) {
-                $authField = $f;
-                break;
+            // -----------------------------
+            // 3) Construir SQL directo
+            // -----------------------------
+            $sql = "
+            SELECT
+                OPOR.\"DocEntry\",
+                OPOR.\"DocNum\",
+                OPOR.\"DocDate\",
+                OPOR.\"CardCode\",
+                OPOR.\"CardName\",
+                MAX(POR1.\"WhsCode\") AS \"Almacen\",
+                MAX(OWHS.\"WhsName\") AS \"NombreAlmacen\",
+                OPOR.\"DocTotal\" - OPOR.\"VatSum\" AS \"TotalSinImpuestos\",
+                OPOR.\"VatSum\" AS \"Impuestos\",
+                OPOR.\"DocTotal\" AS \"TotalConImpuestos\",
+                OPOR.\"U_Autorizador\",
+                OPOR.\"UserSign\",
+                UC.\"U_NAME\" AS \"NombreUsuario\"
+            FROM OPOR
+            INNER JOIN POR1 ON POR1.\"DocEntry\" = OPOR.\"DocEntry\"
+            LEFT JOIN OWHS ON OWHS.\"WhsCode\" = POR1.\"WhsCode\"
+            LEFT JOIN OUSR UC ON UC.\"USERID\" = OPOR.\"UserSign\"
+            WHERE
+                OPOR.\"CANCELED\" = 'N'
+                AND OPOR.\"U_Authorized\" LIKE 'U%'
+                AND OPOR.\"U_Autorizador\" = '{$autorizador}'
+        ";
+
+            if ($search !== '') {
+                $sql .= " AND (OPOR.\"DocNum\" LIKE '%{$search}%' OR OPOR.\"CardName\" LIKE '%{$search}%')";
             }
 
-        // 6) construir select con campos válidos
-        $safeBase = ['DocEntry', 'DocNum', 'DocDate'];
-        $selectFields = [];
-        foreach ($safeBase as $s)
-            if (in_array($s, $availableKeys))
-                $selectFields[] = $s;
-        if ($whsField !== null)
-            $selectFields[] = $whsField;
-        if ($creatorField !== null)
-            $selectFields[] = $creatorField;
-        if ($authField !== null)
-            $selectFields[] = $authField;
-        if (empty($selectFields))
-            $selectFields = $safeBase;
+            $sql .= "
+            GROUP BY
+                OPOR.\"DocEntry\",
+                OPOR.\"DocNum\",
+                OPOR.\"DocDate\",
+                OPOR.\"CardCode\",
+                OPOR.\"CardName\",
+                OPOR.\"DocTotal\",
+                OPOR.\"VatSum\",
+                OPOR.\"U_Autorizador\",
+                OPOR.\"UserSign\",
+                UC.\"U_NAME\"
+            ORDER BY OPOR.\"{$orderField}\" {$orderDir}
+            LIMIT {$length} OFFSET {$start}
+        ";
 
-        $selectParam = '%24select=' . rawurlencode(implode(',', $selectFields));
-        $orderbyParam = '%24orderby=' . rawurlencode($orderField . ' ' . $orderDir);
-        $queryParts = [$selectParam, $orderbyParam];
-        if ($length > 0) {
-            $queryParts[] = '%24skip=' . (int) $start;
-            $queryParts[] = '%24top=' . (int) $length;
-        }
-        if ($fullFilter !== '')
-            $queryParts[] = '%24filter=' . rawurlencode($fullFilter);
-
-        $urlData = rtrim($baseUrlRoot, '/') . '/PurchaseRequests?' . implode('&', $queryParts);
-        $resData = $doCurl($urlData);
-        if ($resData['err'])
-            return ['error' => "cURL Error #: " . $resData['err']];
-        if ($resData['httpCode'] < 200 || $resData['httpCode'] >= 300) {
-            return ['error' => 'Service Layer HTTP error (data fetch)', 'httpCode' => $resData['httpCode'], 'body' => $resData['body']];
-        }
-        $decData = json_decode($resData['body'], true);
-        $rows = $decData['value'] ?? [];
-
-        // --------- 7) Traer Users solo para las claves presentes en $rows (filtrado) ----------
-        $usersMap = [];
-        $userKeys = [];
-        if (!empty($rows)) {
-            foreach ($rows as $r) {
-                if (!empty($creatorField) && !empty($r[$creatorField]))
-                    $userKeys[(string) $r[$creatorField]] = true;
-                if (!empty($authField) && !empty($r[$authField]))
-                    $userKeys[(string) $r[$authField]] = true;
+            // -----------------------------
+            // 4) Ejecutar consulta
+            // -----------------------------
+            $rs = odbc_exec($conn, $sql);
+            if (!$rs) {
+                throw new \Exception('Error SQL: ' . odbc_errormsg($conn));
             }
-        }
 
-        if (!empty($userKeys)) {
-            $filters = [];
-            foreach (array_keys($userKeys) as $k) {
-                $k = (string) $k;
-                if (ctype_digit($k)) {
-                    $filters[] = "InternalKey eq {$k}";
-                    $filters[] = "UserID eq {$k}";
-                    $filters[] = "USERID eq {$k}";
-                } else {
-                    $escaped = str_replace("'", "''", $k);
-                    $filters[] = "UserCode eq '{$escaped}'";
-                }
+            // -----------------------------
+            // 5) Obtener resultados
+            // -----------------------------
+            $data = [];
+            while ($row = odbc_fetch_array($rs)) {
+                $data[] = [
+                    'DocEntry' => $row['DocEntry'],
+                    'DocNum' => $row['DocNum'],
+                    'DocDate' => $row['DocDate'],
+                    'CardCode' => $row['CardCode'],
+                    'CardName' => $row['CardName'],
+                    'Almacen' => $row['Almacen'],
+                    'NombreAlmacen' => $row['NombreAlmacen'],
+                    'TotalSinImpuestos' => round((float) $row['TotalSinImpuestos'], 2),
+                    'Impuestos' => round((float) $row['Impuestos'], 2),
+                    'TotalConImpuestos' => round((float) $row['TotalConImpuestos'], 2),
+                    'AutorizadorKey' => $row['U_Autorizador'],
+                    'UsuarioKey' => $row['UserSign'],
+                    'NombreDeUsuario' => $row['NombreUsuario'],
+                    '_raw' => $row
+                ];
             }
-            $filters = array_unique($filters);
-            $filterUsers = implode(' or ', array_slice($filters, 0, 200)); // limit conditions
 
-            $urlUsers = rtrim($baseUrlRoot, '/') . "/Users?\$select=UserCode,Name&\$filter=" . rawurlencode($filterUsers);
+            odbc_free_result($rs);
+            odbc_close($conn);
 
-            $resUsers = $doCurlTimeout($urlUsers);
+            $records = count($data);
 
-            if ($resUsers['err'] || $resUsers['httpCode'] < 200 || $resUsers['httpCode'] >= 300) {
-                // fallback probe ligero
-                $probeUsers = $doCurlTimeout(rtrim($baseUrlRoot, '/') . "/Users?\$top=1");
-                if (!$probeUsers['err'] && $probeUsers['httpCode'] >= 200 && $probeUsers['httpCode'] < 300) {
-                    $decU = json_decode($probeUsers['body'], true);
-                    foreach ($decU['value'] ?? [] as $u) {
-                        if (isset($u['UserCode']))
-                            $usersMap[(string) $u['UserCode']] = $u['Name'] ?? $u['UserCode'];
-                        if (isset($u['InternalKey']))
-                            $usersMap[(string) $u['InternalKey']] = $u['Name'] ?? ($u['UserCode'] ?? '');
-                        if (isset($u['UserID']))
-                            $usersMap[(string) $u['UserID']] = $u['Name'] ?? ($u['UserCode'] ?? '');
-                    }
-                } else {
-                    // no fue posible obtener users, seguimos con usersMap vacío
-                    $usersMap = [];
-                }
-            } else {
-                $decU = json_decode($resUsers['body'], true);
-                foreach ($decU['value'] ?? [] as $u) {
-                    if (isset($u['UserCode']))
-                        $usersMap[(string) $u['UserCode']] = $u['Name'] ?? $u['UserCode'];
-                    if (isset($u['InternalKey']))
-                        $usersMap[(string) $u['InternalKey']] = $u['Name'] ?? ($u['UserCode'] ?? '');
-                    if (isset($u['UserID']))
-                        $usersMap[(string) $u['UserID']] = $u['Name'] ?? ($u['UserCode'] ?? '');
-                }
-            }
-        }
-
-        // 8) Traer Warehouses (una sola vez)
-        $whsMap = [];
-        $resWhs = $doCurl(rtrim($baseUrlRoot, '/') . "/Warehouses?\$select=WhsCode,WhsName");
-        if (!$resWhs['err'] && $resWhs['httpCode'] >= 200 && $resWhs['httpCode'] < 300) {
-            $decW = json_decode($resWhs['body'], true);
-            foreach ($decW['value'] ?? [] as $w) {
-                if (isset($w['WhsCode']))
-                    $whsMap[(string) $w['WhsCode']] = $w['WhsName'] ?? $w['WhsCode'];
-            }
-        }
-
-        // 9) Mapear resultados y devolver
-        $out = [];
-        foreach ($rows as $r) {
-            $almCode = '';
-            if ($whsField !== null && !empty($r[$whsField]))
-                $almCode = (string) $r[$whsField];
-
-            $creatorKey = $creatorField !== null && !empty($r[$creatorField]) ? (string) $r[$creatorField] : '';
-            $authKey = $authField !== null && !empty($r[$authField]) ? (string) $r[$authField] : '';
-
-            $creatorName = $usersMap[$creatorKey] ?? $creatorKey;
-            $authName = $usersMap[$authKey] ?? $authKey;
-            $whsName = $whsMap[$almCode] ?? $almCode;
-
-            $out[] = [
-                'DocNum' => $r['DocNum'] ?? '',
-                'DocEntry' => $r['DocEntry'] ?? '',
-                'DocDate' => $r['DocDate'] ?? '',
-                'Almacen' => $almCode,
-                'AlmacenName' => $whsName,
-                'UsuarioKey' => $creatorKey,
-                'NombreDeUsuario' => $creatorName,
-                'AutorizadorKey' => $authKey,
-                'NombreAutorizador' => $authName,
-                '_raw' => $r
+            return [
+                'recordsTotal' => $records,
+                'recordsFiltered' => $records,
+                'data' => $data
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'recordsTotal' => 0,
+                'recordsFiltered' => 0,
+                'data' => [],
+                'error' => true,
+                'message' => $e->getMessage()
             ];
         }
-
-        return [
-            'recordsTotal' => $recordsTotal,
-            'recordsFiltered' => $recordsFiltered,
-            'data' => $out
-        ];
     }
 
     /**
@@ -546,8 +379,8 @@ class RequisitionAuthController extends BaseController {
 
         // usuario autenticado (ajusta si tu helper devuelve otra cosa)
         $idUser = user() ? user()->id : null;
-        
-        $userName =user()->username;
+
+        $userName = user()->username;
 
         // --- 1) leer input (JSON o form)
         $inputJson = $request->getJSON(true); // array asociativo
@@ -774,8 +607,8 @@ class RequisitionAuthController extends BaseController {
         $start = (int) ($input['start'] ?? 0);
         $length = (int) ($input['length'] ?? 10);
         $searchValue = (string) ($input['search']['value'] ?? ($input['search'] ?? ''));
-        $orderColumnIndex = (int) (($input['order'][0]['column'] ?? 1));
-        $orderDir = (strtolower($input['order'][0]['dir'] ?? 'asc') === 'desc') ? 'desc' : 'asc';
+        $orderColumnIndex = (int) ($input['order'][0]['column'] ?? 1);
+        $orderDir = (strtolower($input['order'][0]['dir'] ?? 'asc') === 'desc') ? 'DESC' : 'ASC';
 
         $docEntry = isset($input['docEntry']) ? (int) $input['docEntry'] : 0;
         if ($docEntry <= 0) {
@@ -787,198 +620,97 @@ class RequisitionAuthController extends BaseController {
 
         // mapear columna de DataTables a campo real
         $columnsMap = [
-            0 => 'ItemCode', // No (no ordenable)
-            1 => 'ItemCode', // Articulo
-            2 => 'ItemDescription', // Descripcion
-            3 => 'Quantity'         // Cantidad
+            0 => 'ItemCode',
+            1 => 'ItemCode',
+            2 => 'ItemDescription',
+            3 => 'Quantity'
         ];
         $orderField = $columnsMap[$orderColumnIndex] ?? 'ItemCode';
 
-        // --- obtener configuración SL y login ---
-        $dataSL = $this->serviceLayerModel->select('*')->first();
-        if (empty($dataSL)) {
-            return $this->response->setStatusCode(500)->setJSON([
-                        'draw' => $draw, 'recordsTotal' => 0, 'recordsFiltered' => 0, 'data' => [],
-                        'error' => 'No hay configuración Service Layer'
-            ]);
-        }
-
         try {
-            $conexionSap = $this->serviceLayerController->login(
-                    $dataSL['url'],
-                    $dataSL['port'],
-                    $dataSL['password'],
-                    $dataSL['username'],
-                    $dataSL['companyDB']
-            );
-        } catch (\Exception $e) {
-            return $this->response->setStatusCode(500)->setJSON([
-                        'draw' => $draw, 'recordsTotal' => 0, 'recordsFiltered' => 0, 'data' => [],
-                        'error' => 'Error login SL: ' . $e->getMessage()
-            ]);
-        }
-
-        if (empty($conexionSap->SessionId)) {
-            return $this->response->setStatusCode(500)->setJSON([
-                        'draw' => $draw, 'recordsTotal' => 0, 'recordsFiltered' => 0, 'data' => [],
-                        'error' => 'No se obtuvo SessionId de Service Layer'
-            ]);
-        }
-
-        $cookie = "B1SESSION=" . $conexionSap->SessionId . "; ROUTEID=.node1";
-
-        // helper curl
-        $doCurl = function ($url) use ($dataSL, $cookie) {
-            $curl = curl_init();
-            curl_setopt_array($curl, [
-                CURLOPT_PORT => $dataSL['port'],
-                CURLOPT_URL => $url,
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_ENCODING => "",
-                CURLOPT_COOKIE => $cookie,
-                CURLOPT_SSL_VERIFYHOST => false,
-                CURLOPT_SSL_VERIFYPEER => false,
-                CURLOPT_MAXREDIRS => 10,
-                CURLOPT_TIMEOUT => 30,
-                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-                CURLOPT_CUSTOMREQUEST => "GET",
-                CURLOPT_HTTPHEADER => [
-                    "Accept: application/json",
-                    "User-Agent: PHP cURL",
-                    "B1S-CaseInsensitive: true"
-                ],
-            ]);
-            $response = curl_exec($curl);
-            $err = curl_error($curl);
-            $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
-            curl_close($curl);
-            return ['err' => $err, 'httpCode' => $httpCode, 'body' => $response];
-        };
-
-        // normalizar SL root (una sola /b1s/v1)
-        $slRoot = rtrim($dataSL['url'], '/');
-        if (stripos($slRoot, '/b1s/v1') === false) {
-            $slRoot .= '/b1s/v1';
-        } else {
-            $pos = stripos($slRoot, '/b1s/v1');
-            $slRoot = substr($slRoot, 0, $pos) . '/b1s/v1';
-        }
-
-        // --- Traer las DocumentLines en una sola llamada al padre ---
-        // pedimos la propiedad DocumentLines completa
-        $url = $slRoot . "/PurchaseRequests({$docEntry})?\$select=DocumentLines";
-        $res = $doCurl($url);
-        if ($res['err']) {
-            return $this->response->setStatusCode(500)->setJSON([
-                        'draw' => $draw, 'recordsTotal' => 0, 'recordsFiltered' => 0, 'data' => [],
-                        'error' => 'cURL Error #: ' . $res['err']
-            ]);
-        }
-        if ($res['httpCode'] < 200 || $res['httpCode'] >= 300) {
-            return $this->response->setStatusCode(500)->setJSON([
-                        'draw' => $draw, 'recordsTotal' => 0, 'recordsFiltered' => 0, 'data' => [],
-                        'error' => 'Service Layer HTTP error (get lines)', 'httpCode' => $res['httpCode'], 'body' => $res['body']
-            ]);
-        }
-
-        $dec = json_decode($res['body'], true);
-        if ($dec === null) {
-            return $this->response->setStatusCode(500)->setJSON([
-                        'draw' => $draw, 'recordsTotal' => 0, 'recordsFiltered' => 0, 'data' => [],
-                        'error' => 'No JSON en respuesta de DocumentLines', 'body' => $res['body']
-            ]);
-        }
-
-        // Extraer array de líneas: puede venir en value[0].DocumentLines o DocumentLines directo
-        $lines = [];
-        if (isset($dec['value']) && is_array($dec['value']) && isset($dec['value'][0]['DocumentLines'])) {
-            $lines = $dec['value'][0]['DocumentLines'];
-        } elseif (isset($dec['DocumentLines']) && is_array($dec['DocumentLines'])) {
-            $lines = $dec['DocumentLines'];
-        } elseif (isset($dec['value']) && is_array($dec['value']) && !empty($dec['value'])) {
-            // fallback: si el response fue value([...]) y la primera tiene otras estructuras
-            $first = $dec['value'][0];
-            if (isset($first['DocumentLines']) && is_array($first['DocumentLines'])) {
-                $lines = $first['DocumentLines'];
+            // -----------------------------
+            // 1) Conexión ODBC HANA
+            // -----------------------------
+            $conn = odbc_connect('hanagusa', 'SBOHANA', 'Gusa%%2024$');
+            if (!$conn) {
+                throw new \Exception('Error conexión ODBC: ' . odbc_errormsg());
             }
-        }
 
-        // Si no obtuvimos líneas, devolvemos vacío
-        if (!is_array($lines) || empty($lines)) {
+            // 🔥 Fijar schema HANA
+            if (!odbc_exec($conn, 'SET SCHEMA "TEST_GUSA3_5"')) {
+                throw new \Exception('Error SET SCHEMA: ' . odbc_errormsg($conn));
+            }
+
+            // -----------------------------
+            // 2) Construir SQL para líneas
+            // -----------------------------
+            $sql = "
+            SELECT
+                \"DocEntry\",
+                \"LineNum\",
+                \"ItemCode\",
+                \"Dscription\" as \"ItemDescription\",
+                \"Quantity\"
+            FROM \"POR1\"
+            WHERE \"DocEntry\" = {$docEntry}
+        ";
+
+            if ($searchValue !== '') {
+                $searchEsc = str_replace("'", "''", $searchValue);
+                $sql .= " AND (\"ItemCode\" LIKE '%{$searchEsc}%' OR \"ItemDescription\" LIKE '%{$searchEsc}%')";
+            }
+
+            $sql .= " ORDER BY \"{$orderField}\" {$orderDir}";
+
+            if ($length > 0) {
+                $sql .= " LIMIT {$length} OFFSET {$start}";
+            }
+
+            // -----------------------------
+            // 3) Ejecutar consulta
+            // -----------------------------
+            $rs = odbc_exec($conn, $sql);
+            if (!$rs) {
+                throw new \Exception('Error SQL: ' . odbc_errormsg($conn));
+            }
+
+            // -----------------------------
+            // 4) Obtener resultados
+            // -----------------------------
+            $data = [];
+            $idx = $start;
+            while ($row = odbc_fetch_array($rs)) {
+                $idx++;
+                $data[] = [
+                    'No' => $idx,
+                    'Articulo' => $row['ItemCode'] ?? '',
+                    'Descripcion' => $row['ItemDescription'] ?? '',
+                    'Cantidad' => $row['Quantity'] ?? 0,
+                    '_raw' => $row
+                ];
+            }
+
+            odbc_free_result($rs);
+            odbc_close($conn);
+
+            $recordsTotal = count($data);
+            $recordsFiltered = $recordsTotal;
+
             return $this->response->setJSON([
+                        'draw' => $draw,
+                        'recordsTotal' => $recordsTotal,
+                        'recordsFiltered' => $recordsFiltered,
+                        'data' => $data
+            ]);
+        } catch (\Throwable $e) {
+            return $this->response->setStatusCode(500)->setJSON([
                         'draw' => $draw,
                         'recordsTotal' => 0,
                         'recordsFiltered' => 0,
-                        'data' => []
+                        'data' => [],
+                        'error' => true,
+                        'message' => $e->getMessage()
             ]);
         }
-
-        // --- recordsTotal antes de filtrar ---
-        $recordsTotal = count($lines);
-
-        // --- Filtrado por búsqueda (en PHP) ---
-        $filtered = $lines;
-        if ($searchValue !== '') {
-            $sEsc = mb_strtolower($searchValue);
-            $filtered = array_filter($lines, function ($ln) use ($sEsc) {
-                $code = mb_strtolower((string) ($ln['ItemCode'] ?? $ln['ItemCode'] ?? ''));
-                $desc = mb_strtolower((string) ($ln['ItemDescription'] ?? $ln['ItemDescription'] ?? ($ln['ItemName'] ?? '')));
-                return (strpos($code, $sEsc) !== false) || (strpos($desc, $sEsc) !== false);
-            });
-            // reindex
-            $filtered = array_values($filtered);
-        }
-
-        $recordsFiltered = count($filtered);
-
-        // --- Ordenar en PHP ---
-        $orderFieldKey = $orderField;
-        usort($filtered, function ($a, $b) use ($orderFieldKey, $orderDir) {
-            $va = $a[$orderFieldKey] ?? ($a[strtolower($orderFieldKey)] ?? null);
-            $vb = $b[$orderFieldKey] ?? ($b[strtolower($orderFieldKey)] ?? null);
-
-            // normalizar nulls
-            if ($va === null)
-                $va = '';
-            if ($vb === null)
-                $vb = '';
-
-            // si es numeric (cantidad), comparar numérico
-            if (is_numeric($va) && is_numeric($vb)) {
-                $cmp = $va <=> $vb;
-            } else {
-                $cmp = strcasecmp((string) $va, (string) $vb);
-            }
-
-            return ($orderDir === 'desc') ? -$cmp : $cmp;
-        });
-
-        // --- Paginación en PHP ---
-        if ($length > 0) {
-            $paged = array_slice($filtered, $start, $length);
-        } else {
-            $paged = $filtered;
-        }
-
-        // --- Mapear salida para DataTables ---
-        $out = [];
-        $idx = $start;
-        foreach ($paged as $line) {
-            $idx++;
-            $out[] = [
-                'No' => $idx,
-                'Articulo' => $line['ItemCode'] ?? '',
-                'Descripcion' => $line['ItemDescription'] ?? ($line['ItemName'] ?? ''),
-                'Cantidad' => $line['Quantity'] ?? ($line['RequiredQuantity'] ?? 0),
-                '_raw' => $line
-            ];
-        }
-
-        return $this->response->setJSON([
-                    'draw' => $draw,
-                    'recordsTotal' => (int) $recordsTotal,
-                    'recordsFiltered' => (int) $recordsFiltered,
-                    'data' => $out
-        ]);
     }
 }
