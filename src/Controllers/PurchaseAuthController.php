@@ -64,6 +64,11 @@ class PurchaseAuthController extends BaseController {
             ];
 
             $orderField = $columns[$orderColumnIndex] ?? 'DocEntry';
+            
+            
+            //GET SAP CONECTION DATA
+            
+            $dataConect = $this->serviceLayerModel->first();
 
             // Usuario SAP ligado al usuario del sistema
             $userLinkSap = $this->user_sap_link
@@ -80,7 +85,8 @@ class PurchaseAuthController extends BaseController {
                     $start,
                     $length,
                     $orderField,
-                    $orderDir
+                    $orderDir,
+                    $dataConect
             );
 
             return $this->response->setJSON([
@@ -182,7 +188,8 @@ class PurchaseAuthController extends BaseController {
             $start = 0,
             $length = 10,
             $orderField = 'DocEntry',
-            $orderDir = 'asc'
+            $orderDir = 'asc',
+            $dataConect = ""
     ) {
         try {
 
@@ -205,9 +212,9 @@ class PurchaseAuthController extends BaseController {
             // 2) Conexión ODBC
             // -----------------------------
             $conn = odbc_connect(
-                    'hanagusa',
-                    'SBOHANA',
-                    'Gusa%%2024$'
+                    $dataConect["nameODBC"],
+                    $dataConect["userODBC"],
+                    $dataConect["passwordODBC"]
             );
 
             if (!$conn) {
@@ -624,8 +631,11 @@ class PurchaseAuthController extends BaseController {
         ];
         $orderField = $columnsMap[$orderColumnIndex] ?? 'LineNum';
 
+        $dataConect = $this->serviceLayerModel->first();
         // --- Conexión ODBC ---
-        $conn = odbc_connect('hanagusa', 'SBOHANA', 'Gusa%%2024$');
+                
+        $conn = odbc_connect($dataConect["nameODBC"], $dataConect["userODBC"],  $dataConect["passwordODBC"]);
+        
         if (!$conn) {
             return $this->response->setStatusCode(500)->setJSON([
                         'draw' => $draw,
