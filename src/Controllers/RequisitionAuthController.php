@@ -631,7 +631,19 @@ class RequisitionAuthController extends BaseController {
             // -----------------------------
             // 1) Conexión ODBC HANA
             // -----------------------------
-            $conn = odbc_connect('hanagusa', 'SBOHANA', 'Gusa%%2024$');
+
+            $dataConect = $this->serviceLayerModel->first();
+
+            $conn = odbc_connect(
+                    $dataConect["nameODBC"],
+                    $dataConect["userODBC"],
+                    $dataConect["passwordODBC"]
+            );
+            if (!$conn) {
+                throw new \Exception('Error conexión ODBC: ' . odbc_errormsg());
+            }
+            
+
             if (!$conn) {
                 throw new \Exception('Error conexión ODBC: ' . odbc_errormsg());
             }
