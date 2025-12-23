@@ -116,4 +116,33 @@ $routes->group('admin', function ($routes) {
                 'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
             ]
     );
+
+    $routes->resource('link_sap_branchoffice', [
+        'filter' => 'permission:link_sap_branchoffice-permission',
+        'controller' => 'link_sap_branchofficeController',
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers',
+        'except' => 'show'
+    ]);
+
+    $routes->post('link_sap_branchoffice/save'
+            , 'Link_sap_branchofficeController::save',
+            [
+                'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+            ]
+    );
+
+    $routes->post('link_sap_branchoffice/getLink_sap_branchoffice'
+            , 'Link_sap_branchofficeController::getLink_sap_branchoffice',
+            [
+                'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+            ]
+    );
+
+    // Select2 users (reutiliza el método getUsersAjaxSelect2 si lo tienes)
+    $routes->post('branchoffice/getBranchOfficeSAPAjax',
+            'Link_sap_branchofficeController::getSucursalesAjax',
+            [
+                'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+            ]
+    );
 });
