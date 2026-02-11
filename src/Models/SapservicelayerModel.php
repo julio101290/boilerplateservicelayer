@@ -19,6 +19,7 @@ class SapservicelayerModel extends Model {
         , 'port'
         , 'nameODBC'
         , 'userODBC'
+        , 'companyDB'
         , 'passwordODBC'
         , 'updated_at'
         , 'deleted_at'
