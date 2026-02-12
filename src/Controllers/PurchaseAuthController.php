@@ -64,10 +64,9 @@ class PurchaseAuthController extends BaseController {
             ];
 
             $orderField = $columns[$orderColumnIndex] ?? 'DocEntry';
-            
-            
+
             //GET SAP CONECTION DATA
-            
+
             $dataConect = $this->serviceLayerModel->first();
 
             // Usuario SAP ligado al usuario del sistema
@@ -182,154 +181,158 @@ class PurchaseAuthController extends BaseController {
         return $this->respondDeleted($registro, lang("user_sap_link.msg_delete"));
     }
 
-    public function showReqWithOoutAuth(
-            $userAuth,
-            $search,
-            $start = 0,
-            $length = 10,
-            $orderField = 'DocEntry',
-            $orderDir = 'asc',
-            $dataConect = ""
-    ) {
-        try {
+public function showReqWithOoutAuth(
+        $userAuth,
+        $search,
+        $start = 0,
+        $length = 10,
+        $orderField = 'DocEntry',
+        $orderDir = 'asc',
+        $dataConect = ""
+) {
+    try {
 
-            // -----------------------------
-            // 1) Normalizar entradas
-            // -----------------------------
-            $autorizador = (string) $userAuth;
-            $search = trim((string) $search);
-            $start = (int) $start;
-            $length = (int) $length;
+        // -----------------------------
+        // 1) Normalizar entradas
+        // -----------------------------
+        $autorizador = (string) $userAuth;
+        $search = trim((string) $search);
+        $start = (int) $start;
+        $length = (int) $length;
 
-            $orderDir = strtolower($orderDir) === 'desc' ? 'DESC' : 'ASC';
+        $orderDir = strtolower($orderDir) === 'desc' ? 'DESC' : 'ASC';
 
-            $allowedOrderFields = ['DocEntry', 'DocNum', 'DocDate', 'CardName'];
-            if (!in_array($orderField, $allowedOrderFields, true)) {
-                $orderField = 'DocEntry';
-            }
+        $allowedOrderFields = ['DocEntry', 'DocNum', 'DocDate', 'CardName'];
+        if (!in_array($orderField, $allowedOrderFields, true)) {
+            $orderField = 'DocEntry';
+        }
 
-            // -----------------------------
-            // 2) Conexión ODBC
-            // -----------------------------
-            $conn = odbc_connect(
-                    $dataConect["nameODBC"],
-                    $dataConect["userODBC"],
-                    $dataConect["passwordODBC"]
-            );
+        // -----------------------------
+        // 2) Conexión ODBC
+        // -----------------------------
+        $conn = odbc_connect(
+                $dataConect["nameODBC"],
+                $dataConect["userODBC"],
+                $dataConect["passwordODBC"]
+        );
 
-            if (!$conn) {
-                throw new \Exception('Error conexión ODBC: ' . odbc_errormsg());
-            }
+        if (!$conn) {
+            throw new \Exception('Error conexión ODBC: ' . odbc_errormsg());
+        }
 
-            // 🔥 FIJAR SCHEMA (OBLIGATORIO EN HANA)
-            if (!odbc_exec($conn, 'SET SCHEMA "TEST_GUSA3_5"')) {
-                throw new \Exception('Error SET SCHEMA: ' . odbc_errormsg($conn));
-            }
+        if (!odbc_exec($conn, 'SET SCHEMA "' . $dataConect["companyDB"] . '"')) {
+            throw new \Exception('Error SET SCHEMA: ' . odbc_errormsg($conn));
+        }
 
-            // -----------------------------
-            // 3) SQL DIRECTO
-            // -----------------------------
-            $sql = '
-                    SELECT
-                        OPOR."DocEntry",
-                        OPOR."DocNum",
-                        OPOR."DocDate",
-                        OPOR."CardCode",
-                        OPOR."CardName",
+        // -----------------------------
+        // 3) SQL DIRECTO
+        // -----------------------------
+        $sql = '
+            SELECT
+                OPOR."DocEntry",
+                OPOR."DocNum",
+                OPOR."DocDate",
+                OPOR."CardCode",
+                OPOR."CardName",
 
+                MAX(POR1."WhsCode") AS "Almacen",
+                MAX(OWHS."WhsName") AS "NombreAlmacen",
+                OPOR."DocTotal" - OPOR."VatSum" AS "TotalSinImpuestos",
+                OPOR."DocTotal" - OPOR."VatSum" AS "TotalSinImpuestos",
+                OPOR."VatSum" AS "Impuestos",
+                OPOR."DocTotal" AS "TotalConImpuestos",
 
+                MAX(OPOR."DiscSum") AS "Descuento",
 
-                        MAX(POR1."WhsCode") AS "Almacen",
-                        MAX(OWHS."WhsName") AS "NombreAlmacen",
-                            OPOR."DocTotal" - OPOR."VatSum" AS "TotalSinImpuestos",
+                OPOR."UserSign",
+                UC."U_NAME" AS "NombreUsuario",
 
-                            OPOR."DocTotal" - OPOR."VatSum" AS "TotalSinImpuestos",
-                        OPOR."VatSum" AS "Impuestos",
-                        OPOR."DocTotal" AS "TotalConImpuestos",
+                OPOR."U_Autorizador",
 
-                        OPOR."UserSign",
-                        UC."U_NAME" AS "NombreUsuario",
+                MAX(OHEM."firstName" || \' \' || OHEM."lastName") AS "NombreOwner" -- 🔥 NUEVO
 
-                        OPOR."U_Autorizador"
+            FROM OPOR
+            INNER JOIN ' . $dataConect["companyDB"] . '.POR1 
+                ON ' . $dataConect["companyDB"] . '.POR1."DocEntry" = OPOR."DocEntry"
+            LEFT JOIN ' . $dataConect["companyDB"] . '.OWHS 
+                ON ' . $dataConect["companyDB"] . '.OWHS."WhsCode" = POR1."WhsCode"
+            LEFT JOIN ' . $dataConect["companyDB"] . '.OUSR UC 
+                ON UC."USERID" = ' . $dataConect["companyDB"] . '.OPOR."UserSign"
 
+            LEFT JOIN ' . $dataConect["companyDB"] . '.OHEM 
+                ON OHEM."empID" = OPOR."OwnerCode" -- 🔥 JOIN OWNER
 
+            WHERE
+                OPOR."CANCELED" = \'N\'
+                AND OPOR."U_Authorized" = \'U\'
+                AND OPOR."U_Autorizador" = \'' . $userAuth . '\'
 
-                    FROM OPOR
-                    INNER JOIN TEST_GUSA3_5.POR1 
-                        ON TEST_GUSA3_5.POR1."DocEntry" = OPOR."DocEntry"
-                    LEFT JOIN TEST_GUSA3_5.OWHS 
-                        ON TEST_GUSA3_5.OWHS."WhsCode" = POR1."WhsCode"
-                    LEFT JOIN TEST_GUSA3_5.OUSR UC 
-                        ON UC."USERID" = TEST_GUSA3_5.OPOR."UserSign"    
+            GROUP BY
+                OPOR."DocEntry",
+                OPOR."DocNum",
+                OPOR."DocDate",
+                OPOR."CardCode",
+                OPOR."CardName",
+                OPOR."DocTotal",
+                OPOR."VatSum",
+                OPOR."VatSum",
+                OPOR."UserSign",
+                OPOR."U_Autorizador",
+                UC."U_NAME"
+        ';
 
+        $rs = odbc_exec($conn, $sql);
+        if (!$rs) {
+            throw new \Exception('Error SQL: ' . odbc_errormsg($conn));
+        }
 
-                    WHERE
-                        OPOR."CANCELED" = \'N\'
-                        AND OPOR."U_Authorized" = \'U\'
-                        AND OPOR."U_Autorizador" = \''.$userAuth.'\'
+        // -----------------------------
+        // 4) Fetch resultados
+        // -----------------------------
+        $data = [];
+        while ($row = odbc_fetch_array($rs)) {
+            $data[] = [
+                'DocEntry' => $row['DocEntry'],
+                'DocNum' => $row['DocNum'],
+                'DocDate' => $row['DocDate'],
+                'CardCode' => $row['CardCode'],
+                'CardName' => $row['CardName'],
+                'Almacen' => $row['Almacen'],
+                'NombreAlmacen' => $row['NombreAlmacen'],
+                'TotalSinImpuestos' => round((float) $row['TotalSinImpuestos'], 2),
+                'Impuestos' => round((float) $row['Impuestos'], 2),
+                'TotalConImpuestos' => round((float) $row['TotalConImpuestos'], 2),
+                'Descuento' => round((float) $row['Descuento'], 2),
 
-                    GROUP BY
-                        OPOR."DocEntry",
-                        OPOR."DocNum",
-                        OPOR."DocDate",
-                        OPOR."CardCode",
-                        OPOR."CardName",
-                        OPOR."DocTotal",
-                        OPOR."VatSum",
-                        OPOR."VatSum",
-                        OPOR."UserSign",
-                        OPOR."U_Autorizador",
-                        UC."U_NAME"
+                'NombreOwner' => $row['NombreOwner'], // 🔥 NUEVO
 
-';
-
-            $rs = odbc_exec($conn, $sql);
-            if (!$rs) {
-                throw new \Exception('Error SQL: ' . odbc_errormsg($conn));
-            }
-
-            // -----------------------------
-            // 4) Fetch resultados
-            // -----------------------------
-            $data = [];
-            while ($row = odbc_fetch_array($rs)) {
-                $data[] = [
-                    'DocEntry' => $row['DocEntry'],
-                    'DocNum' => $row['DocNum'],
-                    'DocDate' => $row['DocDate'],
-                    'CardCode' => $row['CardCode'],
-                    'CardName' => $row['CardName'],
-                    'Almacen' => $row['Almacen'],
-                    'NombreAlmacen' => $row['NombreAlmacen'],
-                    'TotalSinImpuestos' => round((float) $row['TotalSinImpuestos'], 2),
-                    'Impuestos' => round((float) $row['Impuestos'], 2),
-                    'TotalConImpuestos' => round((float) $row['TotalConImpuestos'], 2),
-                    'AutorizadorKey' => $row['U_Autorizador'],
-                    'UsuarioKey' => $row['UserSign'],
-                    'NombreDeUsuario' => $row['NombreUsuario'],
-                ];
-            }
-
-            odbc_free_result($rs);
-            odbc_close($conn);
-
-            $records = count($data);
-
-            return [
-                'recordsTotal' => $records,
-                'recordsFiltered' => $records,
-                'data' => $data,
-            ];
-        } catch (\Throwable $e) {
-            return [
-                'recordsTotal' => 0,
-                'recordsFiltered' => 0,
-                'data' => [],
-                'error' => true,
-                'message' => $e->getMessage(),
+                'AutorizadorKey' => $row['U_Autorizador'],
+                'UsuarioKey' => $row['UserSign'],
+                'NombreDeUsuario' => $row['NombreUsuario'],
             ];
         }
+
+        odbc_free_result($rs);
+        odbc_close($conn);
+
+        $records = count($data);
+
+        return [
+            'recordsTotal' => $records,
+            'recordsFiltered' => $records,
+            'data' => $data,
+        ];
+    } catch (\Throwable $e) {
+        return [
+            'recordsTotal' => 0,
+            'recordsFiltered' => 0,
+            'data' => [],
+            'error' => true,
+            'message' => $e->getMessage(),
+        ];
     }
+}
+
 
     /**
      * Get users via Ajax for select2
@@ -633,9 +636,9 @@ class PurchaseAuthController extends BaseController {
 
         $dataConect = $this->serviceLayerModel->first();
         // --- Conexión ODBC ---
-                
-        $conn = odbc_connect($dataConect["nameODBC"], $dataConect["userODBC"],  $dataConect["passwordODBC"]);
-        
+
+        $conn = odbc_connect($dataConect["nameODBC"], $dataConect["userODBC"], $dataConect["passwordODBC"]);
+
         if (!$conn) {
             return $this->response->setStatusCode(500)->setJSON([
                         'draw' => $draw,
@@ -654,8 +657,8 @@ class PurchaseAuthController extends BaseController {
                 "Quantity",
                 "Price",
                 ("Quantity" * "Price") AS "Total"
-            FROM "TEST_GUSA3_5"."POR1"
-            WHERE "DocEntry" = '.$docEntry.'
+            FROM ' . $dataConect["companyDB"] . '."POR1"
+            WHERE "DocEntry" = ' . $docEntry . '
             ORDER BY "LineNum" ASC';
 
         $stmt = odbc_prepare($conn, $sql);

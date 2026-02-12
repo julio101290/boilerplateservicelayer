@@ -29,10 +29,11 @@
                                 <th>Almacén</th>
                                 <th>Folio</th>
                                 <th>Fecha</th>
-
+                                <th>Solicita</th>
                                 <!-- Nuevas columnas añadidas -->
                                 <th>Proveedor</th>
                                 <th>Total</th>
+                                <th>Descuento</th>
                                 <th>Impuestos</th>
                                 <th>Total c/ Impuestos</th>
                             </tr>
@@ -50,11 +51,13 @@
 <script>
     // Helper formato moneda (usa locale del navegador, fallback simple)
     function fmtMoney(val) {
-        if (val === null || typeof val === 'undefined' || val === '') return '';
+        if (val === null || typeof val === 'undefined' || val === '')
+            return '';
         var n = parseFloat(val);
-        if (isNaN(n)) return '';
+        if (isNaN(n))
+            return '';
         try {
-            return new Intl.NumberFormat(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+            return new Intl.NumberFormat(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(n);
         } catch (e) {
             return n.toFixed(2);
         }
@@ -85,7 +88,7 @@
                 width: '220px'
             },
             // Opcional: ajustar ancho de columnas de totales
-            { targets: [5,6,7], className: 'text-right' }
+            {targets: [5, 6, 7], className: 'text-right'}
         ],
         columns: [
             // Columna acciones (botones)
@@ -118,6 +121,7 @@
                 }
             },
 
+
             // Columna Almacén
             {
                 data: function (row) {
@@ -125,6 +129,9 @@
                 },
                 name: 'Almacen'
             },
+                    
+
+
 
             // Columna DocNum (Folio)
             {
@@ -141,6 +148,14 @@
                 },
                 name: 'DocDate'
             },
+                    
+                        // Columna Solicita
+            {
+                data: function (row) {
+                    return row.NombreDeUsuario ?? row.NombreDeUsuario ?? row.NombreDeUsuario ?? row.NombreDeUsuario ?? (row._raw && (row._raw.NombreDeUsuario ?? row._raw.NombreDeUsuario)) ?? '';
+                },
+                name: 'NombreDeUsuario'
+            },
 
             // Columna Proveedor (CardName)
             {
@@ -151,22 +166,31 @@
                 name: 'CardName'
             },
 
+            // Columna Descuento
+            {
+                data: function (row) {
+                    var v = row.DocTotal ?? row.TotalSinImpuestos ?? (row._raw && (row._raw.TotalSinImpuestos ?? null)) ?? null;
+                    return fmtMoney(v);
+                },
+                name: 'TotalSinImpuestos'
+            },
+
             // Columna DocTotal (Total sin impuestos)
             {
                 data: function (row) {
-                    var v = row.DocTotal ?? row.DocTotal ?? (row._raw && (row._raw.DocTotal ?? null)) ?? null;
+                    var v = row.Descuento ?? row.Descuento ?? (row._raw && (row._raw.Descuento ?? null)) ?? null;
                     return fmtMoney(v);
                 },
-                name: 'DocTotal'
+                name: 'Descuento'
             },
 
             // Columna TaxTotal (Total impuestos)
             {
                 data: function (row) {
-                    var v = row.TaxTotal ?? (row._raw && (row._raw.TaxTotal ?? null)) ?? null;
+                    var v = row.Impuestos ?? (row._raw && (row._raw.Impuestos ?? null)) ?? null;
                     return fmtMoney(v);
                 },
-                name: 'TaxTotal'
+                name: 'Impuestos'
             },
 
             // Columna Total con impuestos
@@ -280,7 +304,7 @@
             method: 'POST',
             dataType: 'json',
             contentType: 'application/json; charset=utf-8',
-            data: JSON.stringify({ docEntry: docEntry }),
+            data: JSON.stringify({docEntry: docEntry}),
             success: function (resp) {
                 if (resp && resp.data) {
                     // popular modal (asumiendo que modalShowProductsPO tiene un contenedor #modalPOItemsBody)
@@ -310,7 +334,7 @@
 
     $(function () {
         // Hacer modales draggable si aplica
-        $("#modalAddUser_sap_link").draggable();
+        $("#modalListProductsPO").draggable();
     });
 </script>
 <?= $this->endSection() ?>
