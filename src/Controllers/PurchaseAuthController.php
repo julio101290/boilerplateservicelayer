@@ -181,53 +181,53 @@ class PurchaseAuthController extends BaseController {
         return $this->respondDeleted($registro, lang("user_sap_link.msg_delete"));
     }
 
-public function showReqWithOoutAuth(
-        $userAuth,
-        $search,
-        $start = 0,
-        $length = 10,
-        $orderField = 'DocEntry',
-        $orderDir = 'asc',
-        $dataConect = ""
-) {
-    try {
+    public function showReqWithOoutAuth(
+            $userAuth,
+            $search,
+            $start = 0,
+            $length = 10,
+            $orderField = 'DocEntry',
+            $orderDir = 'asc',
+            $dataConect = ""
+    ) {
+        try {
 
-        // -----------------------------
-        // 1) Normalizar entradas
-        // -----------------------------
-        $autorizador = (string) $userAuth;
-        $search = trim((string) $search);
-        $start = (int) $start;
-        $length = (int) $length;
+            // -----------------------------
+            // 1) Normalizar entradas
+            // -----------------------------
+            $autorizador = (string) $userAuth;
+            $search = trim((string) $search);
+            $start = (int) $start;
+            $length = (int) $length;
 
-        $orderDir = strtolower($orderDir) === 'desc' ? 'DESC' : 'ASC';
+            $orderDir = strtolower($orderDir) === 'desc' ? 'DESC' : 'ASC';
 
-        $allowedOrderFields = ['DocEntry', 'DocNum', 'DocDate', 'CardName'];
-        if (!in_array($orderField, $allowedOrderFields, true)) {
-            $orderField = 'DocEntry';
-        }
+            $allowedOrderFields = ['DocEntry', 'DocNum', 'DocDate', 'CardName'];
+            if (!in_array($orderField, $allowedOrderFields, true)) {
+                $orderField = 'DocEntry';
+            }
 
-        // -----------------------------
-        // 2) Conexión ODBC
-        // -----------------------------
-        $conn = odbc_connect(
-                $dataConect["nameODBC"],
-                $dataConect["userODBC"],
-                $dataConect["passwordODBC"]
-        );
+            // -----------------------------
+            // 2) Conexión ODBC
+            // -----------------------------
+            $conn = odbc_connect(
+                    $dataConect["nameODBC"],
+                    $dataConect["userODBC"],
+                    $dataConect["passwordODBC"]
+            );
 
-        if (!$conn) {
-            throw new \Exception('Error conexión ODBC: ' . odbc_errormsg());
-        }
+            if (!$conn) {
+                throw new \Exception('Error conexión ODBC: ' . odbc_errormsg());
+            }
 
-        if (!odbc_exec($conn, 'SET SCHEMA "' . $dataConect["companyDB"] . '"')) {
-            throw new \Exception('Error SET SCHEMA: ' . odbc_errormsg($conn));
-        }
+            if (!odbc_exec($conn, 'SET SCHEMA "' . $dataConect["companyDB"] . '"')) {
+                throw new \Exception('Error SET SCHEMA: ' . odbc_errormsg($conn));
+            }
 
-        // -----------------------------
-        // 3) SQL DIRECTO
-        // -----------------------------
-        $sql = '
+            // -----------------------------
+            // 3) SQL DIRECTO
+            // -----------------------------
+            $sql = '
             SELECT
                 OPOR."DocEntry",
                 OPOR."DocNum",
@@ -281,58 +281,70 @@ public function showReqWithOoutAuth(
                 UC."U_NAME"
         ';
 
-        $rs = odbc_exec($conn, $sql);
-        if (!$rs) {
-            throw new \Exception('Error SQL: ' . odbc_errormsg($conn));
-        }
+            $rs = odbc_exec($conn, $sql);
+            if (!$rs) {
+                throw new \Exception('Error SQL: ' . odbc_errormsg($conn));
+            }
 
-        // -----------------------------
-        // 4) Fetch resultados
-        // -----------------------------
-        $data = [];
-        while ($row = odbc_fetch_array($rs)) {
-            $data[] = [
-                'DocEntry' => $row['DocEntry'],
-                'DocNum' => $row['DocNum'],
-                'DocDate' => $row['DocDate'],
-                'CardCode' => $row['CardCode'],
-                'CardName' => $row['CardName'],
-                'Almacen' => $row['Almacen'],
-                'NombreAlmacen' => $row['NombreAlmacen'],
-                'TotalSinImpuestos' => round((float) $row['TotalSinImpuestos'], 2),
-                'Impuestos' => round((float) $row['Impuestos'], 2),
-                'TotalConImpuestos' => round((float) $row['TotalConImpuestos'], 2),
-                'Descuento' => round((float) $row['Descuento'], 2),
+            // -----------------------------
+            // 4) Fetch resultados
+            // -----------------------------
+            $data = [];
+            while ($row = odbc_fetch_array($rs)) {
 
-                'NombreOwner' => $row['NombreOwner'], // 🔥 NUEVO
+                $row = $this->utf8ize($row); // 🔥 FIX UTF8 SIN TOCAR TU LOGICA
 
-                'AutorizadorKey' => $row['U_Autorizador'],
-                'UsuarioKey' => $row['UserSign'],
-                'NombreDeUsuario' => $row['NombreUsuario'],
+                $data[] = [
+                    'DocEntry' => $row['DocEntry'],
+                    'DocNum' => $row['DocNum'],
+                    'DocDate' => $row['DocDate'],
+                    'CardCode' => $row['CardCode'],
+                    'CardName' => $row['CardName'],
+                    'Almacen' => $row['Almacen'],
+                    'NombreAlmacen' => $row['NombreAlmacen'],
+                    'TotalSinImpuestos' => round((float) $row['TotalSinImpuestos'], 2),
+                    'Impuestos' => round((float) $row['Impuestos'], 2),
+                    'TotalConImpuestos' => round((float) $row['TotalConImpuestos'], 2),
+                    'Descuento' => round((float) $row['Descuento'], 2),
+                    'NombreOwner' => $row['NombreOwner'],
+                    'AutorizadorKey' => $row['U_Autorizador'],
+                    'UsuarioKey' => $row['UserSign'],
+                    'NombreDeUsuario' => $row['NombreUsuario'],
+                ];
+            }
+
+
+            odbc_free_result($rs);
+            odbc_close($conn);
+
+            $records = count($data);
+
+            return [
+                'recordsTotal' => $records,
+                'recordsFiltered' => $records,
+                'data' => $data,
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'recordsTotal' => 0,
+                'recordsFiltered' => 0,
+                'data' => [],
+                'error' => true,
+                'message' => $e->getMessage(),
             ];
         }
-
-        odbc_free_result($rs);
-        odbc_close($conn);
-
-        $records = count($data);
-
-        return [
-            'recordsTotal' => $records,
-            'recordsFiltered' => $records,
-            'data' => $data,
-        ];
-    } catch (\Throwable $e) {
-        return [
-            'recordsTotal' => 0,
-            'recordsFiltered' => 0,
-            'data' => [],
-            'error' => true,
-            'message' => $e->getMessage(),
-        ];
     }
-}
 
+    private function utf8ize($mixed) {
+        if (is_array($mixed)) {
+            foreach ($mixed as $key => $value) {
+                $mixed[$key] = $this->utf8ize($value);
+            }
+        } elseif (is_string($mixed)) {
+            return mb_convert_encoding($mixed, 'UTF-8', 'UTF-8,ISO-8859-1,Windows-1252');
+        }
+        return $mixed;
+    }
 
     /**
      * Get users via Ajax for select2
