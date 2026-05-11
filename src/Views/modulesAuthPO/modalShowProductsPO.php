@@ -23,6 +23,7 @@
                                 <th>#</th>
                                 <th>Artículo</th>
                                 <th>Descripción</th>
+                                <th>Concepto</th>
                                 <th class="text-right">Cantidad</th>
                                 <th class="text-right">Precio</th>
                                 <th class="text-right">Total</th>
@@ -189,6 +190,9 @@
                         return d ?? '';
                     }},
                 {data: 'Descripcion', name: 'Descripcion', render: function (d) {
+                        return d ?? '';
+                    }},
+                {data: 'U_Etapa', name: 'U_Etapa', render: function (d) {
                         return d ?? '';
                     }},
                 {data: 'Cantidad', name: 'Cantidad', className: "text-right", render: function (d) {

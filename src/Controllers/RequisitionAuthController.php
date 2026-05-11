@@ -292,7 +292,7 @@ class RequisitionAuthController extends BaseController {
             // -----------------------------
             $data = [];
             while ($row = odbc_fetch_array($rs)) {
-                $data[] = [
+                $data[] = $this->utf8ize([
                     'DocEntry' => $row['DocEntry'],
                     'DocNum' => $row['DocNum'],
                     'DocDate' => $row['DocDate'],
@@ -307,7 +307,7 @@ class RequisitionAuthController extends BaseController {
                     'UsuarioKey' => $row['UserSign'],
                     'NombreDeUsuario' => $row['NombreUsuario'],
                     '_raw' => $row
-                ];
+                ]);
             }
 
             odbc_free_result($rs);
@@ -642,7 +642,7 @@ class RequisitionAuthController extends BaseController {
             if (!$conn) {
                 throw new \Exception('Error conexión ODBC: ' . odbc_errormsg());
             }
-            
+
 
             if (!$conn) {
                 throw new \Exception('Error conexión ODBC: ' . odbc_errormsg());
@@ -725,5 +725,30 @@ class RequisitionAuthController extends BaseController {
             ]);
         }
     }
-    
+
+    private function utf8ize($data) {
+        if (is_array($data)) {
+            foreach ($data as $key => $value) {
+                $data[$key] = $this->utf8ize($value);
+            }
+            return $data;
+        }
+
+        if (is_object($data)) {
+            foreach ($data as $key => $value) {
+                $data->$key = $this->utf8ize($value);
+            }
+            return $data;
+        }
+
+        if (is_string($data)) {
+            return mb_convert_encoding(
+                    $data,
+                    'UTF-8',
+                    'UTF-8, ISO-8859-1, Windows-1252'
+            );
+        }
+
+        return $data;
+    }
 }

@@ -640,9 +640,10 @@ class PurchaseAuthController extends BaseController {
             0 => 'LineNum',
             1 => 'ItemCode',
             2 => 'ItemDescription',
-            3 => 'Quantity',
-            4 => 'Price',
-            5 => 'Total'
+            3 => 'U_Etapa',
+            4 => 'Quantity',
+            5 => 'Price',
+            6 => 'Total'
         ];
         $orderField = $columnsMap[$orderColumnIndex] ?? 'LineNum';
 
@@ -666,6 +667,7 @@ class PurchaseAuthController extends BaseController {
                 "LineNum",
                 "ItemCode",
                 "Dscription" AS "ItemDescription",
+                "U_Etapa" AS "U_Etapa",
                 "Quantity",
                 "Price",
                 ("Quantity" * "Price") AS "Total"
