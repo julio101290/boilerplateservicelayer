@@ -756,6 +756,7 @@ class PurchaseAuthController extends BaseController {
                 'No' => $start + $idx + 1,
                 'Articulo' => $line['ItemCode'] ?? '',
                 'Descripcion' => $line['ItemDescription'] ?? '',
+                'U_Etapa' => $line['U_Etapa'] ?? '',
                 'Cantidad' => $cantidad,
                 'Precio' => $precio !== null ? round($precio, 2) : null,
                 'Total' => $total !== null ? round($total, 2) : null,
