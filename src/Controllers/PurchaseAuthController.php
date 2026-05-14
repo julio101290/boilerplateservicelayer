@@ -700,7 +700,7 @@ class PurchaseAuthController extends BaseController {
         // --- Traer todas las filas ---
         $lines = [];
         while ($row = odbc_fetch_array($stmt)) {
-            $lines[] = $row;
+            $lines[] = $this->utf8ize($row);
         }
 
         odbc_close($conn);
