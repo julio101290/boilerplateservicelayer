@@ -145,4 +145,23 @@ $routes->group('admin', function ($routes) {
                 'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
             ]
     );
+
+    $routes->get('servicelayer/analizadorSAPXML',
+            'CFDISAPController::analizadorCFDI',
+            ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    $routes->get('servicelayer/analizadorSAPXML',
+            'CFDISAPController::analizadorCFDI',
+            [
+                'namespace' => 'julio101290\boilerplateservicelayer\Controllers',
+                'filter' => 'permission:analizadorCFDI-permission'
+            ]
+    );
+
+    // Para procesar el archivo Excel
+    $routes->post('servicelayer/procesarAnalisisCFDI',
+            'CFDISAPController::procesarAnalisisCFDI',
+            ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
 });
