@@ -13,8 +13,8 @@ use julio101290\boilerplate\Models\UserModel;
 use julio101290\boilerplatecompanies\Models\UsuariosempresaModel;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 
-class CFDISAPController extends BaseController
-{
+class CFDISAPController extends BaseController {
+
     use ResponseTrait;
 
     protected $log;
@@ -25,8 +25,7 @@ class CFDISAPController extends BaseController
     protected $users;
     protected $usersPerCompanie;
 
-    public function __construct()
-    {
+    public function __construct() {
         $this->user_sap_link = new User_sap_linkModel();
         $this->log = new LogModel();
         $this->empresa = new EmpresasModel();
@@ -40,8 +39,7 @@ class CFDISAPController extends BaseController
 
     // ==================== MÉTODOS EXISTENTES ====================
 
-    public function index()
-    {
+    public function index() {
         helper('auth');
 
         $idUser = user()->id;
@@ -67,20 +65,20 @@ class CFDISAPController extends BaseController
             $autorizador = $userLinkSap['sapuser'] ?? null;
 
             $result = $this->showReqWithOoutAuth(
-                $autorizador,
-                $searchValue,
-                $start,
-                $length,
-                $orderField,
-                $orderDir,
-                $dataConect
+                    $autorizador,
+                    $searchValue,
+                    $start,
+                    $length,
+                    $orderField,
+                    $orderDir,
+                    $dataConect
             );
 
             return $this->response->setJSON([
-                'draw' => $draw,
-                'recordsTotal' => $result['recordsTotal'],
-                'recordsFiltered' => $result['recordsFiltered'],
-                'data' => $result['data'],
+                        'draw' => $draw,
+                        'recordsTotal' => $result['recordsTotal'],
+                        'recordsFiltered' => $result['recordsFiltered'],
+                        'data' => $result['data'],
             ]);
         }
 
@@ -89,8 +87,7 @@ class CFDISAPController extends BaseController
         return view('julio101290\boilerplateservicelayer\Views\purchaseAuth', $titulos);
     }
 
-    public function getUser_sap_link()
-    {
+    public function getUser_sap_link() {
         helper('auth');
         $idUser = user()->id;
         $userName = user()->username;
@@ -101,8 +98,8 @@ class CFDISAPController extends BaseController
 
         $idUser_sap_link = $this->request->getPost("idUser_sap_link");
         $dato = $this->user_sap_link->whereIn('idEmpresa', $empresasID)
-            ->where('id', $idUser_sap_link)
-            ->first();
+                ->where('id', $idUser_sap_link)
+                ->first();
 
         $companie = $this->empresa->where("id", $dato["idEmpresa"])->first();
 
@@ -112,8 +109,7 @@ class CFDISAPController extends BaseController
         return $this->response->setJSON($dato);
     }
 
-    public function save()
-    {
+    public function save() {
         helper('auth');
         $userName = user()->username;
         $datos = $this->request->getPost();
@@ -146,8 +142,7 @@ class CFDISAPController extends BaseController
         }
     }
 
-    public function delete($id)
-    {
+    public function delete($id) {
         helper('auth');
         $userName = user()->username;
         $registro = $this->user_sap_link->find($id);
@@ -165,8 +160,7 @@ class CFDISAPController extends BaseController
         return $this->respondDeleted($registro, lang("user_sap_link.msg_delete"));
     }
 
-    public function showReqWithOoutAuth($userAuth, $search, $start = 0, $length = 10, $orderField = 'DocEntry', $orderDir = 'asc', $dataConect = "")
-    {
+    public function showReqWithOoutAuth($userAuth, $search, $start = 0, $length = 10, $orderField = 'DocEntry', $orderDir = 'asc', $dataConect = "") {
         try {
             $autorizador = (string) $userAuth;
             $search = trim((string) $search);
@@ -266,8 +260,7 @@ class CFDISAPController extends BaseController
         }
     }
 
-    private function utf8ize($mixed)
-    {
+    private function utf8ize($mixed) {
         if (is_array($mixed)) {
             foreach ($mixed as $key => $value) {
                 $mixed[$key] = $this->utf8ize($value);
@@ -278,8 +271,7 @@ class CFDISAPController extends BaseController
         return $mixed;
     }
 
-    public function getUsersAjaxSelect2()
-    {
+    public function getUsersAjaxSelect2() {
         $request = service('request');
         $postData = $request->getPost();
         $response['token'] = csrf_hash();
@@ -299,8 +291,7 @@ class CFDISAPController extends BaseController
         echo $jsonVariable;
     }
 
-    public function authorizeOrder()
-    {
+    public function authorizeOrder() {
         helper('auth');
         $request = service('request');
         $idUser = user() ? user()->id : null;
@@ -328,11 +319,11 @@ class CFDISAPController extends BaseController
 
         try {
             $conexionSap = $this->serviceLayerController->login(
-                $dataSL['url'],
-                $dataSL['port'],
-                $dataSL['password'],
-                $dataSL['username'],
-                $dataSL['companyDB']
+                    $dataSL['url'],
+                    $dataSL['port'],
+                    $dataSL['password'],
+                    $dataSL['username'],
+                    $dataSL['companyDB']
             );
         } catch (\Exception $e) {
             return $this->response->setStatusCode(500)->setJSON(['success' => false, 'error' => 'Error login SL: ' . $e->getMessage()]);
@@ -447,10 +438,10 @@ class CFDISAPController extends BaseController
 
         if ($err2 || $http2 < 200 || $http2 >= 300) {
             return $this->response->setJSON([
-                'success' => true,
-                'message' => "Orden de compra {$docNumFromSL} (DocEntry {$docEntry}) autorizada",
-                'docEntry' => $docEntry,
-                'docNum' => $docNumFromSL
+                        'success' => true,
+                        'message' => "Orden de compra {$docNumFromSL} (DocEntry {$docEntry}) autorizada",
+                        'docEntry' => $docEntry,
+                        'docNum' => $docNumFromSL
             ]);
         }
 
@@ -468,16 +459,15 @@ class CFDISAPController extends BaseController
         ]);
 
         return $this->response->setJSON([
-            'success' => true,
-            'message' => "Orden de compra {$docNumFromSL} (DocEntry {$docEntry}) autorizada",
-            'docEntry' => $docEntry,
-            'docNum' => $docNumFromSL,
-            'updatedRow' => $updatedRow
+                    'success' => true,
+                    'message' => "Orden de compra {$docNumFromSL} (DocEntry {$docEntry}) autorizada",
+                    'docEntry' => $docEntry,
+                    'docNum' => $docNumFromSL,
+                    'updatedRow' => $updatedRow
         ]);
     }
 
-    public function showPOItems()
-    {
+    public function showPOItems() {
         $request = service('request');
         $input = $request->getJSON(true);
         if (empty($input)) {
@@ -493,11 +483,11 @@ class CFDISAPController extends BaseController
 
         if ($docEntry <= 0) {
             return $this->response->setStatusCode(400)->setJSON([
-                'draw' => $draw,
-                'recordsTotal' => 0,
-                'recordsFiltered' => 0,
-                'data' => [],
-                'error' => 'docEntry requerido'
+                        'draw' => $draw,
+                        'recordsTotal' => 0,
+                        'recordsFiltered' => 0,
+                        'data' => [],
+                        'error' => 'docEntry requerido'
             ]);
         }
 
@@ -508,11 +498,11 @@ class CFDISAPController extends BaseController
         $conn = odbc_connect($dataConect["nameODBC"], $dataConect["userODBC"], $dataConect["passwordODBC"]);
         if (!$conn) {
             return $this->response->setStatusCode(500)->setJSON([
-                'draw' => $draw,
-                'recordsTotal' => 0,
-                'recordsFiltered' => 0,
-                'data' => [],
-                'error' => 'No se pudo conectar a HANA vía ODBC'
+                        'draw' => $draw,
+                        'recordsTotal' => 0,
+                        'recordsFiltered' => 0,
+                        'data' => [],
+                        'error' => 'No se pudo conectar a HANA vía ODBC'
             ]);
         }
 
@@ -524,22 +514,22 @@ class CFDISAPController extends BaseController
         $stmt = odbc_prepare($conn, $sql);
         if (!$stmt) {
             return $this->response->setStatusCode(500)->setJSON([
-                'draw' => $draw,
-                'recordsTotal' => 0,
-                'recordsFiltered' => 0,
-                'data' => [],
-                'error' => 'Error preparando query ODBC'
+                        'draw' => $draw,
+                        'recordsTotal' => 0,
+                        'recordsFiltered' => 0,
+                        'data' => [],
+                        'error' => 'Error preparando query ODBC'
             ]);
         }
 
         $res = odbc_execute($stmt, [$docEntry]);
         if (!$res) {
             return $this->response->setStatusCode(500)->setJSON([
-                'draw' => $draw,
-                'recordsTotal' => 0,
-                'recordsFiltered' => 0,
-                'data' => [],
-                'error' => 'Error ejecutando query ODBC'
+                        'draw' => $draw,
+                        'recordsTotal' => 0,
+                        'recordsFiltered' => 0,
+                        'data' => [],
+                        'error' => 'Error ejecutando query ODBC'
             ]);
         }
 
@@ -557,10 +547,10 @@ class CFDISAPController extends BaseController
         if ($searchValue !== '') {
             $sEsc = mb_strtolower($searchValue);
             $filtered = array_values(array_filter($lines, function ($ln) use ($sEsc) {
-                $code = mb_strtolower((string) ($ln['ItemCode'] ?? ''));
-                $desc = mb_strtolower((string) ($ln['ItemDescription'] ?? ''));
-                return (strpos($code, $sEsc) !== false) || (strpos($desc, $sEsc) !== false);
-            }));
+                        $code = mb_strtolower((string) ($ln['ItemCode'] ?? ''));
+                        $desc = mb_strtolower((string) ($ln['ItemDescription'] ?? ''));
+                        return (strpos($code, $sEsc) !== false) || (strpos($desc, $sEsc) !== false);
+                    }));
         }
 
         $recordsTotal = count($lines);
@@ -592,10 +582,10 @@ class CFDISAPController extends BaseController
         }
 
         return $this->response->setJSON([
-            'draw' => $draw,
-            'recordsTotal' => $recordsTotal,
-            'recordsFiltered' => $recordsFiltered,
-            'data' => $out
+                    'draw' => $draw,
+                    'recordsTotal' => $recordsTotal,
+                    'recordsFiltered' => $recordsFiltered,
+                    'data' => $out
         ]);
     }
 
@@ -604,8 +594,7 @@ class CFDISAPController extends BaseController
     /**
      * Muestra el formulario para subir el Excel descargado del SAT
      */
-    public function analizadorCFDI()
-    {
+    public function analizadorCFDI() {
         helper('auth');
         $conexiones = $this->serviceLayerModel->findAll();
         $data = [
@@ -618,8 +607,8 @@ class CFDISAPController extends BaseController
     /**
      * Procesa el archivo Excel, consulta SAP vía ODBC y devuelve JSON
      */
-    public function procesarAnalisisCFDI()
-    {
+    public function procesarAnalisisCFDI() {
+        set_time_limit(0); // Evita timeout
         $file = $this->request->getFile('excelFile');
         if (!$file || !$file->isValid()) {
             return $this->response->setJSON(['error' => 'No se ha subido un archivo válido.']);
@@ -638,21 +627,22 @@ class CFDISAPController extends BaseController
         try {
             $spreadsheet = IOFactory::load($file->getTempName());
         } catch (\Exception $e) {
-            return $this->response->setJSON(['error' => 'No se pudo leer el archivo Excel: ' . $e->getMessage()]);
+            return $this->response->setJSON(['error' => 'No se pudo leer el Excel: ' . $e->getMessage()]);
         }
         $worksheet = $spreadsheet->getActiveSheet();
         $rows = $worksheet->toArray();
 
         if (count($rows) < 4) {
-            return $this->response->setJSON(['error' => 'El archivo Excel no contiene suficientes filas (mínimo 4).']);
+            return $this->response->setJSON(['error' => 'El Excel no tiene suficientes filas.']);
         }
 
         $headers = array_map('trim', $rows[2]);
         $uuidColIndex = array_search('UUID', $headers);
         if ($uuidColIndex === false) {
-            return $this->response->setJSON(['error' => 'No se encontró la columna "UUID" en el archivo.']);
+            return $this->response->setJSON(['error' => 'No se encontró la columna "UUID".']);
         }
 
+        // Mapeo de columnas para resultados
         $rfcCol = array_search('Rfc Emisor', $headers);
         $nombreCol = array_search('Nombre Emisor', $headers);
         $folioCol = array_search('Folio', $headers);
@@ -665,7 +655,30 @@ class CFDISAPController extends BaseController
         $formaPagoCol = array_search('Forma de Pago', $headers);
         $monedaCol = array_search('Moneda', $headers);
 
-        // Conexión ODBC
+        // 1. Recoger todos los UUID únicos del Excel (desde fila 4 en adelante)
+        $uuids = [];
+        for ($i = 3; $i < count($rows); $i++) {
+            $row = $rows[$i];
+            if (empty(array_filter($row)))
+                continue;
+            $uuid = trim($row[$uuidColIndex] ?? '');
+            if (empty($uuid)) {
+                // Intentar extraer del nombre del XML (columna A)
+                $xmlFile = trim($row[0] ?? '');
+                if (preg_match('/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/i', $xmlFile, $matches)) {
+                    $uuid = $matches[0];
+                }
+            }
+            if (!empty($uuid)) {
+                $uuids[$uuid] = $uuid; // para evitar duplicados
+            }
+        }
+
+        if (empty($uuids)) {
+            return $this->response->setJSON(['error' => 'No se encontraron UUIDs en el archivo.']);
+        }
+
+        // 2. Conectar ODBC
         $conn = odbc_connect($sapConfig['nameODBC'], $sapConfig['userODBC'], $sapConfig['passwordODBC']);
         if (!$conn) {
             return $this->response->setJSON(['error' => 'Error de conexión ODBC: ' . odbc_errormsg()]);
@@ -674,28 +687,67 @@ class CFDISAPController extends BaseController
             return $this->response->setJSON(['error' => 'Error SET SCHEMA: ' . odbc_errormsg($conn)]);
         }
 
+        // 3. Consulta masiva: armar lista IN ('uuid1','uuid2',...)
+        $uuidList = "'" . implode("','", array_map(function ($u) use ($conn) {
+                            return str_replace("'", "''", $u); // escapar comillas
+                        }, array_keys($uuids))) . "'";
+        $uuidField = "U_FolioFiscal";
+
+        $tablas = [
+            'OPCH' => 'Factura Proveedor',
+            'ORPC' => 'Nota Crédito Proveedor',
+            'ODPI' => 'Factura Anticipo'
+        ];
+
+        // Mapa resultado: uuid -> infoSAP
+        $mapaUUID = [];
+
+        foreach ($tablas as $tabla => $tipoDesc) {
+            $sql = "SELECT \"DocEntry\", \"DocNum\", \"DocTotal\", \"{$uuidField}\" 
+                FROM \"{$sapConfig['companyDB']}\".\"{$tabla}\" 
+                WHERE \"{$uuidField}\" IN ({$uuidList})";
+            $rs = odbc_exec($conn, $sql);
+            if (!$rs) {
+                continue;
+            }
+            while ($row = odbc_fetch_array($rs)) {
+                $folioFiscal = $row[$uuidField];
+                $mapaUUID[$folioFiscal] = [
+                    'encontrado' => 'SI',
+                    'registro' => $row['DocNum'] ?? $row['DocEntry'],
+                    'tipo' => $tipoDesc,
+                    'importe' => number_format((float) $row['DocTotal'], 2)
+                ];
+            }
+            odbc_free_result($rs);
+        }
+        odbc_close($conn);
+
+        // 4. Recorrer filas nuevamente y generar resultados
         $resultados = [];
         for ($i = 3; $i < count($rows); $i++) {
             $row = $rows[$i];
-            if (empty(array_filter($row))) continue;
+            if (empty(array_filter($row)))
+                continue;
 
             $uuid = trim($row[$uuidColIndex] ?? '');
             if (empty($uuid)) {
                 $xmlFile = trim($row[0] ?? '');
                 if (preg_match('/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/i', $xmlFile, $matches)) {
                     $uuid = $matches[0];
-                } else {
-                    $resultados[] = $this->crearResultadoVacio($row, $rfcCol, $nombreCol, $folioCol, $fechaCol, $subtotalCol, $totalCol, $impuestoCol, $impuestoRetCol, $metodoPagoCol, $formaPagoCol, $monedaCol, 'UUID vacío');
-                    continue;
                 }
             }
 
-            $infoSAP = $this->buscarUUIDenSAP_ODBC($uuid, $conn, $sapConfig['companyDB']);
-            $resultado = $this->crearResultadoCompleto($row, $rfcCol, $nombreCol, $folioCol, $fechaCol, $subtotalCol, $totalCol, $impuestoCol, $impuestoRetCol, $metodoPagoCol, $formaPagoCol, $monedaCol, $uuid, $infoSAP);
-            $resultados[] = $resultado;
+            if (empty($uuid)) {
+                $resultados[] = $this->crearResultadoVacio($row, $rfcCol, $nombreCol, $folioCol, $fechaCol, $subtotalCol, $totalCol, $impuestoCol, $impuestoRetCol, $metodoPagoCol, $formaPagoCol, $monedaCol, 'UUID vacío');
+                continue;
+            }
+
+            // Obtener info del mapa (si existe)
+            $infoSAP = $mapaUUID[$uuid] ?? ['encontrado' => 'NO', 'registro' => '', 'tipo' => '', 'importe' => ''];
+            $resultados[] = $this->crearResultadoCompleto($row, $rfcCol, $nombreCol, $folioCol, $fechaCol, $subtotalCol, $totalCol, $impuestoCol, $impuestoRetCol, $metodoPagoCol, $formaPagoCol, $monedaCol, $uuid, $infoSAP);
         }
 
-        odbc_close($conn);
         return $this->response->setJSON(['success' => true, 'data' => $resultados, 'total' => count($resultados)]);
     }
 
@@ -703,8 +755,7 @@ class CFDISAPController extends BaseController
      * Busca un UUID en las tablas de SAP usando ODBC
      * IMPORTANTE: Usa el campo U_FolioFiscal (según tu personalización)
      */
-    private function buscarUUIDenSAP_ODBC($uuid, $conn, $companyDB)
-    {
+    private function buscarUUIDenSAP_ODBC($uuid, $conn, $companyDB) {
         // Campo personalizado donde se guarda el UUID/folio fiscal
         $uuidField = "U_FolioFiscal";
 
@@ -720,8 +771,10 @@ class CFDISAPController extends BaseController
                     FROM \"{$companyDB}\".\"{$tabla}\" 
                     WHERE \"{$uuidField}\" = ?";
             $stmt = odbc_prepare($conn, $sql);
-            if (!$stmt) continue;
-            if (!odbc_execute($stmt, [$uuid])) continue;
+            if (!$stmt)
+                continue;
+            if (!odbc_execute($stmt, [$uuid]))
+                continue;
             $row = odbc_fetch_array($stmt);
             if ($row) {
                 $info['encontrado'] = 'SI';
@@ -735,47 +788,45 @@ class CFDISAPController extends BaseController
         return $info;
     }
 
-    private function crearResultadoCompleto($row, $rfcCol, $nombreCol, $folioCol, $fechaCol, $subtotalCol, $totalCol, $impuestoCol, $impuestoRetCol, $metodoPagoCol, $formaPagoCol, $monedaCol, $uuid, $infoSAP)
-    {
+    private function crearResultadoCompleto($row, $rfcCol, $nombreCol, $folioCol, $fechaCol, $subtotalCol, $totalCol, $impuestoCol, $impuestoRetCol, $metodoPagoCol, $formaPagoCol, $monedaCol, $uuid, $infoSAP) {
         return [
-            'rfc'               => ($rfcCol !== false) ? $row[$rfcCol] : '',
-            'nombre_emisor'     => ($nombreCol !== false) ? $row[$nombreCol] : '',
-            'folio'             => ($folioCol !== false) ? $row[$folioCol] : '',
-            'fecha'             => ($fechaCol !== false) ? $row[$fechaCol] : '',
-            'subtotal'          => ($subtotalCol !== false) ? $row[$subtotalCol] : '',
-            'impuesto'          => ($impuestoCol !== false) ? $row[$impuestoCol] : '',
+            'rfc' => ($rfcCol !== false) ? $row[$rfcCol] : '',
+            'nombre_emisor' => ($nombreCol !== false) ? $row[$nombreCol] : '',
+            'folio' => ($folioCol !== false) ? $row[$folioCol] : '',
+            'fecha' => ($fechaCol !== false) ? $row[$fechaCol] : '',
+            'subtotal' => ($subtotalCol !== false) ? $row[$subtotalCol] : '',
+            'impuesto' => ($impuestoCol !== false) ? $row[$impuestoCol] : '',
             'impuesto_retenido' => ($impuestoRetCol !== false) ? $row[$impuestoRetCol] : '',
-            'total'             => ($totalCol !== false) ? $row[$totalCol] : '',
-            'uuid'              => $uuid,
-            'metodo_pago'       => ($metodoPagoCol !== false) ? $row[$metodoPagoCol] : '',
-            'forma_pago'        => ($formaPagoCol !== false) ? $row[$formaPagoCol] : '',
-            'moneda'            => ($monedaCol !== false) ? $row[$monedaCol] : '',
-            'encontrado_sap'    => $infoSAP['encontrado'],
-            'registro_sap'      => $infoSAP['registro'],
-            'tipo_movimiento'   => $infoSAP['tipo'],
-            'importe_sap'       => $infoSAP['importe']
+            'total' => ($totalCol !== false) ? $row[$totalCol] : '',
+            'uuid' => $uuid,
+            'metodo_pago' => ($metodoPagoCol !== false) ? $row[$metodoPagoCol] : '',
+            'forma_pago' => ($formaPagoCol !== false) ? $row[$formaPagoCol] : '',
+            'moneda' => ($monedaCol !== false) ? $row[$monedaCol] : '',
+            'encontrado_sap' => $infoSAP['encontrado'],
+            'registro_sap' => $infoSAP['registro'],
+            'tipo_movimiento' => $infoSAP['tipo'],
+            'importe_sap' => $infoSAP['importe']
         ];
     }
 
-    private function crearResultadoVacio($row, $rfcCol, $nombreCol, $folioCol, $fechaCol, $subtotalCol, $totalCol, $impuestoCol, $impuestoRetCol, $metodoPagoCol, $formaPagoCol, $monedaCol, $motivo)
-    {
+    private function crearResultadoVacio($row, $rfcCol, $nombreCol, $folioCol, $fechaCol, $subtotalCol, $totalCol, $impuestoCol, $impuestoRetCol, $metodoPagoCol, $formaPagoCol, $monedaCol, $motivo) {
         return [
-            'rfc'               => ($rfcCol !== false) ? $row[$rfcCol] : '',
-            'nombre_emisor'     => ($nombreCol !== false) ? $row[$nombreCol] : '',
-            'folio'             => ($folioCol !== false) ? $row[$folioCol] : '',
-            'fecha'             => ($fechaCol !== false) ? $row[$fechaCol] : '',
-            'subtotal'          => ($subtotalCol !== false) ? $row[$subtotalCol] : '',
-            'impuesto'          => ($impuestoCol !== false) ? $row[$impuestoCol] : '',
+            'rfc' => ($rfcCol !== false) ? $row[$rfcCol] : '',
+            'nombre_emisor' => ($nombreCol !== false) ? $row[$nombreCol] : '',
+            'folio' => ($folioCol !== false) ? $row[$folioCol] : '',
+            'fecha' => ($fechaCol !== false) ? $row[$fechaCol] : '',
+            'subtotal' => ($subtotalCol !== false) ? $row[$subtotalCol] : '',
+            'impuesto' => ($impuestoCol !== false) ? $row[$impuestoCol] : '',
             'impuesto_retenido' => ($impuestoRetCol !== false) ? $row[$impuestoRetCol] : '',
-            'total'             => ($totalCol !== false) ? $row[$totalCol] : '',
-            'uuid'              => '',
-            'metodo_pago'       => ($metodoPagoCol !== false) ? $row[$metodoPagoCol] : '',
-            'forma_pago'        => ($formaPagoCol !== false) ? $row[$formaPagoCol] : '',
-            'moneda'            => ($monedaCol !== false) ? $row[$monedaCol] : '',
-            'encontrado_sap'    => 'ERROR',
-            'registro_sap'      => '',
-            'tipo_movimiento'   => $motivo,
-            'importe_sap'       => ''
+            'total' => ($totalCol !== false) ? $row[$totalCol] : '',
+            'uuid' => '',
+            'metodo_pago' => ($metodoPagoCol !== false) ? $row[$metodoPagoCol] : '',
+            'forma_pago' => ($formaPagoCol !== false) ? $row[$formaPagoCol] : '',
+            'moneda' => ($monedaCol !== false) ? $row[$monedaCol] : '',
+            'encontrado_sap' => 'ERROR',
+            'registro_sap' => '',
+            'tipo_movimiento' => $motivo,
+            'importe_sap' => ''
         ];
     }
 }
