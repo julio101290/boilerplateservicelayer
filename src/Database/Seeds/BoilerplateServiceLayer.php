@@ -42,6 +42,9 @@ class BoilerplateServiceLayer extends Seeder {
         $this->authorize->createPermission('reqauth-permission', 'Permisos para autorizar requisiciones del SAP');
         $this->authorize->createPermission('poauth-permission', 'Permiso Para Autorizar');
         $this->authorize->createPermission('analizadorCFDI-permission', 'Permiso Analizar CFDI');
+        $this->authorize->createPermission('refundsauth-permission', 'Permiso para autorizar rembolsos');
+        
+        
         
         
 
@@ -51,8 +54,9 @@ class BoilerplateServiceLayer extends Seeder {
         $this->authorize->addPermissionToUser('reqauth-permission', 1);
         $this->authorize->addPermissionToUser('poauth-permission', 1);
         $this->authorize->addPermissionToUser('analizadorCFDI-permission', 1);
+        $this->authorize->addPermissionToUser('refundsauth-permission', 1);
+        
     }
-
     public function down() {
         //
     }

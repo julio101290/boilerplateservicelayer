@@ -164,4 +164,29 @@ $routes->group('admin', function ($routes) {
             'CFDISAPController::procesarAnalisisCFDI',
             ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
     );
+
+    $routes->get('refundsauth',
+            'RefundsAuthController::index',
+            [
+                'namespace' => 'julio101290\boilerplateservicelayer\Controllers',
+                'filter' => 'permission:refundsauth-permission',
+            ]
+    );
+
+    $routes->get('servicelayer/refundsauth',
+            'RefundsAuthController::index',
+            [
+                'namespace' => 'julio101290\boilerplateservicelayer\Controllers',
+            ]
+    );
+
+    //$routes->get('refundsauth', 'RefundsAuthController::index');
+    $routes->post('refundsauth/authorizeVoucher', 'RefundsAuthController::authorizeVoucher');
+    
+    $routes->post('servicelayer/refundsauth/showVoucherDetails'
+            , 'RefundsAuthController::showVoucherDetails'
+            ,[
+                'namespace' => 'julio101290\boilerplateservicelayer\Controllers',
+            ]
+            );
 });
