@@ -328,48 +328,81 @@ class User_sap_linkController extends BaseController {
     }
 
     public function usersSAPSelect2() {
+    $request = service('request');
+    $searchTerm = trim((string) $request->getPost('searchTerm'));
 
-        $request = service('request');
-        $postData = $request->getPost();
+    // Obtener datos de conexión (debes tener nameODBC, userODBC, passwordODBC, companyDB en tu modelo)
+    $conectionData = $this->serviceLayerModel->select("*")->first();
 
-        $conectionData = $this->serviceLayerModel->select("*")->first();
-
-        $conexionSAP = $this->serviceLayerController->login($conectionData["url"]
-                , $conectionData["port"]
-                , $conectionData["password"]
-                , $conectionData["username"]
-                , $conectionData["companyDB"]);
-
-        $cookie = "B1SESSION=" . $conexionSAP->SessionId . ";  ROUTEID=.node1";
-
-        $usuariosSAP = $this->showUsers($cookie, $postData["searchTerm"], $conectionData["port"]);
-
-        $usuariosSAPLista = $usuariosSAP["value"];
-
-        $usuariosSAP = $this->serviceLayerController->logout($cookie
-                , $conectionData["url"]
-                , $conectionData["port"]
-                , $conectionData["password"]
-                , $conectionData["username"]
-                , $conectionData["companyDB"]);
-
-        $jsonVariable = ' { "results": [';
-
-        foreach ($usuariosSAPLista as $keyUsuarios1 => $valueUsuarios1) {
-
-
-            $jsonVariable .= ' {
-                    "id": "' . $valueUsuarios1["InternalKey"] . '",
-                    "text": "' . utf8_encode($valueUsuarios1["InternalKey"] . " - " . $valueUsuarios1["UserCode"] . " " . $valueUsuarios1["UserName"]) . '"
-                  },';
+    try {
+        // 1) Conexión ODBC
+        $conn = odbc_connect(
+            $conectionData["nameODBC"],
+            $conectionData["userODBC"],
+            $conectionData["passwordODBC"]
+        );
+        if (!$conn) {
+            throw new \Exception('Error conexión ODBC: ' . odbc_errormsg());
         }
 
-        $jsonVariable = substr($jsonVariable, 0, -1);
+        // 2) Esquema (base de datos de la compañía)
+        $schema = $conectionData["companyDB"];
+        if (!odbc_exec($conn, 'SET SCHEMA "' . $schema . '"')) {
+            throw new \Exception('Error SET SCHEMA: ' . odbc_errormsg($conn));
+        }
 
-        $jsonVariable .= ' ]
-                            }';
+        // 3) Construir SQL con los nombres de columna REALES
+        $sql = 'SELECT "USERID", "USER_CODE", "U_NAME" 
+                FROM "' . $schema . '"."OUSR" 
+                WHERE 1=1';
+        if (!empty($searchTerm)) {
+            $searchTerm = str_replace("'", "''", $searchTerm);
+            $sql .= ' AND ("USER_CODE" LIKE \'%' . $searchTerm . '%\' 
+                       OR "U_NAME" LIKE \'%' . $searchTerm . '%\')';
+        }
+        $sql .= ' ORDER BY "U_NAME"';
 
-        echo ($jsonVariable);
+        $rs = odbc_exec($conn, $sql);
+        if (!$rs) {
+            throw new \Exception('Error SQL: ' . odbc_errormsg($conn));
+        }
+
+        // 4) Construir array de resultados para Select2
+        $results = [];
+        while ($row = odbc_fetch_array($rs)) {
+            $row = $this->utf8ize($row); // asegurar UTF-8 (función auxiliar)
+            $userId   = $row['USERID'];      // ← antes usaba 'InternalKey'
+            $userCode = $row['USER_CODE'];   // ← antes 'UserCode'
+            $userName = $row['U_NAME'];      // ← antes 'UserName'
+
+            $results[] = [
+                'id'   => $userId,
+                'text' => $userId . " - " . $userCode . " " . $userName
+            ];
+        }
+
+        odbc_free_result($rs);
+        odbc_close($conn);
+
+        // 5) Devolver JSON en el formato que espera Select2
+        echo json_encode(['results' => $results]);
+
+    } catch (\Throwable $e) {
+        // En caso de error, respuesta vacía para que Select2 no falle
+        echo json_encode(['results' => []]);
+        log_message('error', 'Error en usersSAPSelect2 (ODBC): ' . $e->getMessage());
+    }
+}
+
+    private function utf8ize($mixed) {
+        if (is_array($mixed)) {
+            foreach ($mixed as $key => $value) {
+                $mixed[$key] = $this->utf8ize($value);
+            }
+        } elseif (is_string($mixed)) {
+            return utf8_encode($mixed);
+        }
+        return $mixed;
     }
 
     /**

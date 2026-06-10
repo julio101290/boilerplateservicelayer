@@ -35,10 +35,10 @@ class User_sap_linkModel extends Model {
                         ->where('b.idEmpresa', $idEmpresa)
                         ->where('b.idUsuario', 'a.id', FALSE)
                         ->groupStart()
-                        ->like('a.id', '', $search)
-                        ->orLike('a.username', '', $search)
-                        ->orLike('a.firstname', '', $search)
-                        ->orLike('a.lastname', '', $search)
+                        ->like('a.id', $search)
+                        ->orLike('a.username',  $search)
+                        ->orLike('a.firstname', $search)
+                        ->orLike('a.lastname', $search)
                         ->groupEnd()
                         ->get();
     }
