@@ -181,7 +181,12 @@ $routes->group('admin', function ($routes) {
     );
 
     //$routes->get('refundsauth', 'RefundsAuthController::index');
-    $routes->post('refundsauth/authorizeVoucher', 'RefundsAuthController::authorizeVoucher');
+    $routes->post('servicelayer/refundsauth/authorizeVoucher'
+            , 'RefundsAuthController::authorizeVoucher'
+            ,[
+                'namespace' => 'julio101290\boilerplateservicelayer\Controllers',
+            ]
+            );
     
     $routes->post('servicelayer/refundsauth/showVoucherDetails'
             , 'RefundsAuthController::showVoucherDetails'
