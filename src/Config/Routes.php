@@ -183,15 +183,68 @@ $routes->group('admin', function ($routes) {
     //$routes->get('refundsauth', 'RefundsAuthController::index');
     $routes->post('servicelayer/refundsauth/authorizeVoucher'
             , 'RefundsAuthController::authorizeVoucher'
-            ,[
-                'namespace' => 'julio101290\boilerplateservicelayer\Controllers',
+            , [
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers',
             ]
-            );
-    
+    );
+
     $routes->post('servicelayer/refundsauth/showVoucherDetails'
             , 'RefundsAuthController::showVoucherDetails'
-            ,[
-                'namespace' => 'julio101290\boilerplateservicelayer\Controllers',
+            , [
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers',
             ]
-            );
+    );
+
+    /**
+     * Refunds
+     */
+    $routes->get('servicelayer/listRefunds'
+            , 'RefundsController::index'
+            , ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    $routes->get('servicelayer/newRefund'
+            , 'RefundsController::newRefund'
+            , ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    $routes->post('servicelayer/refunds/authorizeVoucher'
+            , 'RefundsController::authorizeVoucher'
+            , ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    $routes->post('servicelayer/refunds/showVoucherDetails'
+            , 'RefundsController::showVoucherDetails'
+            , ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    $routes->post('servicelayer/refunds/getUser_sap_link'
+            , 'RefundsController::getUser_sap_link'
+            , ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    $routes->post('servicelayer/refunds/save'
+            , 'RefundsController::save'
+            , ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    $routes->get('servicelayer/refunds/delete/(:num)'
+            , 'RefundsController::delete/$1'
+            , ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    $routes->post('servicelayer/refunds/getUsersAjaxSelect2'
+            , 'RefundsController::getUsersAjaxSelect2'
+            , ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    $routes->post('brachofficeSAP/getBranchofficeAjax'
+            , 'BranchofficesController::getBranchofficeAjax'
+            , ['namespace' => 'julio101290\boilerplatebranchoffice\Controllers']
+    );
+
+    $routes->get('newSells'
+            , 'SellsController::newSell'
+            , ['namespace' => 'julio101290\boilerplatesells\Controllers']
+    );
 });
