@@ -13,7 +13,7 @@ use julio101290\boilerplateservicelayer\Models\SapservicelayerModel;
 use julio101290\boilerplatebranchoffice\Models\BranchofficesModel;
 use julio101290\boilerplateservicelayer\Models\User_sap_linkModel;
 
-class SapBranchofficeController extends BaseController {
+class SapEmployeesController extends BaseController {
 
     use ResponseTrait;
 
@@ -37,7 +37,7 @@ class SapBranchofficeController extends BaseController {
     /**
      * Get branchoffice for select2 via AJAX
      */
-    public function getBranchofficeAjax() {
+    public function getEmployeesAjax() {
         try {
             $request = service('request');
             $postData = $request->getPost();
@@ -45,102 +45,91 @@ class SapBranchofficeController extends BaseController {
             $response = [];
             $response['token'] = csrf_hash();
 
-            helper('auth');
-            $idUser = user()->id;
+            // --- Validar sucursal obligatoria ---
+            $branchId = $postData['idBranchOffice'] ?? null;
+            if (empty($branchId)) {
+                return $this->response->setJSON([
+                            'token' => csrf_hash(),
+                            'data' => [],
+                            'error' => true,
+                            'message' => 'El parámetro "idBranchOffice" es obligatorio.'
+                ]);
+            }
+            $branchId = (int) $branchId;
 
-            $userLinkSap = $this->userLinkSap->select("*")->where("iduser", $idUser)->first();
-
-            // --------------------------------
-            // 1) Conexión ODBC HANA
-            // --------------------------------
+            // --- Conexión ODBC ---
             $dataConect = $this->serviceLayerModel->first();
+            if (!$dataConect) {
+                throw new \Exception('No se encontró configuración de conexión SAP.');
+            }
 
             $conn = odbc_connect(
                     $dataConect['nameODBC'],
                     $dataConect['userODBC'],
                     $dataConect['passwordODBC']
             );
-
             if (!$conn) {
                 throw new \Exception('Error conexión ODBC: ' . odbc_errormsg());
             }
 
-            // FIJAR SCHEMA
             if (!odbc_exec($conn, 'SET SCHEMA "' . $dataConect['companyDB'] . '"')) {
                 throw new \Exception('Error SET SCHEMA: ' . odbc_errormsg($conn));
             }
 
-            // --------------------------------
-            // 2) Obtener sucursales permitidas para el usuario SAP
-            // --------------------------------
-            $sapUser = $userLinkSap["sapuser"] ?? null;
-            $allowedBplIds = [];
-
-            if ($sapUser !== null) {
-                // Consultar USR6 para obtener las sucursales asignadas
-                $sqlUsr6 = 'SELECT "BPLId" FROM USR6 WHERE "UserID" = ' . (int) $sapUser;
-                $rsUsr6 = odbc_exec($conn, $sqlUsr6);
-                if ($rsUsr6) {
-                    while ($row = odbc_fetch_array($rsUsr6)) {
-                        $allowedBplIds[] = (int) $row['BPLId'];
-                    }
-                    odbc_free_result($rsUsr6);
-                }
-            }
-
-            // --------------------------------
-            // 3) Construcción de la consulta principal
-            // --------------------------------
+            // --- Filtro de búsqueda ---
             $whereSearch = '';
             if (!empty($postData['searchTerm'])) {
                 $search = addslashes($postData['searchTerm']);
-                $whereSearch = '
+                $whereSearch = "
                 AND (
-                    "BPLName" LIKE \'%' . $search . '%\'
-                    OR "BPLId" LIKE \'%' . $search . '%\'
+                    \"empID\" LIKE '%{$search}%'
+                    OR \"firstName\" LIKE '%{$search}%'
+                    OR \"lastName\" LIKE '%{$search}%'
                 )
-            ';
+            ";
             }
 
-            // Filtro por sucursales permitidas (solo si hay restricciones)
-            $bplFilter = '';
-            if (!empty($allowedBplIds)) {
-                // Si USR6 tiene registros, filtrar solo esas sucursales
-                $ids = implode(',', array_map('intval', $allowedBplIds));
-                $bplFilter = 'AND "BPLId" IN (' . $ids . ')';
-            }
-            // Si no hay registros en USR6, no se aplica filtro (acceso a todas)
-
-            $sql = '
+            // --- Consulta SQL ---
+            $sql = "
             SELECT
-                "BPLId",
-                "BPLName"
-            FROM OBPL
-            WHERE "Disabled" <> \'Y\'
-              and "BPLId"<>1
-              ' . $bplFilter . '
-              ' . $whereSearch . '
-            ORDER BY "BPLId", "BPLName"
-        ';
+                \"empID\",
+                \"firstName\",
+                \"lastName\"
+            FROM OHEM
+            WHERE \"Active\" = 'Y'
+              AND \"BPLId\" = {$branchId}
+              {$whereSearch}
+            ORDER BY \"empID\"
+        ";
 
             $rs = odbc_exec($conn, $sql);
             if (!$rs) {
                 throw new \Exception('Error SQL: ' . odbc_errormsg($conn));
             }
 
-            // --------------------------------
-            // 4) Formatear respuesta (Select2)
-            // --------------------------------
+            // --- Procesar resultados con conversión UTF-8 ---
             $data = [];
-            $data[] = [
-                'id' => 0,
-                'text' => '0 Todas las sucursales'
-            ];
-
             while ($row = odbc_fetch_array($rs)) {
+                // Función auxiliar para convertir a UTF-8
+                $toUtf8 = function ($value) {
+                    if (is_null($value))
+                        return '';
+                    // Si ya es UTF-8, lo dejamos; si no, lo convertimos desde ISO-8859-1
+                    if (mb_check_encoding($value, 'UTF-8')) {
+                        return $value;
+                    }
+                    return mb_convert_encoding($value, 'UTF-8', 'ISO-8859-1');
+                    // Alternativa: return utf8_encode($value);
+                };
+
+                $empID = $toUtf8($row['empID']);
+                $firstName = $toUtf8($row['firstName']);
+                $lastName = $toUtf8($row['lastName']);
+                $fullName = trim($firstName . ' ' . $lastName);
+
                 $data[] = [
-                    'id' => $row['BPLId'],
-                    'text' => $row['BPLId'] . ' ' . $row['BPLName'],
+                    'id' => $empID,
+                    'text' => $empID . ' - ' . $fullName
                 ];
             }
 
@@ -148,7 +137,6 @@ class SapBranchofficeController extends BaseController {
             odbc_close($conn);
 
             $response['data'] = $data;
-
             return $this->response->setJSON($response);
         } catch (\Throwable $e) {
             return $this->response->setJSON([

@@ -629,7 +629,7 @@
 
             $("#idSucursal").select2({
                 ajax: {
-                    url: "<?= site_url('admin/sucursales/getSucursalesAjax') ?>",
+                    url: "<?= site_url('admin/sapBranchOffice/getBranchOfficesAjax') ?>",
                     type: "post",
                     dataType: 'json',
                     delay: 250,
@@ -683,11 +683,6 @@
                         $(".comprobantesRD").attr("hidden", true);
 
                     }
-
-
-
-
-
                 }
 
             });
@@ -736,9 +731,9 @@
         $("#idEmpresaRefunds").select2();
 
         // Initialize select2 storages
-        $("#custumerSell").select2({
+        $("#employeeRefund").select2({
             ajax: {
-                url: "<?= site_url('admin/custumers/getCustumersAjax') ?>",
+                url: "<?= site_url('admin/SAPEmployess/getSAPEmployeAjax') ?>",
                 type: "post",
                 dataType: 'json',
                 delay: 250,
@@ -746,12 +741,12 @@
                     // CSRF Hash
                     var csrfName = $('.txt_csrfname').attr('name'); // CSRF Token name
                     var csrfHash = $('.txt_csrfname').val(); // CSRF hash
-                    var idEmpresa = $('.idEmpresaRefunds').val(); // CSRF hash
+                    var idBranchOffice = $('.idSucursal').val(); // CSRF hash
 
                     return {
                         searchTerm: params.term, // search term
                         [csrfName]: csrfHash, // CSRF Token
-                        idEmpresa: idEmpresa // search term
+                        idBranchOffice: idBranchOffice // search term
                     };
                 },
                 processResults: function (response) {

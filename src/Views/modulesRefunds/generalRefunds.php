@@ -99,16 +99,16 @@
 
     <div class="col-lg-2  col-xs-12 col-md-2">
         <div class="form-group">
-            <label for="custumerRefund"><?= lang('newRefund.custumer') ?> </label>
-            <select id='custumerRefund' name='custumerRefund' class="custumerRefund" style='width: 100%;'>
+            <label for="employeeRefund"><?= lang('newRefund.custumer') ?> </label>
+            <select id='employeeRefund' name='employeeRefund' class="employeeRefund" style='width: 100%;'>
 
                 <?php
-                if (isset($idCustumer)) {
+                if (isset($employeeRefund)) {
 
-                    echo "   <option value='$idCustumer'>$idCustumer - $nameCustumer</option>";
+                    echo "  <option value='$employeeRefund'>$idEmployee - $nameEmployee</option>";
                 } else {
 
-                    echo "  <option value=''>".lang('newRefund.selectCustumer') ."</option>";
+                    echo "  <option value=''>".lang('newRefund.selectEmployee') ."</option>";
                 }
                 ?>
 
