@@ -98,7 +98,7 @@ class EmployeeSAPController extends BaseController {
                 $orderField = 'empID';
             }
 
-            $baseSql = 'SELECT "empID", "firstName", "lastName", "middleName", "dept", "Active" FROM OHEM WHERE 1=1';
+            $baseSql = 'SELECT "empID", "firstName", "lastName", "middleName", "dept", "Active", "Code" FROM OHEM WHERE 1=1';
             if (!empty($search)) {
                 $baseSql .= " AND (\"firstName\" LIKE '%$searchEsc%' OR \"lastName\" LIKE '%$searchEsc%' OR \"middleName\" LIKE '%$searchEsc%')";
             }
@@ -118,6 +118,7 @@ class EmployeeSAPController extends BaseController {
                     'lastName' => $row['lastName'] ?? '',
                     'middleName' => $row['middleName'] ?? '',
                     'Dept' => $row['dept'] ?? '',
+                    'Code' => $row['Code'] ?? '',
                     'Active' => $row['Active'] ?? '',
                 ];
             }
@@ -157,7 +158,7 @@ class EmployeeSAPController extends BaseController {
         }
         odbc_exec($conn, 'SET SCHEMA "' . $dataConect["companyDB"] . '"');
 
-        $sql = 'SELECT "empID", "firstName", "lastName", "middleName", "dept", "Active" FROM OHEM WHERE "empID" = ' . (int) $id;
+        $sql = 'SELECT "empID", "firstName", "lastName", "middleName", "dept", "Active", "Code" FROM OHEM WHERE "empID" = ' . (int) $id;
         $stmt = odbc_exec($conn, $sql);
         if (!$stmt) {
             odbc_close($conn);
@@ -623,7 +624,6 @@ class EmployeeSAPController extends BaseController {
     public function removeEmployeeRole($empID, $roleID) {
         helper('auth');
         $userName = user()->username;
-
         $empID = (int) $empID;
         $roleID = (int) $roleID;
 
@@ -636,7 +636,6 @@ class EmployeeSAPController extends BaseController {
             return $this->respond(['status' => 500, 'message' => 'No hay configuración Service Layer'], 500);
         }
 
-        // Login en Service Layer
         try {
             $conexionSap = $this->serviceLayerController->login(
                     $dataSL['url'],
@@ -654,8 +653,6 @@ class EmployeeSAPController extends BaseController {
         }
 
         $cookie = "B1SESSION=" . $conexionSap->SessionId . "; ROUTEID=.node1";
-
-        // Normalizar URL base
         $slRoot = rtrim($dataSL['url'], '/');
         if (stripos($slRoot, '/b1s/v1') === false) {
             $slRoot .= '/b1s/v1';
@@ -664,25 +661,80 @@ class EmployeeSAPController extends BaseController {
             $slRoot = substr($slRoot, 0, $pos) . '/b1s/v1';
         }
 
-        // DELETE a /EmployeeRoles(EmployeeID=xxx,RoleCode='yyy')
-        $url = $slRoot . "/EmployeeRoles(EmployeeID=$empID,RoleCode='$roleID')";
+        $getHeaders = [
+            "Accept: application/json",
+            "Content-Type: application/json",
+            "User-Agent: PHP",
+            "B1S-CaseInsensitive: true"
+        ];
+
+        // Header especial: necesario para que el PATCH SÍ elimine líneas
+        // omitidas de la colección hija (por defecto PATCH solo actualiza/agrega,
+        // nunca borra elementos que no estén en el arreglo enviado)
+        $patchHeaders = array_merge($getHeaders, [
+            "B1S-ReplaceCollectionsOnPatch: true"
+        ]);
+
+        // 1) GET de los roles actuales
+        $getUrl = $slRoot . "/EmployeesInfo({$empID})?" . http_build_query([
+                    '$select' => 'EmployeeID,EmployeeRolesInfoLines'
+        ]);
 
         $ch = curl_init();
         curl_setopt_array($ch, [
-            CURLOPT_URL => $url,
+            CURLOPT_URL => $getUrl,
             CURLOPT_PORT => $dataSL['port'],
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_CUSTOMREQUEST => 'DELETE',
             CURLOPT_COOKIE => $cookie,
             CURLOPT_SSL_VERIFYHOST => false,
             CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_HTTPHEADER => [
-                "Accept: application/json",
-                "User-Agent: PHP"
-            ],
-            CURLOPT_TIMEOUT => 30
+            CURLOPT_HTTPHEADER => $getHeaders,
+            CURLOPT_TIMEOUT => 60
         ]);
+        $getResp = curl_exec($ch);
+        $getErr = curl_error($ch);
+        $getHttp = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
 
+        if ($getErr || $getHttp < 200 || $getHttp >= 300) {
+            return $this->respond([
+                        'status' => 500,
+                        'message' => 'Error al obtener roles actuales: ' . ($getErr ?: "HTTP $getHttp: $getResp")
+                            ], 500);
+        }
+
+        $current = json_decode($getResp, true);
+        $roles = $current['EmployeeRolesInfoLines'] ?? [];
+
+        // 2) Filtrar quitando el rol indicado
+        $newRoles = array_values(array_filter($roles, function ($r) use ($roleID) {
+                    return (int) ($r['RoleID'] ?? 0) !== $roleID;
+                }));
+
+        if (count($newRoles) === count($roles)) {
+            return $this->respond([
+                        'status' => 404,
+                        'message' => 'El empleado no tiene asignado ese rol'
+                            ], 404);
+        }
+
+        // 3) PATCH con la colección ya sin ese rol + header de reemplazo total
+        $patchUrl = $slRoot . "/EmployeesInfo({$empID})";
+        $payload = ['EmployeeRolesInfoLines' => $newRoles];
+
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL => $patchUrl,
+            CURLOPT_PORT => $dataSL['port'],
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CUSTOMREQUEST => 'PATCH',
+            CURLOPT_POSTFIELDS => json_encode($payload),
+            CURLOPT_COOKIE => $cookie,
+            CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_HTTPHEADER => $patchHeaders,
+            CURLOPT_TIMEOUT => 60
+        ]);
         $resp = curl_exec($ch);
         $err = curl_error($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -698,10 +750,11 @@ class EmployeeSAPController extends BaseController {
         }
 
         $this->log->save([
-            "description" => "Eliminación de rol ID '$roleID' del empleado $empID (vía SL)",
+            "description" => "Eliminación de rol ID '$roleID' del empleado $empID (vía SL, EmployeesInfo/EmployeeRolesInfoLines)",
             "user" => $userName
         ]);
 
+        // Normalizado a 200 siempre en éxito, sin importar si SAP regresó 204
         return $this->respond(['status' => 200, 'message' => 'Rol eliminado correctamente'], 200);
     }
 

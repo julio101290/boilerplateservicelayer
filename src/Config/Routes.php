@@ -256,7 +256,8 @@ $routes->group('admin', function ($routes) {
     // EmployeeSAPController
     $routes->get('servicelayer/employees'
             , 'EmployeeSAPController::index'
-            , ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
+            , ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+            );
 
     $routes->get('servicelayer/employees/getEmployee/(:num)'
             , 'EmployeeSAPController::getEmployee/$1'

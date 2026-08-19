@@ -20,6 +20,7 @@ return [
         'lastName'    => 'Apellido',
         'middleName'  => 'Segundo Nombre',
         'dept'        => 'Departamento',
+        'Code'        => 'Codigo',
         'active'      => 'Activo',
         'role_code'   => 'Código',
         'role_name'   => 'Descripción',

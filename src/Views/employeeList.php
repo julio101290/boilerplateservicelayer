@@ -40,8 +40,8 @@
                     <div class="row">
                         <div class="col-md-6">
                             <div class="form-group">
-                                <label for="empID"><?= lang('employee.fields.empID') ?></label>
-                                <input type="text" class="form-control" name="empID" id="empID">
+                                <label for="Code"><?= lang('employee.fields.Code') ?></label>
+                                <input type="text" class="form-control" name="Code" id="Code">
                             </div>
                         </div>
                         <div class="col-md-6">
@@ -96,8 +96,8 @@
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal"><?= lang('boilerplate.cancel') ?></button>
-                <button type="button" class="btn btn-primary" id="btnSaveEmployee"><?= lang('boilerplate.save') ?></button>
+                <button type="button" class="btn btn-secondary" data-dismiss="modal"><?= lang('boilerplate.global.close') ?></button>
+                <button type="button" class="btn btn-primary" id="btnSaveEmployee"><?= lang('boilerplate.global.save') ?></button>
             </div>
         </div>
     </div>
@@ -165,9 +165,7 @@
                 <button class="btn btn-warning btn-sm btnEditEmployee" data-empID="${empID}" title="Editar">
                     <i class="fas fa-edit"></i>
                 </button>
-                <button class="btn btn-danger btn-sm btnDeleteEmployee" data-empID="${empID}" title="Eliminar">
-                    <i class="fas fa-trash"></i>
-                </button>
+
             </div>`;
                     }
                 },
@@ -214,7 +212,8 @@
                         $('#firstName').val(resp.firstName || '');
                         $('#lastName').val(resp.lastName || '');
                         $('#middleName').val(resp.middleName || '');
-                        $('#Dept').val(resp.Dept || '');
+                        $('#middleName').val(resp.middleName || '');
+                        $('#Code').val(resp.Code || '');
                         $('#Active').val(resp.Active || 'Y');
                         $('#modalEmployeeLabel').text('<?= lang('employee.edit_title') ?>');
                         $('#modalEmployee').modal('show');
@@ -418,11 +417,13 @@
     });
 
 // Eliminar rol (evento delegado)
-    $('#tbodyRoles').on('click', '.btnRemoveRole', function (e) {
-        e.preventDefault(); // 🔥 Previene la recarga de la página
+    $(document).off('click', '#tbodyRoles .btnRemoveRole').on('click', '#tbodyRoles .btnRemoveRole', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
 
         var empID = $('#empID').val();
         var roleCode = $(this).data('rolecode');
+
         if (!empID || !roleCode) {
             Swal.fire('Error', 'Faltan datos para eliminar el rol', 'error');
             return;
@@ -436,24 +437,34 @@
             confirmButtonText: 'Sí, eliminar',
             cancelButtonText: 'Cancelar'
         }).then((result) => {
-            if (result.isConfirmed) {
-                $.ajax({
-                    url: '<?= base_url('admin/servicelayer/employees/removeEmployeeRole') ?>/' + empID + '/' + encodeURIComponent(roleCode),
-                    method: 'DELETE',
-                    dataType: 'json',
-                    success: function (resp) {
-                        if (resp.status === 200) {
-                            Swal.fire('Eliminado', resp.message, 'success');
-                            loadEmployeeRoles(empID);
-                        } else {
-                            Swal.fire('Error', resp.message || 'Error al eliminar', 'error');
-                        }
-                    },
-                    error: function () {
-                        Swal.fire('Error', 'No se pudo eliminar el rol', 'error');
-                    }
-                });
+            if (!result.value) {
+                return;
             }
+
+            $.ajax({
+                url: '<?= base_url('admin/servicelayer/employees/removeEmployeeRole') ?>/' + empID + '/' + encodeURIComponent(roleCode),
+                method: 'DELETE',
+                dataType: 'json',
+                success: function (resp) {
+                    if (resp.status === 200) {
+                        Swal.fire({
+                            toast: true,
+                            position: 'top-end',
+                            icon: 'success',
+                            title: resp.message || 'Rol eliminado',
+                            showConfirmButton: false,
+                            timer: 2000
+                        });
+                        loadEmployeeRoles(empID);
+                    } else {
+                        Swal.fire('Error', resp.message || 'Error al eliminar', 'error');
+                    }
+                },
+                error: function (xhr) {
+                    var msg = xhr.responseJSON?.message || 'No se pudo eliminar el rol';
+                    Swal.fire('Error', msg, 'error');
+                }
+            });
         });
     });
 
