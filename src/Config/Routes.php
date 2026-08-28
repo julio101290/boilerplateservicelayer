@@ -64,6 +64,14 @@ $routes->group('admin', function ($routes) {
             ]
     );
 
+    $routes->post('servicelayer/deauthorizeReq',
+            'ServiceLayerController::deauthorizeReq',
+            [
+                'filter' => 'permission:authorize-permission',
+                'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+            ]
+    );
+
     $routes->post('servicelayer/showlistProductsReq',
             'RequisitionAuthController::showReqItems',
             [
@@ -257,7 +265,7 @@ $routes->group('admin', function ($routes) {
     $routes->get('servicelayer/employees'
             , 'EmployeeSAPController::index'
             , ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
-            );
+    );
 
     $routes->get('servicelayer/employees/getEmployee/(:num)'
             , 'EmployeeSAPController::getEmployee/$1'

@@ -3,11 +3,18 @@
 <?= $this->include('julio101290\boilerplate\Views\load\nestable') ?>
 <?= $this->extend('julio101290\boilerplate\Views\layout\sweetalert') ?>
 <?= $this->extend('julio101290\boilerplate\Views\layout\index') ?>
+
 <?= $this->section('content') ?>
 <?= $this->include('julio101290\boilerplateservicelayer\Views\modulesAuthReq/modalShowProducts') ?>
+
 <div class="card card-default">
     <div class="card-header">
-
+        <div class="float-right">
+            <!-- Botón de Estado / Filtro -->
+            <button type="button" id="btnToggleAuth" class="btn btn-secondary btn-sm">
+                <i class="fas fa-clock"></i> No autorizadas
+            </button>
+        </div>
     </div>
     <div class="card-body">
         <div class="row">
@@ -16,7 +23,6 @@
                     <table id="tableAuthReq" class="table table-striped table-hover va-middle tableUser_sap_link">
                         <thead>
                             <tr>
-
                                 <th><?= lang('authreq.fields.actions') ?></th>
                                 <th><?= lang('authreq.fields.warehouse') ?></th>
                                 <th><?= lang('authreq.fields.folio') ?></th>
@@ -31,9 +37,13 @@
     </div>
 </div>
 <?= $this->endSection() ?>
+
 <?= $this->section('js') ?>
 <script>
-// Inicializar DataTable
+    // Variable de control de estado (false: No autorizadas | true: Ya autorizadas)
+    var showAuthorized = false;
+
+    // Inicializar DataTable
     var tableAuthReq = $('#tableAuthReq').DataTable({
         processing: true,
         serverSide: true,
@@ -44,8 +54,10 @@
             url: '<?= base_url('admin/servicelayer/getauthreq') ?>',
             method: 'GET',
             dataType: "json",
+            data: function (d) {
+                d.authorized = showAuthorized ? 1 : 0;
+            },
             dataSrc: function (json) {
-                // debug: ver exactamente qué viene
                 console.log('AJAX response (DataTables):', json);
                 return json.data || [];
             }
@@ -59,27 +71,41 @@
             }
         ],
         columns: [
-            // Columna acciones (botones) — usamos función para no depender de propiedades fijas
             {
                 data: function (row) {
-                    // fallbacks robustos para extraer campos
                     var docEntry = row.DocEntry ?? row.docEntry ?? (row._raw && (row._raw.DocEntry ?? row._raw.DocEntry)) ?? '';
-                    var docNum = row.DocNum   ?? row.docNum   ?? (row._raw && (row._raw.DocNum ?? row._raw.DocNum)) ?? '';
-                    var almacen = row.Almacen  ?? row.AlmacenName ?? row.WhsName ?? row.U_WhsCode ?? (row._raw && (row._raw.U_WhsCode ?? row._raw.U_Almacen)) ?? '';
+                    var docNum   = row.DocNum   ?? row.docNum   ?? (row._raw && (row._raw.DocNum ?? row._raw.DocNum)) ?? '';
+                    var almacen  = row.Almacen  ?? row.AlmacenName ?? row.WhsName ?? row.U_WhsCode ?? (row._raw && (row._raw.U_WhsCode ?? row._raw.U_Almacen)) ?? '';
 
-                    // escapar valores (opcional)
                     var eDocEntry = String(docEntry).replace(/"/g, '&quot;');
-                    var eDocNum = String(docNum).replace(/"/g, '&quot;');
-                    var eAlmacen = String(almacen).replace(/"/g, '&quot;');
+                    var eDocNum   = String(docNum).replace(/"/g, '&quot;');
+                    var eAlmacen  = String(almacen).replace(/"/g, '&quot;');
 
-                    return `
-                    <div class="btn-group" role="group" aria-label="Acciones">
+                    // Alternar botón según el filtro actual
+                    var botonAccion = '';
+                    if (showAuthorized) {
+                        botonAccion = `
+                        <button class="btn btn-danger btnDeauthorize btn-sm"
+                                data-docentry="${eDocEntry}"
+                                data-docnum="${eDocNum}"
+                                data-almacen="${eAlmacen}"
+                                title="Desautorizar">
+                            <i class="fas fa-times-circle"></i> Desautorizar
+                        </button>`;
+                    } else {
+                        botonAccion = `
                         <button class="btn btn-success btnAuthorize btn-sm"
                                 data-docentry="${eDocEntry}"
                                 data-docnum="${eDocNum}"
-                                data-almacen="${eAlmacen}">
+                                data-almacen="${eAlmacen}"
+                                title="Autorizar">
                             <i class="fas fa-check-circle"></i> Autorizar
-                        </button>
+                        </button>`;
+                    }
+
+                    return `
+                    <div class="btn-group" role="group" aria-label="Acciones">
+                        ${botonAccion}
                         <button class="btn btn-info btnViewItems btn-sm ml-1"
                                 data-docentry="${eDocEntry}"
                                 data-docnum="${eDocNum}"
@@ -90,24 +116,18 @@
                     </div>`;
                 }
             },
-
-            // Columna Almacén — usamos función para evitar warning si la propiedad no existe
             {
                 data: function (row) {
                     return row.Almacen ?? row.AlmacenName ?? row.WhsName ?? row.U_WhsCode ?? (row._raw && (row._raw.U_WhsCode ?? row._raw.U_Almacen)) ?? '';
                 },
                 name: 'Almacen'
             },
-
-            // Columna DocNum
             {
                 data: function (row) {
                     return row.DocNum ?? row.docNum ?? (row._raw && (row._raw.DocNum ?? '')) ?? '';
                 },
                 name: 'DocNum'
             },
-
-            // Columna DocDate
             {
                 data: function (row) {
                     return row.DocDate ?? row.docDate ?? (row._raw && (row._raw.DocDate ?? '')) ?? '';
@@ -120,40 +140,48 @@
         }
     });
 
+    // Evento clic para alternar el botón de cabecera
+    $('#btnToggleAuth').on('click', function () {
+        showAuthorized = !showAuthorized;
+        const $btn = $(this);
 
+        if (showAuthorized) {
+            $btn.removeClass('btn-secondary').addClass('btn-success');
+            $btn.html('<i class="fas fa-check-double"></i> Ya autorizadas');
+        } else {
+            $btn.removeClass('btn-success').addClass('btn-secondary');
+            $btn.html('<i class="fas fa-clock"></i> No autorizadas');
+        }
 
+        // Recargar la tabla con el nuevo estado
+        tableAuthReq.ajax.reload();
+    });
+
+    // 1) Acción: AUTORIZAR (Botón Verde)
     $('#tableAuthReq tbody').on('click', '.btnAuthorize', function () {
-
-        console.log($(this).data());
         const docEntry = $(this).data('docentry');
-        const docNum = $(this).data('docnum');
-        const almacen = $(this).data('almacen');
+        const docNum   = $(this).data('docnum');
+        const almacen  = $(this).data('almacen');
+        const $btn     = $(this);
 
         Swal.fire({
             title: '¿Autorizar Requisición?',
             html: `
-            <p><strong>DocEntry:</strong> ${docEntry}</p>
-            <p><strong>DocNum:</strong> ${docNum}</p>
-            <p><strong>Almacén:</strong> ${almacen}</p>
-        `,
+                <p><strong>DocEntry:</strong> ${docEntry}</p>
+                <p><strong>DocNum:</strong> ${docNum}</p>
+                <p><strong>Almacén:</strong> ${almacen}</p>
+            `,
             icon: 'warning',
             showCancelButton: true,
             confirmButtonText: 'Sí, autorizar',
             cancelButtonText: 'Cancelar'
         }).then((result) => {
-
             if (result.value) {
-
-
-                const $btn = $(this);  // si estás dentro del handler y `this` es el botón
-                // Si no, obtén el botón por selector. Ej: var $btn = $(e.currentTarget);
-                // Mejor: obtener el botón que abrió el swal: lo guardamos antes de llamar a Swal
-                // (ver ejemplo abajo)
-
                 const payload = {
                     docEntry: docEntry,
                     docNum: docNum,
-                    almacen: almacen
+                    almacen: almacen,
+                    action: 'authorize'
                 };
 
                 $.ajax({
@@ -162,39 +190,8 @@
                     dataType: 'json',
                     contentType: 'application/json; charset=utf-8',
                     data: JSON.stringify(payload),
-                    // Si necesitas enviar cookies/credenciales cross-domain:
-                    // xhrFields: { withCredentials: true },
                     success: function (resp) {
                         if (resp && resp.success) {
-                            // 1) Update button visual
-                            // if we have the original $btn reference:
-                            if ($btn && $btn.length) {
-                                $btn.removeClass('btn-success').addClass('btn-secondary').attr('disabled', true);
-                                $btn.html('<i class="fas fa-check"></i> Autorizado');
-                            }
-
-                            // 2) Update row data in DataTable (si response trae updatedRow)
-                            /*
-                            if (resp.updatedRow) {
-                                // buscar la fila por DocEntry y actualizar
-                                var rowIndex = tableAuthReq.rows().indexes().filter(function (idx) {
-                                    var d = tableAuthReq.row(idx).data();
-                                    return (d.DocEntry == resp.updatedRow.DocEntry);
-                                })[0];
-                                if (typeof rowIndex !== 'undefined') {
-                                    tableAuthReq.row(rowIndex).data(resp.updatedRow).invalidate().draw(false);
-                                } else {
-                                    // si no encuentra, refresca la fila actual:
-                                    tableAuthReq.ajax.reload(null, false);
-                                }
-                            } else {
-                                // si no hay updatedRow, recargamos solo la fila actual gracioso:
-                                tableAuthReq.ajax.reload(null, false);
-                            }
- * 
-                             */
-                            
-                            // 3) Mostrar toast de éxito
                             Swal.fire({
                                 toast: true,
                                 position: 'top-end',
@@ -203,8 +200,8 @@
                                 showConfirmButton: false,
                                 timer: 2000
                             });
+                            tableAuthReq.ajax.reload(null, false);
                         } else {
-                            // manejo de error enviado por el servidor
                             var msg = (resp && resp.error) ? resp.error : 'Error en la autorización';
                             Swal.fire('Error', msg, 'error');
                         }
@@ -214,20 +211,68 @@
                         Swal.fire('Error', 'No se pudo autorizar (error de red o servidor).', 'error');
                     }
                 });
-
-
-
-            } else {
-
             }
         });
     });
 
+    // 2) Acción: DESAUTORIZAR (Botón Rojo)
+    $('#tableAuthReq tbody').on('click', '.btnDeauthorize', function () {
+        const docEntry = $(this).data('docentry');
+        const docNum   = $(this).data('docnum');
+        const almacen  = $(this).data('almacen');
+        const $btn     = $(this);
 
+        Swal.fire({
+            title: '¿Desautorizar Requisición?',
+            html: `
+                <p><strong>DocEntry:</strong> ${docEntry}</p>
+                <p><strong>DocNum:</strong> ${docNum}</p>
+                <p><strong>Almacén:</strong> ${almacen}</p>
+            `,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            confirmButtonText: 'Sí, desautorizar',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (result.value) {
+                const payload = {
+                    docEntry: docEntry,
+                    docNum: docNum,
+                    almacen: almacen,
+                    action: 'deauthorize'
+                };
 
-
-
-
+                $.ajax({
+                    url: '<?= base_url("admin/servicelayer/deauthorizeReq") ?>',
+                    method: 'POST',
+                    dataType: 'json',
+                    contentType: 'application/json; charset=utf-8',
+                    data: JSON.stringify(payload),
+                    success: function (resp) {
+                        if (resp && resp.success) {
+                            Swal.fire({
+                                toast: true,
+                                position: 'top-end',
+                                icon: 'success',
+                                title: 'Requisición desautorizada',
+                                showConfirmButton: false,
+                                timer: 2000
+                            });
+                            tableAuthReq.ajax.reload(null, false);
+                        } else {
+                            var msg = (resp && resp.error) ? resp.error : 'Error al desautorizar';
+                            Swal.fire('Error', msg, 'error');
+                        }
+                    },
+                    error: function (xhr, status, err) {
+                        console.error('AJAX deauthorize error', status, err, xhr.responseText);
+                        Swal.fire('Error', 'No se pudo desautorizar (error de red o servidor).', 'error');
+                    }
+                });
+            }
+        });
+    });
 
     $(function () {
         $("#modalAddUser_sap_link").draggable();

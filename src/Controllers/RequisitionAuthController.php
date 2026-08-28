@@ -46,18 +46,27 @@ class RequisitionAuthController extends BaseController {
         $empresasID = count($titulos["empresas"]) === 0 ? [0] : array_column($titulos["empresas"], "id");
 
         if ($this->request->isAJAX()) {
-            // --- Controlador (parte que llama al Service Layer) ---
             $request = service('request');
 
             $draw = (int) $request->getGet('draw');
             $start = (int) $request->getGet('start');
             $length = (int) $request->getGet('length');
             $searchValue = $request->getGet('search')['value'] ?? '';
-            $orderColumnIndex = (int) ($request->getGet('order')[0]['column'] ?? 0);
+            $orderColumnIndex = (int) ($request->getGet('order')[0]['column'] ?? 1);
             $orderDir = $request->getGet('order')[0]['dir'] ?? 'asc';
 
-            // $fields debe venir definido en tu controlador (array con nombres de campos en SAP Service Layer)
-            $orderField = $fields[$orderColumnIndex] ?? 'DocEntry';
+            // Capturar si es No autorizadas (0) o Ya autorizadas (1)
+            $authorized = (int) ($request->getGet('authorized') ?? 0);
+
+            // Mapeo exacto según el orden de columnas en tu vista:
+            // 0: Acciones | 1: Almacén | 2: Folio (DocNum) | 3: Fecha (DocDate)
+            $fields = [
+                0 => 'DocEntry',
+                1 => 'Almacen',
+                2 => 'DocNum',
+                3 => 'DocDate'
+            ];
+            $orderField = $fields[$orderColumnIndex] ?? 'DocNum';
 
             $dataSL = $this->serviceLayerModel->select("*")->first();
 
@@ -69,18 +78,10 @@ class RequisitionAuthController extends BaseController {
                     $dataSL["companyDB"]
             );
 
-            $cookie = "B1SESSION=" . $conexionSap->SessionId . ";  ROUTEID=.node1";
+            $cookie = "B1SESSION=" . $conexionSap->SessionId . "; ROUTEID=.node1";
 
             $userLinkSap = $this->user_sap_link->select("*")->where("iduser", $idUser)->first();
 
-            $fields = [
-                'DocNum',
-                'CardName',
-                'DocDate',
-                'DocStatus'
-            ];
-
-            // Llamada que soporta pagination, orden y búsqueda
             $result = $this->showReqWithOoutAuth(
                     $cookie,
                     $userLinkSap["sapuser"],
@@ -91,11 +92,11 @@ class RequisitionAuthController extends BaseController {
                     $length,
                     $orderField,
                     $orderDir,
-                    $fields // pasamos los campos para búsqueda/contains
+                    $fields,
+                    $authorized
             );
 
-            // Manejo de errores sencillos si $result no es el esperado
-            if (isset($result['error'])) {
+            if (isset($result['error']) && $result['error'] === true) {
                 return $this->response->setStatusCode(500)->setJSON($result);
             }
 
@@ -193,48 +194,52 @@ class RequisitionAuthController extends BaseController {
     }
 
     public function showReqWithOoutAuth(
-        $cookie,
-        $userAuth,
-        $search,
-        $baseUrlRoot,
-        $port,
-        $start = 0,
-        $length = 10,
-        $orderField = 'DocEntry',
-        $orderDir = 'asc',
-        array $fields = []
-) {
-    try {
-        // -----------------------------
-        // 1) Normalizar entradas
-        // -----------------------------
-        $autorizador = trim((string) $userAuth);
-        $search = trim((string) $search);
-        $orderDir = strtolower($orderDir) === 'desc' ? 'DESC' : 'ASC';
-        $orderField = $orderField ?: 'DocEntry';
+            $cookie,
+            $userAuth,
+            $search,
+            $baseUrlRoot,
+            $port,
+            $start = 0,
+            $length = 10,
+            $orderField = 'DocNum',
+            $orderDir = 'asc',
+            array $fields = [],
+            int $authorized = 0
+    ) {
+        try {
+            $autorizador = trim((string) $userAuth);
+            $search = trim((string) $search);
+            $orderDir = strtolower($orderDir) === 'desc' ? 'DESC' : 'ASC';
 
-        $dataConect = $this->serviceLayerModel->first();
-        // -----------------------------
-        // 2) Conexión ODBC a HANA
-        // -----------------------------
-        $conn = odbc_connect(
-                $dataConect["nameODBC"],
-                $dataConect["userODBC"],
-                $dataConect["passwordODBC"]
-        );
-        if (!$conn) {
-            throw new \Exception('Error conexión ODBC: ' . odbc_errormsg());
-        }
+            // Validar que orderField sea seguro y permitido
+            $allowedFields = ['DocEntry', 'DocNum', 'DocDate', 'CardCode', 'CardName', 'Almacen', 'NombreAlmacen'];
+            $orderField = in_array($orderField, $allowedFields) ? $orderField : 'DocNum';
 
-        // 🔥 Fijar schema
-        if (!odbc_exec($conn, 'SET SCHEMA "' . $dataConect["companyDB"] . '"')) {
-            throw new \Exception('Error SET SCHEMA: ' . odbc_errormsg($conn));
-        }
+            $dataConect = $this->serviceLayerModel->first();
 
-        // -----------------------------
-        // 3) Construir SQL CORREGIDO (Solicitudes de Compra)
-        // -----------------------------
-        $sql = "
+            // Conexión ODBC
+            $conn = odbc_connect(
+                    $dataConect["nameODBC"],
+                    $dataConect["userODBC"],
+                    $dataConect["passwordODBC"]
+            );
+            if (!$conn) {
+                throw new \Exception('Error conexión ODBC: ' . odbc_errormsg());
+            }
+
+            if (!odbc_exec($conn, 'SET SCHEMA "' . $dataConect["companyDB"] . '"')) {
+                throw new \Exception('Error SET SCHEMA: ' . odbc_errormsg($conn));
+            }
+
+            // Filtro según botón
+            if ($authorized === 1) {
+                $authCondition = "OPRQ.\"U_Authorized\" NOT LIKE 'U%'";
+            } else {
+                $authCondition = "OPRQ.\"U_Authorized\" LIKE 'U%'";
+            }
+
+            // Consulta SQL: se corrigió ORDER BY "{$orderField}" para permitir ordenar por alias (Almacen)
+            $sql = "
         SELECT
             OPRQ.\"DocEntry\",
             OPRQ.\"DocNum\",
@@ -249,21 +254,21 @@ class RequisitionAuthController extends BaseController {
             OPRQ.\"U_Autorizador\",
             OPRQ.\"UserSign\",
             UC.\"U_NAME\" AS \"NombreUsuario\"
-        FROM OPRQ                          -- ✅ Antes era OPOR
-        INNER JOIN PRQ1 ON PRQ1.\"DocEntry\" = OPRQ.\"DocEntry\"  -- ✅ Antes era POR1
+        FROM OPRQ
+        INNER JOIN PRQ1 ON PRQ1.\"DocEntry\" = OPRQ.\"DocEntry\"
         LEFT JOIN OWHS ON OWHS.\"WhsCode\" = PRQ1.\"WhsCode\"
         LEFT JOIN OUSR UC ON UC.\"USERID\" = OPRQ.\"UserSign\"
         WHERE
             OPRQ.\"CANCELED\" = 'N'
-            AND OPRQ.\"U_Authorized\" LIKE 'U%'
+            AND {$authCondition}
             AND OPRQ.\"U_Autorizador\" = '{$autorizador}'
-    ";
+        ";
 
-        if ($search !== '') {
-            $sql .= " AND (OPRQ.\"DocNum\" LIKE '%{$search}%' OR OPRQ.\"CardName\" LIKE '%{$search}%')";
-        }
+            if ($search !== '') {
+                $sql .= " AND (OPRQ.\"DocNum\" LIKE '%{$search}%' OR OPRQ.\"CardName\" LIKE '%{$search}%')";
+            }
 
-        $sql .= "
+            $sql .= "
         GROUP BY
             OPRQ.\"DocEntry\",
             OPRQ.\"DocNum\",
@@ -275,61 +280,55 @@ class RequisitionAuthController extends BaseController {
             OPRQ.\"U_Autorizador\",
             OPRQ.\"UserSign\",
             UC.\"U_NAME\"
-        ORDER BY OPRQ.\"{$orderField}\" {$orderDir}
+        ORDER BY \"{$orderField}\" {$orderDir}
         LIMIT {$length} OFFSET {$start}
-    ";
+        ";
 
-        // -----------------------------
-        // 4) Ejecutar consulta
-        // -----------------------------
-        $rs = odbc_exec($conn, $sql);
-        if (!$rs) {
-            throw new \Exception('Error SQL: ' . odbc_errormsg($conn));
+            $rs = odbc_exec($conn, $sql);
+            if (!$rs) {
+                throw new \Exception('Error SQL: ' . odbc_errormsg($conn));
+            }
+
+            $data = [];
+            while ($row = odbc_fetch_array($rs)) {
+                $data[] = $this->utf8ize([
+                    'DocEntry' => $row['DocEntry'],
+                    'DocNum' => $row['DocNum'],
+                    'DocDate' => $row['DocDate'],
+                    'CardCode' => $row['CardCode'],
+                    'CardName' => $row['CardName'],
+                    'Almacen' => $row['Almacen'],
+                    'NombreAlmacen' => $row['NombreAlmacen'],
+                    'TotalSinImpuestos' => round((float) $row['TotalSinImpuestos'], 2),
+                    'Impuestos' => round((float) $row['Impuestos'], 2),
+                    'TotalConImpuestos' => round((float) $row['TotalConImpuestos'], 2),
+                    'AutorizadorKey' => $row['U_Autorizador'],
+                    'UsuarioKey' => $row['UserSign'],
+                    'NombreDeUsuario' => $row['NombreUsuario'],
+                    '_raw' => $row
+                ]);
+            }
+
+            odbc_free_result($rs);
+            odbc_close($conn);
+
+            $records = count($data);
+
+            return [
+                'recordsTotal' => $records,
+                'recordsFiltered' => $records,
+                'data' => $data
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'recordsTotal' => 0,
+                'recordsFiltered' => 0,
+                'data' => [],
+                'error' => true,
+                'message' => $e->getMessage()
+            ];
         }
-
-        // -----------------------------
-        // 5) Obtener resultados
-        // -----------------------------
-        $data = [];
-        while ($row = odbc_fetch_array($rs)) {
-            $data[] = $this->utf8ize([
-                'DocEntry' => $row['DocEntry'],
-                'DocNum' => $row['DocNum'],
-                'DocDate' => $row['DocDate'],
-                'CardCode' => $row['CardCode'],
-                'CardName' => $row['CardName'],
-                'Almacen' => $row['Almacen'],
-                'NombreAlmacen' => $row['NombreAlmacen'],
-                'TotalSinImpuestos' => round((float) $row['TotalSinImpuestos'], 2),
-                'Impuestos' => round((float) $row['Impuestos'], 2),
-                'TotalConImpuestos' => round((float) $row['TotalConImpuestos'], 2),
-                'AutorizadorKey' => $row['U_Autorizador'],
-                'UsuarioKey' => $row['UserSign'],
-                'NombreDeUsuario' => $row['NombreUsuario'],
-                '_raw' => $row
-            ]);
-        }
-
-        odbc_free_result($rs);
-        odbc_close($conn);
-
-        $records = count($data);
-
-        return [
-            'recordsTotal' => $records,
-            'recordsFiltered' => $records,
-            'data' => $data
-        ];
-    } catch (\Throwable $e) {
-        return [
-            'recordsTotal' => 0,
-            'recordsFiltered' => 0,
-            'data' => [],
-            'error' => true,
-            'message' => $e->getMessage()
-        ];
     }
-}
 
     /**
      * Get users via Ajax for select2
@@ -596,28 +595,28 @@ class RequisitionAuthController extends BaseController {
 
     public function showReqItems() {
         $request = service('request');
-    
+
         // --- input (JSON body o post) ---
         $input = $request->getJSON(true);
         if (empty($input)) {
             $input = $request->getPost();
         }
-    
+
         $draw = (int) ($input['draw'] ?? 0);
         $start = (int) ($input['start'] ?? 0);
         $length = (int) ($input['length'] ?? 10);
         $searchValue = (string) ($input['search']['value'] ?? ($input['search'] ?? ''));
         $orderColumnIndex = (int) ($input['order'][0]['column'] ?? 1);
         $orderDir = (strtolower($input['order'][0]['dir'] ?? 'asc') === 'desc') ? 'DESC' : 'ASC';
-    
+
         $docEntry = isset($input['docEntry']) ? (int) $input['docEntry'] : 0;
         if ($docEntry <= 0) {
             return $this->response->setStatusCode(400)->setJSON([
-                'draw' => $draw, 'recordsTotal' => 0, 'recordsFiltered' => 0, 'data' => [],
-                'error' => 'docEntry requerido'
+                        'draw' => $draw, 'recordsTotal' => 0, 'recordsFiltered' => 0, 'data' => [],
+                        'error' => 'docEntry requerido'
             ]);
         }
-    
+
         // Mapeo de columnas de DataTables a campos reales
         $columnsMap = [
             0 => 'ItemCode',
@@ -631,26 +630,26 @@ class RequisitionAuthController extends BaseController {
         if ($orderField === 'ItemDescription') {
             $orderField = 'Dscription';
         }
-    
+
         try {
             // -----------------------------
             // 1) Conexión ODBC HANA
             // -----------------------------
             $dataConect = $this->serviceLayerModel->first();
             $conn = odbc_connect(
-                $dataConect["nameODBC"],
-                $dataConect["userODBC"],
-                $dataConect["passwordODBC"]
+                    $dataConect["nameODBC"],
+                    $dataConect["userODBC"],
+                    $dataConect["passwordODBC"]
             );
             if (!$conn) {
                 throw new \Exception('Error conexión ODBC: ' . odbc_errormsg());
             }
-    
+
             // Fijar schema HANA
             if (!odbc_exec($conn, 'SET SCHEMA "' . $dataConect["companyDB"] . '"')) {
                 throw new \Exception('Error SET SCHEMA: ' . odbc_errormsg($conn));
             }
-    
+
             // -----------------------------
             // 2) Construir SQL para líneas de SOLICITUDES (PRQ1)
             // -----------------------------
@@ -664,20 +663,20 @@ class RequisitionAuthController extends BaseController {
                 FROM \"PRQ1\"               -- ✅ Cambio: antes era POR1
                 WHERE \"DocEntry\" = {$docEntry}
             ";
-    
+
             if ($searchValue !== '') {
                 $searchEsc = str_replace("'", "''", $searchValue);
                 $sql .= " AND (\"ItemCode\" LIKE '%{$searchEsc}%' OR \"Dscription\" LIKE '%{$searchEsc}%')";
             }
-    
+
             // El ORDER BY debe usar el nombre real del campo (Dscription) no el alias
             $orderFieldReal = ($orderField === 'Dscription') ? 'Dscription' : $orderField;
             $sql .= " ORDER BY \"{$orderFieldReal}\" {$orderDir}";
-    
+
             if ($length > 0) {
                 $sql .= " LIMIT {$length} OFFSET {$start}";
             }
-    
+
             // -----------------------------
             // 3) Ejecutar consulta
             // -----------------------------
@@ -685,7 +684,7 @@ class RequisitionAuthController extends BaseController {
             if (!$rs) {
                 throw new \Exception('Error SQL: ' . odbc_errormsg($conn));
             }
-    
+
             // -----------------------------
             // 4) Obtener resultados
             // -----------------------------
@@ -701,27 +700,27 @@ class RequisitionAuthController extends BaseController {
                     '_raw' => $row
                 ];
             }
-    
+
             odbc_free_result($rs);
             odbc_close($conn);
-    
+
             $recordsTotal = count($data);
             $recordsFiltered = $recordsTotal;
-    
+
             return $this->response->setJSON([
-                'draw' => $draw,
-                'recordsTotal' => $recordsTotal,
-                'recordsFiltered' => $recordsFiltered,
-                'data' => $data
+                        'draw' => $draw,
+                        'recordsTotal' => $recordsTotal,
+                        'recordsFiltered' => $recordsFiltered,
+                        'data' => $data
             ]);
         } catch (\Throwable $e) {
             return $this->response->setStatusCode(500)->setJSON([
-                'draw' => $draw,
-                'recordsTotal' => 0,
-                'recordsFiltered' => 0,
-                'data' => [],
-                'error' => true,
-                'message' => $e->getMessage()
+                        'draw' => $draw,
+                        'recordsTotal' => 0,
+                        'recordsFiltered' => 0,
+                        'data' => [],
+                        'error' => true,
+                        'message' => $e->getMessage()
             ]);
         }
     }
@@ -750,5 +749,152 @@ class RequisitionAuthController extends BaseController {
         }
 
         return $data;
+    }
+
+    public function deauthorizeReq() {
+        if (!$this->request->isAJAX()) {
+            return $this->response->setStatusCode(400)->setJSON([
+                        'success' => false,
+                        'error' => 'Petición no permitida.'
+            ]);
+        }
+
+        $json = $this->request->getJSON(true);
+        $docEntry = (int) ($json['docEntry'] ?? 0);
+        $docNum = $json['docNum'] ?? '';
+
+        if ($docEntry <= 0) {
+            return $this->response->setJSON([
+                        'success' => false,
+                        'error' => 'El DocEntry no es válido o es requerido.'
+            ]);
+        }
+
+        try {
+            $dataSL = $this->serviceLayerModel->select("*")->first();
+
+            // -------------------------------------------------------------
+            // 1) VALIDACIÓN: Verificar si tiene documentos posteriores en HANA
+            // -------------------------------------------------------------
+            $conn = odbc_connect(
+                    $dataSL["nameODBC"],
+                    $dataSL["userODBC"],
+                    $dataSL["passwordODBC"]
+            );
+
+            if (!$conn) {
+                throw new \Exception('Error de conexión ODBC: ' . odbc_errormsg());
+            }
+
+            if (!odbc_exec($conn, 'SET SCHEMA "' . $dataSL["companyDB"] . '"')) {
+                odbc_close($conn);
+                throw new \Exception('Error SET SCHEMA: ' . odbc_errormsg($conn));
+            }
+
+            // ObjType 1470000113 = Solicitud de Compra (OPRQ)
+            // Buscamos si existe en Órdenes de Compra (OPOR) u Ofertas (OPQT) no canceladas
+            $sqlCheck = "
+            SELECT 
+                (SELECT COUNT(DISTINCT OPOR.\"DocNum\") 
+                 FROM POR1 
+                 INNER JOIN OPOR ON OPOR.\"DocEntry\" = POR1.\"DocEntry\" 
+                 WHERE POR1.\"BaseType\" = 1470000113 
+                   AND POR1.\"BaseEntry\" = {$docEntry} 
+                   AND OPOR.\"CANCELED\" = 'N') AS \"CountPedidos\",
+
+                (SELECT COUNT(DISTINCT OPQT.\"DocNum\") 
+                 FROM PQT1 
+                 INNER JOIN OPQT ON OPQT.\"DocEntry\" = PQT1.\"DocEntry\" 
+                 WHERE PQT1.\"BaseType\" = 1470000113 
+                   AND PQT1.\"BaseEntry\" = {$docEntry} 
+                   AND OPQT.\"CANCELED\" = 'N') AS \"CountOfertas\"
+            FROM DUMMY
+        ";
+
+            $rsCheck = odbc_exec($conn, $sqlCheck);
+            if (!$rsCheck) {
+                odbc_close($conn);
+                throw new \Exception('Error al validar documentos posteriores: ' . odbc_errormsg($conn));
+            }
+
+            $rowCheck = odbc_fetch_array($rsCheck);
+            odbc_free_result($rsCheck);
+            odbc_close($conn);
+
+            $countPedidos = (int) ($rowCheck['CountPedidos'] ?? 0);
+            $countOfertas = (int) ($rowCheck['CountOfertas'] ?? 0);
+
+            // Si existen documentos posteriores activos, frenamos la operación
+            if ($countPedidos > 0 || $countOfertas > 0) {
+                $motivo = [];
+                if ($countPedidos > 0) {
+                    $motivo[] = "{$countPedidos} Orden(es) de Compra / Pedido(s)";
+                }
+                if ($countOfertas > 0) {
+                    $motivo[] = "{$countOfertas} Oferta(s) de Compra";
+                }
+
+                return $this->response->setJSON([
+                            'success' => false,
+                            'error' => 'No se puede desautorizar: el folio ' . $docNum . ' ya tiene documentos posteriores asociados (' . implode(', ', $motivo) . ').'
+                ]);
+            }
+
+            // -------------------------------------------------------------
+            // 2) Conexión a Service Layer para actualizar U_Authorized
+            // -------------------------------------------------------------
+            $conexionSap = $this->serviceLayerController->login(
+                    $dataSL["url"],
+                    $dataSL["port"],
+                    $dataSL["password"],
+                    $dataSL["username"],
+                    $dataSL["companyDB"]
+            );
+
+            $cookie = "B1SESSION=" . $conexionSap->SessionId . "; ROUTEID=.node1";
+            $urlSL = rtrim($dataSL["url"], '/') . ':' . $dataSL["port"] . '/b1s/v1/PurchaseRequests(' . $docEntry . ')';
+
+            $payloadUpdate = [
+                'U_Authorized' => 'U' // Regresa a estado No Autorizado / Pendiente
+            ];
+
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $urlSL);
+            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PATCH');
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payloadUpdate));
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Content-Type: application/json',
+                'Cookie: ' . $cookie
+            ]);
+
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curlError = curl_error($ch);
+            curl_close($ch);
+
+            if ($httpCode === 204 || $httpCode === 200) {
+                return $this->response->setJSON([
+                            'success' => true,
+                            'message' => 'Requisición desautorizada con éxito.'
+                ]);
+            } else {
+                $resDecoded = json_decode($response, true);
+                $errMsg = $resDecoded['error']['message']['value'] ?? $curlError ?? 'Error al actualizar en Service Layer.';
+
+                return $this->response->setJSON([
+                            'success' => false,
+                            'error' => $errMsg,
+                            'httpCode' => $httpCode
+                ]);
+            }
+        } catch (\Throwable $e) {
+            return $this->response->setJSON([
+                        'success' => false,
+                        'error' => $e->getMessage()
+            ]);
+        }
     }
 }
