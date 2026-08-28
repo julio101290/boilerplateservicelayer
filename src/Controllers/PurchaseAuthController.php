@@ -45,31 +45,24 @@ class PurchaseAuthController extends BaseController {
         $titulos["empresas"] = $this->empresa->mdlEmpresasPorUsuario($idUser);
 
         if ($this->request->isAJAX()) {
-
             $request = service('request');
 
             $draw = (int) $request->getGet('draw');
             $start = (int) $request->getGet('start');
             $length = (int) $request->getGet('length');
-
             $searchValue = trim($request->getGet('search')['value'] ?? '');
+
+            // Capturar si es 0 (No autorizadas) o 1 (Ya autorizadas)
+            $authorized = (int) ($request->getGet('authorized') ?? 0);
 
             $orderColumnIndex = (int) ($request->getGet('order')[0]['column'] ?? 0);
             $orderDir = strtolower($request->getGet('order')[0]['dir'] ?? 'asc');
 
-            $columns = [
-                'DocNum',
-                'CardName',
-                'DocDate'
-            ];
-
+            $columns = ['DocNum', 'CardName', 'DocDate'];
             $orderField = $columns[$orderColumnIndex] ?? 'DocEntry';
-
-            //GET SAP CONECTION DATA
 
             $dataConect = $this->serviceLayerModel->first();
 
-            // Usuario SAP ligado al usuario del sistema
             $userLinkSap = $this->user_sap_link
                     ->select('*')
                     ->where('iduser', $idUser)
@@ -77,7 +70,6 @@ class PurchaseAuthController extends BaseController {
 
             $autorizador = $userLinkSap['sapuser'] ?? null;
 
-            // 🔥 LLAMADA ODBC + STORED PROCEDURE
             $result = $this->showReqWithOoutAuth(
                     $autorizador,
                     $searchValue,
@@ -85,14 +77,15 @@ class PurchaseAuthController extends BaseController {
                     $length,
                     $orderField,
                     $orderDir,
-                    $dataConect
+                    $dataConect,
+                    $authorized // <-- Pasamos el estado al método
             );
 
             return $this->response->setJSON([
                         'draw' => $draw,
-                        'recordsTotal' => $result['recordsTotal'],
-                        'recordsFiltered' => $result['recordsFiltered'],
-                        'data' => $result['data'],
+                        'recordsTotal' => $result['recordsTotal'] ?? 0,
+                        'recordsFiltered' => $result['recordsFiltered'] ?? 0,
+                        'data' => $result['data'] ?? [],
             ]);
         }
 
@@ -183,32 +176,17 @@ class PurchaseAuthController extends BaseController {
 
     public function showReqWithOoutAuth(
             $userAuth,
-            $search,
+            $search = "",
             $start = 0,
             $length = 10,
             $orderField = 'DocEntry',
             $orderDir = 'asc',
-            $dataConect = ""
+            $dataConect = "",
+            $authorized = 0
     ) {
         try {
-
             // -----------------------------
-            // 1) Normalizar entradas
-            // -----------------------------
-            $autorizador = (string) $userAuth;
-            $search = trim((string) $search);
-            $start = (int) $start;
-            $length = (int) $length;
-
-            $orderDir = strtolower($orderDir) === 'desc' ? 'DESC' : 'ASC';
-
-            $allowedOrderFields = ['DocEntry', 'DocNum', 'DocDate', 'CardName'];
-            if (!in_array($orderField, $allowedOrderFields, true)) {
-                $orderField = 'DocEntry';
-            }
-
-            // -----------------------------
-            // 2) Conexión ODBC
+            // 1) Conexión ODBC
             // -----------------------------
             $conn = odbc_connect(
                     $dataConect["nameODBC"],
@@ -221,78 +199,84 @@ class PurchaseAuthController extends BaseController {
             }
 
             if (!odbc_exec($conn, 'SET SCHEMA "' . $dataConect["companyDB"] . '"')) {
+                odbc_close($conn);
                 throw new \Exception('Error SET SCHEMA: ' . odbc_errormsg($conn));
             }
 
             // -----------------------------
-            // 3) SQL DIRECTO
+            // 2) Definir estado según botón:
+            // Si $authorized == 1 busca 'Y' (Autorizadas)
+            // Si $authorized == 0 busca 'U' (No autorizadas / Pendientes)
+            // -----------------------------
+            $estadoAuth = ((int) $authorized === 1) ? 'Y' : 'U';
+
+            // -----------------------------
+            // 3) SQL Exacto Original
             // -----------------------------
             $sql = '
-            SELECT
-                OPOR."DocEntry",
-                OPOR."DocNum",
-                OPOR."DocDate",
-                OPOR."CardCode",
-                OPOR."CardName",
+        SELECT
+            OPOR."DocEntry",
+            OPOR."DocNum",
+            OPOR."DocDate",
+            OPOR."CardCode",
+            OPOR."CardName",
 
-                MAX(POR1."WhsCode") AS "Almacen",
-                MAX(OWHS."WhsName") AS "NombreAlmacen",
-                OPOR."DocTotal" - OPOR."VatSum" AS "TotalSinImpuestos",
-                OPOR."DocTotal" - OPOR."VatSum" AS "TotalSinImpuestos",
-                OPOR."VatSum" AS "Impuestos",
-                OPOR."DocTotal" AS "TotalConImpuestos",
+            MAX(POR1."WhsCode") AS "Almacen",
+            MAX(OWHS."WhsName") AS "NombreAlmacen",
+            OPOR."DocTotal" - OPOR."VatSum" AS "TotalSinImpuestos",
+            OPOR."VatSum" AS "Impuestos",
+            OPOR."DocTotal" AS "TotalConImpuestos",
 
-                MAX(OPOR."DiscSum") AS "Descuento",
+            MAX(OPOR."DiscSum") AS "Descuento",
 
-                OPOR."UserSign",
-                UC."U_NAME" AS "NombreUsuario",
+            OPOR."UserSign",
+            UC."U_NAME" AS "NombreUsuario",
 
-                OPOR."U_Autorizador",
+            OPOR."U_Autorizador",
 
-                MAX(OHEM."firstName" || \' \' || OHEM."lastName") AS "NombreOwner" -- 🔥 NUEVO
+            MAX(OHEM."firstName" || \' \' || OHEM."lastName") AS "NombreOwner"
 
-            FROM OPOR
-            INNER JOIN ' . $dataConect["companyDB"] . '.POR1 
-                ON ' . $dataConect["companyDB"] . '.POR1."DocEntry" = OPOR."DocEntry"
-            LEFT JOIN ' . $dataConect["companyDB"] . '.OWHS 
-                ON ' . $dataConect["companyDB"] . '.OWHS."WhsCode" = POR1."WhsCode"
-            LEFT JOIN ' . $dataConect["companyDB"] . '.OUSR UC 
-                ON UC."USERID" = ' . $dataConect["companyDB"] . '.OPOR."UserSign"
+        FROM OPOR
+        INNER JOIN ' . $dataConect["companyDB"] . '.POR1 
+            ON ' . $dataConect["companyDB"] . '.POR1."DocEntry" = OPOR."DocEntry"
+        LEFT JOIN ' . $dataConect["companyDB"] . '.OWHS 
+            ON ' . $dataConect["companyDB"] . '.OWHS."WhsCode" = POR1."WhsCode"
+        LEFT JOIN ' . $dataConect["companyDB"] . '.OUSR UC 
+            ON UC."USERID" = ' . $dataConect["companyDB"] . '.OPOR."UserSign"
+        LEFT JOIN ' . $dataConect["companyDB"] . '.OHEM 
+            ON OHEM."empID" = OPOR."OwnerCode"
 
-            LEFT JOIN ' . $dataConect["companyDB"] . '.OHEM 
-                ON OHEM."empID" = OPOR."OwnerCode" -- 🔥 JOIN OWNER
+        WHERE
+            OPOR."CANCELED" = \'N\'
+            AND OPOR."U_Authorized" = \'' . $estadoAuth . '\'
+            AND OPOR."U_Autorizador" = \'' . $userAuth . '\'
 
-            WHERE
-                OPOR."CANCELED" = \'N\'
-                AND OPOR."U_Authorized" = \'U\'
-                AND OPOR."U_Autorizador" = \'' . $userAuth . '\'
-
-            GROUP BY
-                OPOR."DocEntry",
-                OPOR."DocNum",
-                OPOR."DocDate",
-                OPOR."CardCode",
-                OPOR."CardName",
-                OPOR."DocTotal",
-                OPOR."VatSum",
-                OPOR."VatSum",
-                OPOR."UserSign",
-                OPOR."U_Autorizador",
-                UC."U_NAME"
+        GROUP BY
+            OPOR."DocEntry",
+            OPOR."DocNum",
+            OPOR."DocDate",
+            OPOR."CardCode",
+            OPOR."CardName",
+            OPOR."DocTotal",
+            OPOR."VatSum",
+            OPOR."UserSign",
+            OPOR."U_Autorizador",
+            UC."U_NAME"
+        ORDER BY OPOR."DocEntry" DESC
         ';
 
             $rs = odbc_exec($conn, $sql);
             if (!$rs) {
+                odbc_close($conn);
                 throw new \Exception('Error SQL: ' . odbc_errormsg($conn));
             }
 
             // -----------------------------
-            // 4) Fetch resultados
+            // 4) Fetch de resultados
             // -----------------------------
             $data = [];
             while ($row = odbc_fetch_array($rs)) {
-
-                $row = $this->utf8ize($row); // 🔥 FIX UTF8 SIN TOCAR TU LOGICA
+                $row = $this->utf8ize($row);
 
                 $data[] = [
                     'DocEntry' => $row['DocEntry'],
@@ -313,7 +297,6 @@ class PurchaseAuthController extends BaseController {
                 ];
             }
 
-
             odbc_free_result($rs);
             odbc_close($conn);
 
@@ -332,6 +315,161 @@ class PurchaseAuthController extends BaseController {
                 'error' => true,
                 'message' => $e->getMessage(),
             ];
+        }
+    }
+
+    public function deauthorizeOrder() {
+        if (!$this->request->isAJAX()) {
+            return $this->response->setStatusCode(400)->setJSON([
+                        'success' => false,
+                        'error' => 'Petición no permitida.'
+            ]);
+        }
+
+        helper('auth');
+        $userName = user() ? user()->username : 'Sistema';
+
+        $inputJson = $this->request->getJSON(true);
+        $docEntry = (int) ($inputJson['docEntry'] ?? 0);
+        $docNum = $inputJson['docNum'] ?? '';
+
+        if ($docEntry <= 0) {
+            return $this->response->setJSON([
+                        'success' => false,
+                        'error' => 'El DocEntry no es válido o es requerido.'
+            ]);
+        }
+
+        try {
+            $dataSL = $this->serviceLayerModel->select("*")->first();
+
+            // -------------------------------------------------------------
+            // 1) VALIDACIÓN: Verificar si tiene Entradas o Facturas en HANA
+            // -------------------------------------------------------------
+            $conn = odbc_connect(
+                    $dataSL["nameODBC"],
+                    $dataSL["userODBC"],
+                    $dataSL["passwordODBC"]
+            );
+
+            if (!$conn) {
+                throw new \Exception('Error de conexión ODBC: ' . odbc_errormsg());
+            }
+
+            if (!odbc_exec($conn, 'SET SCHEMA "' . $dataSL["companyDB"] . '"')) {
+                odbc_close($conn);
+                throw new \Exception('Error SET SCHEMA: ' . odbc_errormsg($conn));
+            }
+
+            // ObjType 22 = Orden de Compra / Pedido (OPOR)
+            $sqlCheck = "
+            SELECT 
+                (SELECT COUNT(DISTINCT OPDN.\"DocNum\") 
+                 FROM PDN1 
+                 INNER JOIN OPDN ON OPDN.\"DocEntry\" = PDN1.\"DocEntry\" 
+                 WHERE PDN1.\"BaseType\" = 22 
+                   AND PDN1.\"BaseEntry\" = {$docEntry} 
+                   AND OPDN.\"CANCELED\" = 'N') AS \"CountEntradas\",
+
+                (SELECT COUNT(DISTINCT OPCH.\"DocNum\") 
+                 FROM PCH1 
+                 INNER JOIN OPCH ON OPCH.\"DocEntry\" = PCH1.\"DocEntry\" 
+                 WHERE PCH1.\"BaseType\" = 22 
+                   AND PCH1.\"BaseEntry\" = {$docEntry} 
+                   AND OPCH.\"CANCELED\" = 'N') AS \"CountFacturas\"
+            FROM DUMMY
+        ";
+
+            $rsCheck = odbc_exec($conn, $sqlCheck);
+            if (!$rsCheck) {
+                odbc_close($conn);
+                throw new \Exception('Error al validar documentos posteriores: ' . odbc_errormsg($conn));
+            }
+
+            $rowCheck = odbc_fetch_array($rsCheck);
+            odbc_free_result($rsCheck);
+            odbc_close($conn);
+
+            $countEntradas = (int) ($rowCheck['CountEntradas'] ?? 0);
+            $countFacturas = (int) ($rowCheck['CountFacturas'] ?? 0);
+
+            if ($countEntradas > 0 || $countFacturas > 0) {
+                $motivo = [];
+                if ($countEntradas > 0) {
+                    $motivo[] = "{$countEntradas} Entrada(s) de Mercancía";
+                }
+                if ($countFacturas > 0) {
+                    $motivo[] = "{$countFacturas} Factura(s) de Proveedor";
+                }
+
+                return $this->response->setJSON([
+                            'success' => false,
+                            'error' => 'No se puede desautorizar: el pedido ' . $docNum . ' ya tiene documentos posteriores (' . implode(', ', $motivo) . ').'
+                ]);
+            }
+
+            // -------------------------------------------------------------
+            // 2) Conexión a Service Layer para actualizar U_Authorized
+            // -------------------------------------------------------------
+            $conexionSap = $this->serviceLayerController->login(
+                    $dataSL["url"],
+                    $dataSL["port"],
+                    $dataSL["password"],
+                    $dataSL["username"],
+                    $dataSL["companyDB"]
+            );
+
+            $cookie = "B1SESSION=" . $conexionSap->SessionId . "; ROUTEID=.node1";
+            $urlSL = rtrim($dataSL["url"], '/') . ':' . $dataSL["port"] . '/b1s/v1/PurchaseOrders(' . $docEntry . ')';
+
+            $payloadUpdate = [
+                'U_Authorized' => 'U' // Regresar estado a no autorizado
+            ];
+
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $urlSL);
+            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PATCH');
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payloadUpdate));
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Content-Type: application/json',
+                'Cookie: ' . $cookie
+            ]);
+
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curlError = curl_error($ch);
+            curl_close($ch);
+
+            if ($httpCode === 204 || $httpCode === 200) {
+                // Guardar bitácora
+                $datosBitacora = [
+                    'description' => "Se desautorizó el Pedido {$docNum} (DocEntry {$docEntry})",
+                    'user' => $userName
+                ];
+                $this->log->save($datosBitacora);
+
+                return $this->response->setJSON([
+                            'success' => true,
+                            'message' => "Pedido {$docNum} desautorizado con éxito."
+                ]);
+            } else {
+                $resDecoded = json_decode($response, true);
+                $errMsg = $resDecoded['error']['message']['value'] ?? $curlError ?? 'Error al actualizar en Service Layer.';
+
+                return $this->response->setJSON([
+                            'success' => false,
+                            'error' => $errMsg,
+                            'httpCode' => $httpCode
+                ]);
+            }
+        } catch (\Throwable $e) {
+            return $this->response->setJSON([
+                        'success' => false,
+                        'error' => $e->getMessage()
+            ]);
         }
     }
 
