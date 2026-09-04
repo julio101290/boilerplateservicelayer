@@ -93,15 +93,13 @@ $routes->group('admin', function ($routes) {
                 'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
             ]
     );
-    
-    
+
     $routes->post('servicelayer/deauthorizeOrder',
-    'ServiceLayerController::deauthorizeOrder',
-    [
-        'filter'    => 'permission:authorize-permission',
-        'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
-    ]
-);
+            'PurchaseAuthController::deauthorizeOrder',
+            [
+                'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+            ]
+    );
 
 // Obtener/mostrar líneas del PO (DataTables / modal)
     $routes->post('servicelayer/showlistProductsPO',

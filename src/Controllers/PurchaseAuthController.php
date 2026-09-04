@@ -409,7 +409,7 @@ class PurchaseAuthController extends BaseController {
             }
 
             // -------------------------------------------------------------
-            // 2) Conexión a Service Layer para actualizar U_Authorized
+            // 2) Conexión y Autenticación en Service Layer
             // -------------------------------------------------------------
             $conexionSap = $this->serviceLayerController->login(
                     $dataSL["url"],
@@ -419,22 +419,49 @@ class PurchaseAuthController extends BaseController {
                     $dataSL["companyDB"]
             );
 
+            if (empty($conexionSap->SessionId)) {
+                throw new \Exception('No se pudo obtener una sesión válida de Service Layer.');
+            }
+
             $cookie = "B1SESSION=" . $conexionSap->SessionId . "; ROUTEID=.node1";
-            $urlSL = rtrim($dataSL["url"], '/') . ':' . $dataSL["port"] . '/b1s/v1/PurchaseOrders(' . $docEntry . ')';
+
+            // -------------------------------------------------------------
+            // 3) Construcción blindada de la URL (Evita duplicidad de puertos/rutas)
+            // -------------------------------------------------------------
+            $rawUrl = trim($dataSL["url"]);
+            $configuredPort = trim((string) ($dataSL["port"] ?? ''));
+
+            if (!preg_match('#^https?://#i', $rawUrl)) {
+                $rawUrl = 'https://' . $rawUrl;
+            }
+
+            $parsed = parse_url($rawUrl);
+            $scheme = $parsed['scheme'] ?? 'https';
+            $host = $parsed['host'] ?? $rawUrl;
+
+            // Si el puerto ya venía dentro de la URL (ej: https://server:50000), se respeta ese;
+            // si no, toma la columna "port", o recurre al puerto estándar 50000.
+            $port = !empty($parsed['port']) ? $parsed['port'] : (!empty($configuredPort) ? $configuredPort : '50000');
+
+            $urlSL = "{$scheme}://{$host}:{$port}/b1s/v1/PurchaseOrders({$docEntry})";
 
             $payloadUpdate = [
-                'U_Authorized' => 'U' // Regresar estado a no autorizado
+                'U_Authorized' => 'U'
             ];
 
+            // -------------------------------------------------------------
+            // 4) Ejecución cURL con Method Tunneling
+            // -------------------------------------------------------------
             $ch = curl_init();
             curl_setopt($ch, CURLOPT_URL, $urlSL);
-            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PATCH');
+            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'POST');
             curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payloadUpdate));
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
             curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
             curl_setopt($ch, CURLOPT_HTTPHEADER, [
                 'Content-Type: application/json',
+                'X-HTTP-Method-Override: PATCH',
                 'Cookie: ' . $cookie
             ]);
 
@@ -443,8 +470,10 @@ class PurchaseAuthController extends BaseController {
             $curlError = curl_error($ch);
             curl_close($ch);
 
+            // -------------------------------------------------------------
+            // 5) Procesamiento de la Respuesta
+            // -------------------------------------------------------------
             if ($httpCode === 204 || $httpCode === 200) {
-                // Guardar bitácora
                 $datosBitacora = [
                     'description' => "Se desautorizó el Pedido {$docNum} (DocEntry {$docEntry})",
                     'user' => $userName
@@ -457,12 +486,22 @@ class PurchaseAuthController extends BaseController {
                 ]);
             } else {
                 $resDecoded = json_decode($response, true);
-                $errMsg = $resDecoded['error']['message']['value'] ?? $curlError ?? 'Error al actualizar en Service Layer.';
+
+                if (json_last_error() === JSON_ERROR_NONE && isset($resDecoded['error']['message']['value'])) {
+                    $errMsg = $resDecoded['error']['message']['value'];
+                } elseif (!empty($curlError)) {
+                    $errMsg = 'Error de cURL: ' . $curlError;
+                } else {
+                    // Remueve código HTML en caso de que el servidor web responda con páginas de error
+                    $cleanHtml = trim(preg_replace('/\s+/', ' ', strip_tags($response)));
+                    $errMsg = !empty($cleanHtml) ? "Servidor ({$httpCode}): {$cleanHtml}" : "Error desconocido con código HTTP {$httpCode}";
+                }
 
                 return $this->response->setJSON([
                             'success' => false,
                             'error' => $errMsg,
-                            'httpCode' => $httpCode
+                            'httpCode' => $httpCode,
+                            'urlDebug' => $urlSL
                 ]);
             }
         } catch (\Throwable $e) {
