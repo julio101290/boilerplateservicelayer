@@ -69,6 +69,7 @@
                     <th>Registro SAP</th>
                     <th>Tipo Movimiento</th>
                     <th>Importe SAP</th>
+                    <th>Sucursal</th>
                 </tr>
             </thead>
             <tbody id="cuerpoResultados"></tbody>
@@ -145,6 +146,7 @@ $(function () {
                 <td>${escapeHtml(row.registro_sap)}</td>
                 <td>${escapeHtml(row.tipo_movimiento)}</td>
                 <td>${escapeHtml(row.importe_sap)}</td>
+                <td>${escapeHtml(row.sucursal)}</td>    
             </td>`;
             tbody.append(tr);
         });

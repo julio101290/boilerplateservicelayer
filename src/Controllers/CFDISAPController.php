@@ -703,9 +703,11 @@ class CFDISAPController extends BaseController {
         $mapaUUID = [];
 
         foreach ($tablas as $tabla => $tipoDesc) {
-            $sql = "SELECT \"DocEntry\", \"DocNum\", \"DocTotal\", \"{$uuidField}\" 
-                FROM \"{$sapConfig['companyDB']}\".\"{$tabla}\" 
-                WHERE \"{$uuidField}\" IN ({$uuidList})";
+            $sql = "SELECT T0.\"DocEntry\", T0.\"DocNum\", T0.\"DocTotal\", T1.\"BPLName\", T0.\"{$uuidField}\" 
+                FROM \"{$sapConfig['companyDB']}\".\"{$tabla}\" T0
+                LEFT JOIN \"{$sapConfig['companyDB']}\".\"OBPL\" T1 ON T0.\"BPLId\" = T1.\"BPLId\"
+                WHERE T0.\"{$uuidField}\" IN ({$uuidList})";
+
             $rs = odbc_exec($conn, $sql);
             if (!$rs) {
                 continue;
@@ -716,7 +718,8 @@ class CFDISAPController extends BaseController {
                     'encontrado' => 'SI',
                     'registro' => $row['DocNum'] ?? $row['DocEntry'],
                     'tipo' => $tipoDesc,
-                    'importe' => number_format((float) $row['DocTotal'], 2)
+                    'importe' => number_format((float) $row['DocTotal'], 2),
+                    'sucursal' => $row['BPLName'] ?? 'General'
                 ];
             }
             odbc_free_result($rs);
@@ -744,7 +747,7 @@ class CFDISAPController extends BaseController {
             }
 
             // Obtener info del mapa (si existe)
-            $infoSAP = $mapaUUID[$uuid] ?? ['encontrado' => 'NO', 'registro' => '', 'tipo' => '', 'importe' => ''];
+            $infoSAP = $mapaUUID[$uuid] ?? ['encontrado' => 'NO', 'registro' => '', 'tipo' => '', 'importe' => '', 'sucursal' => ''];
             $resultados[] = $this->crearResultadoCompleto($row, $rfcCol, $nombreCol, $folioCol, $fechaCol, $subtotalCol, $totalCol, $impuestoCol, $impuestoRetCol, $metodoPagoCol, $formaPagoCol, $monedaCol, $uuid, $infoSAP);
         }
 
@@ -805,7 +808,8 @@ class CFDISAPController extends BaseController {
             'encontrado_sap' => $infoSAP['encontrado'],
             'registro_sap' => $infoSAP['registro'],
             'tipo_movimiento' => $infoSAP['tipo'],
-            'importe_sap' => $infoSAP['importe']
+            'importe_sap' => $infoSAP['importe'],
+            'sucursal' => $infoSAP['sucursal']
         ];
     }
 
