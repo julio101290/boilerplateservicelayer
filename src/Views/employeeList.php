@@ -38,13 +38,19 @@
                         </div>
                     </div>
                     <div class="row">
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <div class="form-group">
-                                <label for="Code"><?= lang('employee.fields.Code') ?></label>
-                                <input type="text" class="form-control" name="Code" id="Code">
+                                <label for="ExtEmpNo">No. Empleado Externo *</label>
+                                <input type="text" class="form-control" name="ExtEmpNo" id="ExtEmpNo" required placeholder="Ej. EMP-001">
                             </div>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="Code">Código SAP (Auto)</label>
+                                <input type="text" class="form-control" name="Code" id="Code" readonly placeholder="Automático por SAP">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
                             <div class="form-group">
                                 <label for="Active"><?= lang('employee.fields.active') ?></label>
                                 <select class="form-control" name="Active" id="Active">
@@ -53,45 +59,44 @@
                                 </select>
                             </div>
                         </div>
+                    </div>
 
-                        <!-- Gestión de roles -->
-                        <div class="row mt-3">
-                            <div class="col-md-12">
-                                <div class="card card-info card-outline">
-                                    <div class="card-header">
-                                        <h5 class="card-title"><?= lang('employee.roles_title') ?></h5>
+                    <!-- Gestión de roles -->
+                    <div class="row mt-3">
+                        <div class="col-md-12">
+                            <div class="card card-info card-outline">
+                                <div class="card-header">
+                                    <h5 class="card-title"><?= lang('employee.roles_title') ?></h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row mb-2">
+                                        <div class="col-md-8">
+                                            <select class="form-control select2-roles" id="selectRole" style="width:100%;"></select>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <button type="button" class="btn btn-primary btn-block" id="btnAddRole">
+                                                <i class="fas fa-plus"></i> <?= lang('employee.btn_add_role') ?>
+                                            </button>
+                                        </div>
                                     </div>
-                                    <div class="card-body">
-                                        <div class="row mb-2">
-                                            <div class="col-md-8">
-                                                <select class="form-control select2-roles" id="selectRole" style="width:100%;"></select>
-                                            </div>
-                                            <div class="col-md-4">
-                                                <button class="btn btn-primary btn-block" id="btnAddRole">
-                                                    <i class="fas fa-plus"></i> <?= lang('employee.btn_add_role') ?>
-                                                </button>
-                                            </div>
-                                        </div>
-                                        <div class="table-responsive">
-                                            <table class="table table-sm table-bordered" id="tableRoles">
-                                                <thead>
-                                                    <tr>
-                                                        <th><?= lang('employee.fields.role_code') ?></th>
-                                                        <th><?= lang('employee.fields.role_name') ?></th>
-                                                        <th><?= lang('employee.fields.position') ?></th>
-                                                        <th width="80"><?= lang('employee.fields.actions') ?></th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody id="tbodyRoles">
-                                                    <tr><td colspan="4" class="text-center"><?= lang('employee.no_roles') ?></td></tr>
-                                                </tbody>
-                                            </table>
-                                        </div>
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-bordered" id="tableRoles">
+                                            <thead>
+                                                <tr>
+                                                    <th><?= lang('employee.fields.role_code') ?></th>
+                                                    <th><?= lang('employee.fields.role_name') ?></th>
+                                                    <th><?= lang('employee.fields.position') ?></th>
+                                                    <th width="80"><?= lang('employee.fields.actions') ?></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="tbodyRoles">
+                                                <tr><td colspan="4" class="text-center"><?= lang('employee.no_roles') ?></td></tr>
+                                            </tbody>
+                                        </table>
                                     </div>
                                 </div>
                             </div>
                         </div>
-
                     </div>
                 </form>
             </div>
@@ -119,6 +124,7 @@
                     <tr>
                         <th><?= lang('employee.fields.actions') ?></th>
                         <th><?= lang('employee.fields.empID') ?></th>
+                        <th>No. Externo</th>
                         <th><?= lang('employee.fields.firstName') ?></th>
                         <th><?= lang('employee.fields.lastName') ?></th>
                         <th><?= lang('employee.fields.middleName') ?></th>
@@ -152,7 +158,7 @@
                 }
             },
             columnDefs: [
-                {targets: 0, orderable: false, searchable: false, width: '150px'}
+                {targets: 0, orderable: false, searchable: false, width: '120px'}
             ],
             columns: [
                 {
@@ -161,15 +167,18 @@
                     render: function (data, type, row) {
                         var empID = row.empID || '';
                         return `
-            <div class="btn-group" role="group">
-                <button class="btn btn-warning btn-sm btnEditEmployee" data-empID="${empID}" title="Editar">
-                    <i class="fas fa-edit"></i>
-                </button>
-
-            </div>`;
+                        <div class="btn-group" role="group">
+                            <button class="btn btn-warning btn-sm btnEditEmployee" data-empid="${empID}" title="Editar">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn btn-danger btn-sm btnDeleteEmployee" data-empid="${empID}" title="Eliminar">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>`;
                     }
                 },
                 {data: 'empID'},
+                {data: 'ExtEmpNo'},
                 {data: 'firstName'},
                 {data: 'lastName'},
                 {data: 'middleName'},
@@ -190,6 +199,8 @@
         $('#btnNewEmployee').on('click', function () {
             $('#formEmployee')[0].reset();
             $('#empID').val(0);
+            $('#ExtEmpNo').val('');
+            $('#Code').val('');
             $('#Active').val('Y');
             $('#modalEmployeeLabel').text('<?= lang('employee.new_title') ?>');
             $('#modalEmployee').modal('show');
@@ -209,11 +220,11 @@
                 success: function (resp) {
                     if (resp.empID) {
                         $('#empID').val(resp.empID);
+                        $('#ExtEmpNo').val(resp.ExtEmpNo || '');
+                        $('#Code').val(resp.Code || '');
                         $('#firstName').val(resp.firstName || '');
                         $('#lastName').val(resp.lastName || '');
                         $('#middleName').val(resp.middleName || '');
-                        $('#middleName').val(resp.middleName || '');
-                        $('#Code').val(resp.Code || '');
                         $('#Active').val(resp.Active || 'Y');
                         $('#modalEmployeeLabel').text('<?= lang('employee.edit_title') ?>');
                         $('#modalEmployee').modal('show');
@@ -235,8 +246,15 @@
                 data[field.name] = field.value;
             });
 
-            if (!data.empID || data.empID.trim() === '' || parseInt(data.empID) <= 0) {
-                Swal.fire('Atención', 'Debes capturar el código de empleado', 'warning');
+            // Validar número externo
+            if (!data.ExtEmpNo || data.ExtEmpNo.trim() === '') {
+                Swal.fire('Atención', 'Debes capturar el número de empleado externo', 'warning');
+                return;
+            }
+
+            // Validar nombres obligatorios
+            if (!data.firstName || data.firstName.trim() === '' || !data.lastName || data.lastName.trim() === '') {
+                Swal.fire('Atención', 'Nombre y Apellido son obligatorios', 'warning');
                 return;
             }
 
@@ -267,9 +285,10 @@
                 }
             });
         });
+
         // Eliminar
         $('#tableEmployees tbody').on('click', '.btnDeleteEmployee', function () {
-            var empID = $(this).data('empID');
+            var empID = $(this).attr('data-empid');
             Swal.fire({
                 title: '¿Eliminar empleado?',
                 text: 'Esta acción no se puede deshacer',
@@ -305,11 +324,10 @@
         });
     });
 
-
     // ===== GESTIÓN DE ROLES =====
     var currentEmpID = 0;
 
-// Inicializar select2 para roles
+    // Inicializar select2 para roles
     $('#selectRole').select2({
         dropdownParent: $('#modalEmployee'),
         ajax: {
@@ -334,7 +352,7 @@
         }
     });
 
-// Función para cargar roles del empleado actual
+    // Función para cargar roles del empleado actual
     function loadEmployeeRoles(empID) {
         currentEmpID = empID;
         $.ajax({
@@ -352,8 +370,8 @@
                     var tr = '<tr>' +
                             '<td>' + (role.roleID || '') + '</td>' +
                             '<td>' + (role.RoleName || '') + '</td>' +
-                            '<td>' + (role.Position || '') + '</td>' +
-                            '<td><button class="btn btn-danger btn-sm btnRemoveRole" data-rolecode="' + role.roleID + '"><i class="fas fa-trash"></i></button></td>' +
+                            '<td>' + (role.Description || '') + '</td>' +
+                            '<td><button type="button" class="btn btn-danger btn-sm btnRemoveRole" data-rolecode="' + role.roleID + '"><i class="fas fa-trash"></i></button></td>' +
                             '</tr>';
                     tbody.append(tr);
                 });
@@ -364,7 +382,7 @@
         });
     }
 
-// Al abrir el modal de edición, cargar roles
+    // Al abrir el modal de edición, cargar roles
     $('#modalEmployee').on('show.bs.modal', function (e) {
         var empID = $('#empID').val();
         if (empID > 0) {
@@ -375,7 +393,7 @@
         }
     });
 
-// Agregar rol
+    // Agregar rol
     $('#btnAddRole').on('click', function () {
         var empID = $('#empID').val();
         if (empID == 0) {
@@ -416,7 +434,7 @@
         });
     });
 
-// Eliminar rol (evento delegado)
+    // Eliminar rol (evento delegado)
     $(document).off('click', '#tbodyRoles .btnRemoveRole').on('click', '#tbodyRoles .btnRemoveRole', function (e) {
         e.preventDefault();
         e.stopPropagation();
@@ -472,8 +490,6 @@
     $('#tbodyRoles').on('click', '.btnEditRole', function () {
         var empID = $('#empID').val();
         var oldRoleID = $(this).data('roleid');
-        // Mostrar un modal o select con roles disponibles
-        // (o usar un select2 inline)
         var newRoleID = prompt('Nuevo ID de rol:', oldRoleID);
         if (newRoleID && newRoleID != oldRoleID) {
             $.ajax({
@@ -495,6 +511,5 @@
             });
         }
     });
-
 </script>
 <?= $this->endSection() ?>

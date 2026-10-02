@@ -36,17 +36,17 @@ class EmployeeSAPController extends BaseController {
             $orderDir = strtolower($request->getGet('order')[0]['dir'] ?? 'asc');
 
             // Columnas visibles en DataTable
-            $columns = ['empID', 'firstName', 'lastName', 'middleName', 'Dept', 'Active'];
+            $columns = ['empID', 'empID', 'ExtEmpNo', 'firstName', 'lastName', 'middleName', 'Dept', 'Active'];
             $orderField = $columns[$orderColumnIndex] ?? 'empID';
 
             $dataConect = $this->serviceLayerModel->first();
             $result = $this->getEmployeesODBC($dataConect, $searchValue, $start, $length, $orderField, $orderDir);
 
             return $this->response->setJSON([
-                        'draw' => $draw,
-                        'recordsTotal' => $result['recordsTotal'],
-                        'recordsFiltered' => $result['recordsFiltered'],
-                        'data' => $result['data'],
+                'draw' => $draw,
+                'recordsTotal' => $result['recordsTotal'],
+                'recordsFiltered' => $result['recordsFiltered'],
+                'data' => $result['data'],
             ]);
         }
 
@@ -62,9 +62,9 @@ class EmployeeSAPController extends BaseController {
             }
 
             $conn = odbc_connect(
-                    $dataConect["nameODBC"],
-                    $dataConect["userODBC"],
-                    $dataConect["passwordODBC"]
+                $dataConect["nameODBC"],
+                $dataConect["userODBC"],
+                $dataConect["passwordODBC"]
             );
             if (!$conn) {
                 throw new \Exception('Error conexión ODBC: ' . odbc_errormsg());
@@ -76,10 +76,10 @@ class EmployeeSAPController extends BaseController {
 
             $searchEsc = str_replace("'", "''", $search);
 
-            // Count total
+            // Conteo total
             $countSql = 'SELECT COUNT(*) AS total FROM OHEM WHERE 1=1';
             if (!empty($search)) {
-                $countSql .= " AND (\"firstName\" LIKE '%$searchEsc%' OR \"lastName\" LIKE '%$searchEsc%' OR \"middleName\" LIKE '%$searchEsc%')";
+                $countSql .= " AND (\"firstName\" LIKE '%$searchEsc%' OR \"lastName\" LIKE '%$searchEsc%' OR \"middleName\" LIKE '%$searchEsc%' OR \"ExtEmpNo\" LIKE '%$searchEsc%')";
             }
             $countStmt = odbc_exec($conn, $countSql);
             if (!$countStmt) {
@@ -91,16 +91,16 @@ class EmployeeSAPController extends BaseController {
             }
             odbc_free_result($countStmt);
 
-            // Main query with LIMIT/OFFSET
+            // Consulta paginada
             $orderDir = strtoupper($orderDir) === 'DESC' ? 'DESC' : 'ASC';
-            $allowed = ['empID', 'firstName', 'lastName', 'middleName', 'Dept', 'Active'];
+            $allowed = ['empID', 'ExtEmpNo', 'firstName', 'lastName', 'middleName', 'Dept', 'Active'];
             if (!in_array($orderField, $allowed)) {
                 $orderField = 'empID';
             }
 
-            $baseSql = 'SELECT "empID", "firstName", "lastName", "middleName", "dept", "Active", "Code" FROM OHEM WHERE 1=1';
+            $baseSql = 'SELECT "empID", "ExtEmpNo", "firstName", "lastName", "middleName", "dept", "Active", "Code" FROM OHEM WHERE 1=1';
             if (!empty($search)) {
-                $baseSql .= " AND (\"firstName\" LIKE '%$searchEsc%' OR \"lastName\" LIKE '%$searchEsc%' OR \"middleName\" LIKE '%$searchEsc%')";
+                $baseSql .= " AND (\"firstName\" LIKE '%$searchEsc%' OR \"lastName\" LIKE '%$searchEsc%' OR \"middleName\" LIKE '%$searchEsc%' OR \"ExtEmpNo\" LIKE '%$searchEsc%')";
             }
             $sql = $baseSql . " ORDER BY \"$orderField\" $orderDir LIMIT $length OFFSET $start";
 
@@ -114,6 +114,7 @@ class EmployeeSAPController extends BaseController {
                 $row = $this->utf8ize($row);
                 $data[] = [
                     'empID' => $row['empID'] ?? '',
+                    'ExtEmpNo' => $row['ExtEmpNo'] ?? '',
                     'firstName' => $row['firstName'] ?? '',
                     'lastName' => $row['lastName'] ?? '',
                     'middleName' => $row['middleName'] ?? '',
@@ -149,16 +150,16 @@ class EmployeeSAPController extends BaseController {
         }
 
         $conn = odbc_connect(
-                $dataConect["nameODBC"],
-                $dataConect["userODBC"],
-                $dataConect["passwordODBC"]
+            $dataConect["nameODBC"],
+            $dataConect["userODBC"],
+            $dataConect["passwordODBC"]
         );
         if (!$conn) {
             return $this->respond(['status' => 500, 'message' => 'Error conexión ODBC'], 500);
         }
         odbc_exec($conn, 'SET SCHEMA "' . $dataConect["companyDB"] . '"');
 
-        $sql = 'SELECT "empID", "firstName", "lastName", "middleName", "dept", "Active", "Code" FROM OHEM WHERE "empID" = ' . (int) $id;
+        $sql = 'SELECT "empID", "ExtEmpNo", "firstName", "lastName", "middleName", "dept", "Active", "Code" FROM OHEM WHERE "empID" = ' . (int) $id;
         $stmt = odbc_exec($conn, $sql);
         if (!$stmt) {
             odbc_close($conn);
@@ -175,17 +176,65 @@ class EmployeeSAPController extends BaseController {
         return $this->respond($row, 200);
     }
 
+    /**
+     * Valida que no exista otro empleado con el mismo ExtEmpNo
+     */
+    private function extEmpNoExists($dataConect, string $extEmpNo, int $currentEmpID = 0): bool {
+        if (empty($extEmpNo)) {
+            return false;
+        }
+
+        $conn = @odbc_connect(
+            $dataConect["nameODBC"],
+            $dataConect["userODBC"],
+            $dataConect["passwordODBC"]
+        );
+        if (!$conn) {
+            return false;
+        }
+
+        odbc_exec($conn, 'SET SCHEMA "' . $dataConect["companyDB"] . '"');
+
+        $extEmpNoEsc = str_replace("'", "''", trim($extEmpNo));
+        $sql = 'SELECT COUNT(*) AS total FROM OHEM WHERE "ExtEmpNo" = \'' . $extEmpNoEsc . '\'';
+        if ($currentEmpID > 0) {
+            $sql .= ' AND "empID" <> ' . (int) $currentEmpID;
+        }
+
+        $stmt = odbc_exec($conn, $sql);
+        $exists = false;
+        if ($stmt && odbc_fetch_row($stmt)) {
+            $exists = ((int) odbc_result($stmt, 1)) > 0;
+        }
+
+        if ($stmt) {
+            odbc_free_result($stmt);
+        }
+        odbc_close($conn);
+
+        return $exists;
+    }
+
     public function save() {
         helper('auth');
         $userName = user()->username;
         $datos = $this->request->getPost();
         $empID = isset($datos['empID']) ? (int) $datos['empID'] : 0;
+        $extEmpNo = trim($datos['ExtEmpNo'] ?? '');
 
-        if ($empID <= 0) {
+        // Validaciones requeridas
+        if (empty($datos['firstName']) || empty($datos['lastName'])) {
             return $this->respond([
-                        'status' => 400,
-                        'message' => 'Debes capturar el código de empleado (empID)'
-                            ], 400);
+                'status' => 400,
+                'message' => 'Nombre y Apellido son obligatorios'
+            ], 400);
+        }
+
+        if (empty($extEmpNo)) {
+            return $this->respond([
+                'status' => 400,
+                'message' => 'El Número de Empleado Externo es obligatorio'
+            ], 400);
         }
 
         $dataSL = $this->serviceLayerModel->first();
@@ -193,13 +242,21 @@ class EmployeeSAPController extends BaseController {
             return $this->respond(['status' => 500, 'message' => 'No hay configuración Service Layer'], 500);
         }
 
+        // Validación de duplicidad en ExtEmpNo
+        if ($this->extEmpNoExists($dataSL, $extEmpNo, $empID)) {
+            return $this->respond([
+                'status' => 400,
+                'message' => "El número de empleado externo '{$extEmpNo}' ya se encuentra registrado."
+            ], 400);
+        }
+
         try {
             $conexionSap = $this->serviceLayerController->login(
-                    $dataSL['url'],
-                    $dataSL['port'],
-                    $dataSL['password'],
-                    $dataSL['username'],
-                    $dataSL['companyDB']
+                $dataSL['url'],
+                $dataSL['port'],
+                $dataSL['password'],
+                $dataSL['username'],
+                $dataSL['companyDB']
             );
         } catch (\Exception $e) {
             return $this->respond(['status' => 500, 'message' => 'Error login SL: ' . $e->getMessage()], 500);
@@ -225,46 +282,26 @@ class EmployeeSAPController extends BaseController {
             "B1S-CaseInsensitive: true"
         ];
 
-        // ¿Es alta o edición? Lo determinamos verificando si ese empID ya existe en SAP
-        $checkUrl = $slRoot . "/EmployeesInfo($empID)?" . http_build_query(['$select' => 'EmployeeID']);
-        $ch = curl_init();
-        curl_setopt_array($ch, [
-            CURLOPT_URL => $checkUrl,
-            CURLOPT_PORT => $dataSL['port'],
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_COOKIE => $cookie,
-            CURLOPT_SSL_VERIFYHOST => false,
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_HTTPHEADER => $baseHeaders,
-            CURLOPT_TIMEOUT => 60
-        ]);
-        $checkResp = curl_exec($ch);
-        $checkHttp = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+        // Construcción del payload
+        $payload = [
+            'FirstName' => trim($datos['firstName']),
+            'LastName' => trim($datos['lastName']),
+            'ExternalEmployeeNumber' => $extEmpNo
+        ];
 
-        $exists = ($checkHttp >= 200 && $checkHttp < 300);
-
-        $payload = [];
-        if (isset($datos['firstName']))
-            $payload['FirstName'] = $datos['firstName'];
-        if (isset($datos['lastName']))
-            $payload['LastName'] = $datos['lastName'];
-        if (isset($datos['middleName']))
-            $payload['MiddleName'] = $datos['middleName'];
-        // Dept omitido por ahora (requiere un código válido existente en OUDP)
+        if (isset($datos['middleName'])) {
+            $payload['MiddleName'] = trim($datos['middleName']);
+        }
         if (isset($datos['Active'])) {
             $activeVal = $datos['Active'];
             $payload['Active'] = in_array($activeVal, [true, 1, '1', 'Y', 'tYES'], true) ? 'tYES' : 'tNO';
         }
 
-        if (!$exists) {
-            // Alta: se manda el EmployeeID capturado por el usuario
-            $payload['EmployeeID'] = $empID;
+        if ($empID <= 0) {
             $url = $slRoot . "/EmployeesInfo";
             $method = 'POST';
         } else {
-            // Edición
-            $url = $slRoot . "/EmployeesInfo($empID)";
+            $url = $slRoot . "/EmployeesInfo({$empID})";
             $method = 'PATCH';
         }
 
@@ -294,17 +331,27 @@ class EmployeeSAPController extends BaseController {
 
         if ($httpCode < 200 || $httpCode >= 300) {
             $body = json_decode($resp, true);
-            return $this->respond(['status' => $httpCode, 'message' => 'Error en SL', 'body' => $body], $httpCode);
+            $msgError = $body['error']['message']['value'] ?? 'Error en Service Layer';
+            return $this->respond(['status' => $httpCode, 'message' => $msgError, 'body' => $body], $httpCode);
+        }
+
+        $nuevoEmpID = $empID;
+        $data = null;
+        if ($method === 'POST') {
+            $data = json_decode($resp, true);
+            $nuevoEmpID = $data['EmployeeID'] ?? $empID;
         }
 
         $this->log->save([
-            "description" => (!$exists ? "Creación" : "Actualización") . " de empleado (código $empID): " . json_encode($datos),
+            "description" => ($empID <= 0 ? "Creación" : "Actualización") . " de empleado (ID $nuevoEmpID, No. Externo: $extEmpNo)",
             "user" => $userName
         ]);
 
-        $data = $method === 'POST' ? json_decode($resp, true) : null;
-
-        return $this->respond(['status' => 200, 'message' => 'Operación exitosa', 'data' => $data], 200);
+        return $this->respond([
+            'status' => 200,
+            'message' => ($empID <= 0 ? 'Empleado creado correctamente' : 'Empleado actualizado correctamente'),
+            'data' => $data
+        ], 200);
     }
 
     public function delete($id) {
@@ -318,11 +365,11 @@ class EmployeeSAPController extends BaseController {
 
         try {
             $conexionSap = $this->serviceLayerController->login(
-                    $dataSL['url'],
-                    $dataSL['port'],
-                    $dataSL['password'],
-                    $dataSL['username'],
-                    $dataSL['companyDB']
+                $dataSL['url'],
+                $dataSL['port'],
+                $dataSL['password'],
+                $dataSL['username'],
+                $dataSL['companyDB']
             );
         } catch (\Exception $e) {
             return $this->respond(['status' => 500, 'message' => 'Error login SL: ' . $e->getMessage()], 500);
@@ -341,7 +388,7 @@ class EmployeeSAPController extends BaseController {
             $slRoot = substr($slRoot, 0, $pos) . '/b1s/v1';
         }
 
-        $url = $slRoot . "/Employees($id)";
+        $url = $slRoot . "/EmployeesInfo($id)";
         $ch = curl_init();
         curl_setopt_array($ch, [
             CURLOPT_URL => $url,
@@ -390,9 +437,9 @@ class EmployeeSAPController extends BaseController {
         }
 
         $conn = odbc_connect(
-                $dataConect["nameODBC"],
-                $dataConect["userODBC"],
-                $dataConect["passwordODBC"]
+            $dataConect["nameODBC"],
+            $dataConect["userODBC"],
+            $dataConect["passwordODBC"]
         );
         if (!$conn) {
             return $this->respond(['status' => 500, 'message' => 'Error conexión ODBC'], 500);
@@ -448,9 +495,9 @@ class EmployeeSAPController extends BaseController {
         }
 
         $conn = odbc_connect(
-                $dataConect["nameODBC"],
-                $dataConect["userODBC"],
-                $dataConect["passwordODBC"]
+            $dataConect["nameODBC"],
+            $dataConect["userODBC"],
+            $dataConect["passwordODBC"]
         );
         if (!$conn) {
             return $this->response->setJSON(['results' => []]);
@@ -479,10 +526,7 @@ class EmployeeSAPController extends BaseController {
     }
 
     /**
-     * Agrega un rol a un empleado usando Service Layer.
-     * Endpoint: POST /EmployeeRoles (o /EmployeesRoles según versión)
-     * 
-     * @return \CodeIgniter\HTTP\Response
+     * Agrega un rol a un empleado usando Service Layer
      */
     public function addEmployeeRole() {
         helper('auth');
@@ -493,9 +537,9 @@ class EmployeeSAPController extends BaseController {
 
         if ($empID <= 0 || $roleID <= 0) {
             return $this->respond([
-                        'status' => 400,
-                        'message' => 'Faltan datos (empID o roleID)'
-                            ], 400);
+                'status' => 400,
+                'message' => 'Faltan datos (empID o roleID)'
+            ], 400);
         }
 
         $dataSL = $this->serviceLayerModel->first();
@@ -505,8 +549,8 @@ class EmployeeSAPController extends BaseController {
 
         try {
             $conexionSap = $this->serviceLayerController->login(
-                    $dataSL['url'], $dataSL['port'], $dataSL['password'],
-                    $dataSL['username'], $dataSL['companyDB']
+                $dataSL['url'], $dataSL['port'], $dataSL['password'],
+                $dataSL['username'], $dataSL['companyDB']
             );
         } catch (\Exception $e) {
             return $this->respond(['status' => 500, 'message' => 'Error login SL: ' . $e->getMessage()], 500);
@@ -518,7 +562,6 @@ class EmployeeSAPController extends BaseController {
 
         $cookie = "B1SESSION=" . $conexionSap->SessionId . "; ROUTEID=.node1";
 
-        // Normalizar URL base
         $slRoot = rtrim($dataSL['url'], '/');
         if (stripos($slRoot, '/b1s/v1') === false) {
             $slRoot .= '/b1s/v1';
@@ -534,10 +577,7 @@ class EmployeeSAPController extends BaseController {
             "B1S-CaseInsensitive: true"
         ];
 
-        // ============================================================
-        // 1) GET de los roles actuales del empleado (EmployeeRolesInfoLines)
-        //    para no perderlos al hacer el PATCH (que reemplaza la colección completa)
-        // ============================================================
+        // 1) GET roles actuales
         $getUrl = $slRoot . "/EmployeesInfo({$empID})?\$select=EmployeeID,EmployeeRolesInfoLines";
 
         $ch = curl_init();
@@ -557,14 +597,13 @@ class EmployeeSAPController extends BaseController {
         curl_close($ch);
 
         if ($getErr || $getHttp < 200 || $getHttp >= 300) {
-            log_message('warning', 'SL falló GET EmployeesInfo, usando ODBC: ' . ($getErr ?: "HTTP $getHttp: $getResp"));
-            //return $this->addEmployeeRoleODBC($empID, $roleID, $userName);
+            log_message('warning', 'SL falló GET EmployeesInfo: ' . ($getErr ?: "HTTP $getHttp: $getResp"));
         }
 
         $current = json_decode($getResp, true);
         $roles = $current['EmployeeRolesInfoLines'] ?? [];
 
-        // Evitar duplicar si ya tiene el rol asignado
+        // Evitar duplicar
         $alreadyHasRole = false;
         foreach ($roles as $r) {
             if ((int) ($r['RoleID'] ?? 0) === $roleID) {
@@ -576,9 +615,7 @@ class EmployeeSAPController extends BaseController {
             $roles[] = ['RoleID' => $roleID];
         }
 
-        // ============================================================
-        // 2) PATCH de la colección completa (merge) de vuelta a EmployeesInfo
-        // ============================================================
+        // 2) PATCH de vuelta
         $patchUrl = $slRoot . "/EmployeesInfo({$empID})";
         $payload = ['EmployeeRolesInfoLines' => $roles];
 
@@ -601,21 +638,19 @@ class EmployeeSAPController extends BaseController {
         curl_close($ch);
 
         if (!$err && $httpCode >= 200 && $httpCode < 300) {
-            // PATCH en Service Layer normalmente responde 204 No Content
             $this->log->save([
-                "description" => "Asignación de rol ID '$roleID' al empleado $empID (vía SL, EmployeesInfo/EmployeeRolesInfoLines)",
+                "description" => "Asignación de rol ID '$roleID' al empleado $empID (vía SL)",
                 "user" => $userName
             ]);
 
             return $this->respond([
-                        'status' => 200,
-                        'message' => 'Rol asignado correctamente'
-                            ], 200);
+                'status' => 200,
+                'message' => 'Rol asignado correctamente'
+            ], 200);
         }
 
-        // Si el PATCH falla, fallback automático a ODBC
-        log_message('warning', 'SL falló PATCH roles, usando ODBC: ' . ($err ?: "HTTP $httpCode: $resp"));
-        // return $this->addEmployeeRoleODBC($empID, $roleID, $userName);
+        log_message('warning', 'SL falló PATCH roles: ' . ($err ?: "HTTP $httpCode: $resp"));
+        return $this->respond(['status' => 500, 'message' => 'Error al asignar rol en Service Layer'], 500);
     }
 
     /**
@@ -638,11 +673,11 @@ class EmployeeSAPController extends BaseController {
 
         try {
             $conexionSap = $this->serviceLayerController->login(
-                    $dataSL['url'],
-                    $dataSL['port'],
-                    $dataSL['password'],
-                    $dataSL['username'],
-                    $dataSL['companyDB']
+                $dataSL['url'],
+                $dataSL['port'],
+                $dataSL['password'],
+                $dataSL['username'],
+                $dataSL['companyDB']
             );
         } catch (\Exception $e) {
             return $this->respond(['status' => 500, 'message' => 'Error login SL: ' . $e->getMessage()], 500);
@@ -668,16 +703,13 @@ class EmployeeSAPController extends BaseController {
             "B1S-CaseInsensitive: true"
         ];
 
-        // Header especial: necesario para que el PATCH SÍ elimine líneas
-        // omitidas de la colección hija (por defecto PATCH solo actualiza/agrega,
-        // nunca borra elementos que no estén en el arreglo enviado)
         $patchHeaders = array_merge($getHeaders, [
             "B1S-ReplaceCollectionsOnPatch: true"
         ]);
 
-        // 1) GET de los roles actuales
+        // 1) GET roles actuales
         $getUrl = $slRoot . "/EmployeesInfo({$empID})?" . http_build_query([
-                    '$select' => 'EmployeeID,EmployeeRolesInfoLines'
+            '$select' => 'EmployeeID,EmployeeRolesInfoLines'
         ]);
 
         $ch = curl_init();
@@ -698,27 +730,27 @@ class EmployeeSAPController extends BaseController {
 
         if ($getErr || $getHttp < 200 || $getHttp >= 300) {
             return $this->respond([
-                        'status' => 500,
-                        'message' => 'Error al obtener roles actuales: ' . ($getErr ?: "HTTP $getHttp: $getResp")
-                            ], 500);
+                'status' => 500,
+                'message' => 'Error al obtener roles actuales: ' . ($getErr ?: "HTTP $getHttp: $getResp")
+            ], 500);
         }
 
         $current = json_decode($getResp, true);
         $roles = $current['EmployeeRolesInfoLines'] ?? [];
 
-        // 2) Filtrar quitando el rol indicado
+        // 2) Filtrar quitando el rol
         $newRoles = array_values(array_filter($roles, function ($r) use ($roleID) {
-                    return (int) ($r['RoleID'] ?? 0) !== $roleID;
-                }));
+            return (int) ($r['RoleID'] ?? 0) !== $roleID;
+        }));
 
         if (count($newRoles) === count($roles)) {
             return $this->respond([
-                        'status' => 404,
-                        'message' => 'El empleado no tiene asignado ese rol'
-                            ], 404);
+                'status' => 404,
+                'message' => 'El empleado no tiene asignado ese rol'
+            ], 404);
         }
 
-        // 3) PATCH con la colección ya sin ese rol + header de reemplazo total
+        // 3) PATCH de reemplazo total
         $patchUrl = $slRoot . "/EmployeesInfo({$empID})";
         $payload = ['EmployeeRolesInfoLines' => $newRoles];
 
@@ -746,15 +778,14 @@ class EmployeeSAPController extends BaseController {
 
         if ($httpCode < 200 || $httpCode >= 300) {
             $body = json_decode($resp, true);
-            return $this->respond(['status' => $httpCode, 'message' => 'Error al eliminar', 'body' => $body], $httpCode);
+            return $this->respond(['status' => $httpCode, 'message' => 'Error al eliminar rol', 'body' => $body], $httpCode);
         }
 
         $this->log->save([
-            "description" => "Eliminación de rol ID '$roleID' del empleado $empID (vía SL, EmployeesInfo/EmployeeRolesInfoLines)",
+            "description" => "Eliminación de rol ID '$roleID' del empleado $empID (vía SL)",
             "user" => $userName
         ]);
 
-        // Normalizado a 200 siempre en éxito, sin importar si SAP regresó 204
         return $this->respond(['status' => 200, 'message' => 'Rol eliminado correctamente'], 200);
     }
 
@@ -776,14 +807,13 @@ class EmployeeSAPController extends BaseController {
             return $this->respond(['status' => 500, 'message' => 'No hay configuración Service Layer'], 500);
         }
 
-        // Login en Service Layer
         try {
             $conexionSap = $this->serviceLayerController->login(
-                    $dataSL['url'],
-                    $dataSL['port'],
-                    $dataSL['password'],
-                    $dataSL['username'],
-                    $dataSL['companyDB']
+                $dataSL['url'],
+                $dataSL['port'],
+                $dataSL['password'],
+                $dataSL['username'],
+                $dataSL['companyDB']
             );
         } catch (\Exception $e) {
             return $this->respond(['status' => 500, 'message' => 'Error login SL: ' . $e->getMessage()], 500);
@@ -802,7 +832,6 @@ class EmployeeSAPController extends BaseController {
             $slRoot = substr($slRoot, 0, $pos) . '/b1s/v1';
         }
 
-        // PATCH a EmployeeRoles(EmployeeID=xxx,RoleCode='yyy')
         $url = $slRoot . "/EmployeeRoles(EmployeeID=$empID,RoleCode='$oldRoleID')";
         $payload = ['RoleCode' => $newRoleID];
 
