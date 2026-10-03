@@ -310,49 +310,63 @@ $routes->group('admin', function ($routes) {
             , 'EmployeeSAPController::updateEmployeeRole'
             , ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
 
-    // ==========================================
+// ==========================================
     // RUTAS PARA ARTÍCULOS SAP (OITM)
     // ==========================================
     // Consulta rápida vía ODBC para Select2 general
     $routes->post('SAPMaterials/getSAPMaterialAjax'
             , 'SapMaterialController::getItemsAjax'
-            , [
-               
-                'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
-                ]
+            , ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
     );
 
-    // CRUD / Gestión de Artículos (Service Layer / Datatables)
+    // Listado y AJAX para Datatables (con filtro de grupo)
     $routes->get('servicelayer/materials'
             , 'SapMaterialController::index'
             , [
-                'filter' => 'permission:SAPMaterials-permission',
-                'namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+        'filter' => 'permission:SAPMaterials-permission',
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+            ]
     );
 
-    // Obtener datos de un artículo por ItemCode (se usa (:segment) por ser alfanumérico)
+    // Consecutivo automático con 5 ceros (ej. RMM -> RMM00003)
+    $routes->get('servicelayer/materials/getNextItemCode/(:segment)'
+            , 'SapMaterialController::getNextItemCode/$1'
+            , ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    // Catálogo de Grupos de Artículos (OITB) para los Select2 (Filtro y Modal)
+    $routes->get('servicelayer/materials/getItemGroupsAjax'
+            , 'SapMaterialController::getItemGroupsAjax'
+            , ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    // Obtener datos del artículo para editar
     $routes->get('servicelayer/materials/getMaterial/(:segment)'
             , 'SapMaterialController::getMaterial/$1'
             , ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
     );
 
-    // Guardar / Actualizar artículo
+    // Guardar / Actualizar en Service Layer
     $routes->post('servicelayer/materials/save'
             , 'SapMaterialController::save'
             , ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
     );
 
-    // Eliminar / Desactivar artículo
-    $routes->delete('servicelayer/materials/delete/(:segment)'
-            , 'SapMaterialController::delete/$1'
-            , ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
-    );
-
-    // Búsqueda AJAX para selects dentro de los formularios de materiales
+    // Búsqueda AJAX para selects dentro de otros formularios
     $routes->post('servicelayer/materials/getMaterialsAjaxSelect2'
-            , 'SapMaterialController::getMaterialsAjaxSelect2'
+            , 'SapMaterialController::getItemsAjax'
             , ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
     );
     
+    // Catálogo de Unidades de Medida (OUOM) para Select2
+    $routes->get('servicelayer/materials/getUnitsAjax'
+        , 'SapMaterialController::getUnitsAjax'
+        , ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
     
+    // Catálogo de Unidades de Medida (OUOM) para Select2
+    $routes->get('servicelayer/materials/getUnitsAjax'
+        , 'SapMaterialController::getUnitsAjax'
+        , ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
 });
