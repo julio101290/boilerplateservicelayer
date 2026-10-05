@@ -43,7 +43,8 @@ class BoilerplateServiceLayer extends Seeder {
         $this->authorize->createPermission('poauth-permission', 'Permiso Para Autorizar');
         $this->authorize->createPermission('analizadorCFDI-permission', 'Permiso Analizar CFDI');
         $this->authorize->createPermission('refundsauth-permission', 'Permiso para autorizar rembolsos');
-        
+        $this->authorize->createPermission('SAPMaterials-permission', 'Permiso para el catalogo de articulos');
+        $this->authorize->createPermission('SAPUserAuthWH-permission', 'Permiso para el catalogo de Permisos por almacen');
         
         
         
@@ -55,6 +56,8 @@ class BoilerplateServiceLayer extends Seeder {
         $this->authorize->addPermissionToUser('poauth-permission', 1);
         $this->authorize->addPermissionToUser('analizadorCFDI-permission', 1);
         $this->authorize->addPermissionToUser('refundsauth-permission', 1);
+        $this->authorize->addPermissionToUser('SAPMaterials-permission', 1);
+        $this->authorize->addPermissionToUser('SAPUserAuthWH-permission', 1);
         
     }
     public function down() {

@@ -369,4 +369,49 @@ $routes->group('admin', function ($routes) {
         , 'SapMaterialController::getUnitsAjax'
         , ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
     );
+    
+    
+    // =========================================================================
+    // RUTAS PARA AUTORIZACIÓN DE ALMACENES SAP (@AUTORIZACOMPRA / AutCompra)
+    // =========================================================================
+
+    // Listado y AJAX para DataTables
+    $routes->get('servicelayer/sapuserauthwh',
+        'SapUserAuthWHController::index',
+        [
+            'filter'    => 'permission:SAPUserAuthWH-permission',
+            'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+        ]
+    );
+
+    // Obtener cabecera y detalle por código de almacén para edición
+    $routes->get('servicelayer/sapuserauthwh/getAuthWH/(:segment)',
+        'SapUserAuthWHController::getAuthWH/$1',
+        ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    // Catálogo de Almacenes SAP (OWHS) para Select2
+    $routes->get('servicelayer/sapuserauthwh/getWarehousesAjax',
+        'SapUserAuthWHController::getWarehousesAjax',
+        ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    // Catálogo de Usuarios SAP (OUSR) para Select2 en el detalle
+    $routes->get('servicelayer/sapuserauthwh/getSapUsersAjax',
+        'SapUserAuthWHController::getSapUsersAjax',
+        ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    // Guardar / Actualizar UDO en Service Layer (Cabecera y líneas)
+    $routes->post('servicelayer/sapuserauthwh/save',
+        'SapUserAuthWHController::save',
+        ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    // Eliminar registro UDO por código de almacén
+    $routes->post('servicelayer/sapuserauthwh/delete/(:segment)',
+        'SapUserAuthWHController::delete/$1',
+        ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+    
 });
