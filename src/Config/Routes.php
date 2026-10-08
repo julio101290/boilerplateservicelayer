@@ -453,4 +453,28 @@ $routes->group('admin', function ($routes) {
             'SapUserWHController::delete/$1',
             ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
     );
+    
+    // =========================================================================
+    // RUTAS PARA CORRECCIÓN DE ODÓMETRO / HORÓMETRO (OIGE / IGE1 / InventoryGenExits)
+    // =========================================================================
+    // Vista principal del módulo
+    $routes->get('servicelayer/sapodometro',
+        'SapOdometroController::index',
+        [
+            'filter' => 'permission:SAPOdometro-permission',
+            'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+        ]
+    );
+
+    // Búsqueda de líneas de salida por DocNum y OcrCode (ODBC)
+    $routes->get('servicelayer/sapodometro/searchLines',
+        'SapOdometroController::searchLines',
+        ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    // Actualización de U_Odometro en SAP vía Service Layer (PATCH)
+    $routes->post('servicelayer/sapodometro/update',
+        'SapOdometroController::update',
+        ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
 });
