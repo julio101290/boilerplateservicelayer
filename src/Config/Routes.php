@@ -453,28 +453,133 @@ $routes->group('admin', function ($routes) {
             'SapUserWHController::delete/$1',
             ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
     );
-    
+
     // =========================================================================
     // RUTAS PARA CORRECCIÓN DE ODÓMETRO / HORÓMETRO (OIGE / IGE1 / InventoryGenExits)
     // =========================================================================
     // Vista principal del módulo
     $routes->get('servicelayer/sapodometro',
-        'SapOdometroController::index',
-        [
-            'filter' => 'permission:SAPOdometro-permission',
-            'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
-        ]
+            'SapOdometroController::index',
+            [
+                'filter' => 'permission:SAPOdometro-permission',
+                'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+            ]
     );
 
     // Búsqueda de líneas de salida por DocNum y OcrCode (ODBC)
     $routes->get('servicelayer/sapodometro/searchLines',
-        'SapOdometroController::searchLines',
-        ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+            'SapOdometroController::searchLines',
+            ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
     );
 
     // Actualización de U_Odometro en SAP vía Service Layer (PATCH)
     $routes->post('servicelayer/sapodometro/update',
-        'SapOdometroController::update',
-        ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+            'SapOdometroController::update',
+            ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    //FACTURA DE PROVEEDOR
+    $routes->resource('vendorInvoice', [
+        'filter' => 'permission:vendorinvoice-permission',
+        'controller' => 'VendorInvoiceController',
+        'except' => 'show',
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers',
+    ]);
+
+    $routes->get('newVendorInvoice',
+            'VendorInvoiceController::newVendorInvoice',
+            ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    $routes->get('editVendorInvoice/(:any)',
+            'VendorInvoiceController::editVendorInvoice/$1',
+            ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    $routes->get('fromXMLVendorInvoice/(:any)',
+            'VendorInvoiceController::fromXMLVendorInvoice/$1',
+            ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    $routes->post('vendorInvoice/save',
+            'VendorInvoiceController::save',
+            ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    $routes->post('vendorInvoice/getLastCode',
+            'VendorInvoiceController::getLastCode',
+            ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    $routes->get('vendorInvoice/report/(:any)',
+            'VendorInvoiceController::report/$1',
+            ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    $routes->get('vendorInvoice/(:any)/(:any)/(:any)/(:any)/(:any)/(:any)',
+            'VendorInvoiceController::vendorInvoiceFilters/$1/$2/$3/$4/$5/$6',
+            ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    $routes->get('listVendorInvoice/(:any)/(:any)/(:any)/(:any)/(:any)/(:any)',
+            'VendorInvoiceController::vendorInvoiceListFilters/$1/$2/$3/$4/$5/$6',
+            ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    $routes->get('reporteVendorInvoice',
+            'VendorInvoiceController::reportVendorInvoiceProducts',
+            ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    $routes->get('vendorInvoiceReport/(:any)/(:any)/(:any)/(:any)/(:any)/(:any)',
+            'VendorInvoiceController::vendorInvoiceReport/$1/$2/$3/$4/$5/$6',
+            ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+// Pagos
+    $routes->post('payments/save',
+            'PaymentsController::save',
+            ['namespace' => 'julio101290\boilerplatesells\Controllers']
+    );
+
+    $routes->get('payments/getPayments/(:any)',
+            'PaymentsController::ctrGetPayments/$1',
+            ['namespace' => 'julio101290\boilerplatesells\Controllers']
+    );
+
+    $routes->get('payments/delete/(:any)',
+            'PaymentsController::delete/$1',
+            ['namespace' => 'julio101290\boilerplatesells\Controllers']
+    );
+
+// Enlace y gestión XML / CFDI
+    $routes->get('xmlenlace/getXMLEnlazados/(:any)',
+            'VendorInvoiceController::getXMLEnlazados/$1',
+            ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    $routes->get('xml/xmlSinAsignar/(:any)',
+            'VendorInvoiceController::xmlSinAsignar/$1',
+            ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    $routes->get('enlacexml/delete/(:num)',
+            'EnlacexmlController::delete/$1',
+            ['namespace' => 'julio101290\boilerplatesells\Controllers']
+    );
+
+    $routes->post('xmlenlace/enlazaFactura',
+            'VendorInvoiceController::enlazaFactura',
+            ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    $routes->get('xml/generarPDFDesdeFactura/(:any)',
+            'VendorInvoiceController::generaPDFDesdeFactura/$1',
+            ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    $routes->get('xml/descargaAcuseCancelacion/(:any)',
+            'VendorInvoiceController::descargaAcuseCancelacion/$1',
+            ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
     );
 });

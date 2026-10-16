@@ -47,6 +47,7 @@ class BoilerplateServiceLayer extends Seeder {
         $this->authorize->createPermission('SAPUserAuthWH-permission', 'Permiso para el catalogo de Permisos por almacen');
         $this->authorize->createPermission('SAPUserWH-permission', 'Permiso para entrar a almacenes por usuario en SAP');
         $this->authorize->createPermission('SAPOdometro-permission', 'Permiso para corregir el Odometro');
+        $this->authorize->createPermission('vendorinvoice-permission', 'Permiso para corregir el Odometro');
         
         
 
@@ -61,6 +62,7 @@ class BoilerplateServiceLayer extends Seeder {
         $this->authorize->addPermissionToUser('SAPUserAuthWH-permission', 1);
         $this->authorize->addPermissionToUser('SAPUserWH-permission', 1);
         $this->authorize->addPermissionToUser('SAPOdometro-permission', 1);
+        $this->authorize->addPermissionToUser('vendorinvoice-permission', 1);
         
     }
     public function down() {
