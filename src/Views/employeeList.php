@@ -20,13 +20,13 @@
                     <div class="row">
                         <div class="col-md-4">
                             <div class="form-group">
-                                <label for="firstName"><?= lang('employee.fields.firstName') ?></label>
+                                <label for="firstName"><?= lang('employee.fields.firstName') ?> *</label>
                                 <input type="text" class="form-control" name="firstName" id="firstName" required>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="form-group">
-                                <label for="lastName"><?= lang('employee.fields.lastName') ?></label>
+                                <label for="lastName"><?= lang('employee.fields.lastName') ?> *</label>
                                 <input type="text" class="form-control" name="lastName" id="lastName" required>
                             </div>
                         </div>
@@ -38,19 +38,27 @@
                         </div>
                     </div>
                     <div class="row">
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <div class="form-group">
                                 <label for="ExtEmpNo">No. Empleado Externo *</label>
                                 <input type="text" class="form-control" name="ExtEmpNo" id="ExtEmpNo" required placeholder="Ej. EMP-001">
                             </div>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <div class="form-group">
                                 <label for="Code">Código SAP (Auto)</label>
                                 <input type="text" class="form-control" name="Code" id="Code" readonly placeholder="Automático por SAP">
                             </div>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label for="BPLId">Sucursal Principal *</label>
+                                <select class="form-control" name="BPLId" id="BPLId" style="width: 100%;" required>
+                                    <option value="">Cargando sucursales...</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
                             <div class="form-group">
                                 <label for="Active"><?= lang('employee.fields.active') ?></label>
                                 <select class="form-control" name="Active" id="Active">
@@ -61,8 +69,45 @@
                         </div>
                     </div>
 
+                    <!-- Gestión de Sucursales Asignadas -->
+                    <div class="row mt-2">
+                        <div class="col-md-12">
+                            <div class="card card-secondary card-outline">
+                                <div class="card-header">
+                                    <h5 class="card-title">Sucursales Asignadas al Empleado</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row mb-2">
+                                        <div class="col-md-8">
+                                            <select class="form-control" id="selectBranchAssign" style="width:100%;"></select>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <button type="button" class="btn btn-secondary btn-block" id="btnAddBranch">
+                                                <i class="fas fa-plus"></i> Asignar Sucursal
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-bordered" id="tableBranchesAssign">
+                                            <thead>
+                                                <tr>
+                                                    <th width="100">ID Sucursal</th>
+                                                    <th>Nombre Sucursal</th>
+                                                    <th width="80"><?= lang('employee.fields.actions') ?></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="tbodyBranchesAssign">
+                                                <tr><td colspan="3" class="text-center">Sin sucursales asignadas</td></tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Gestión de roles -->
-                    <div class="row mt-3">
+                    <div class="row mt-2">
                         <div class="col-md-12">
                             <div class="card card-info card-outline">
                                 <div class="card-header">
@@ -122,9 +167,10 @@
             <table id="tableEmployees" class="table table-striped table-hover">
                 <thead>
                     <tr>
-                        <th><?= lang('employee.fields.actions') ?></th>
+                        <th width="60"><?= lang('employee.fields.actions') ?></th>
                         <th><?= lang('employee.fields.empID') ?></th>
                         <th>No. Externo</th>
+                        <th>Sucursal</th>
                         <th><?= lang('employee.fields.firstName') ?></th>
                         <th><?= lang('employee.fields.lastName') ?></th>
                         <th><?= lang('employee.fields.middleName') ?></th>
@@ -143,6 +189,35 @@
 <?= $this->section('js') ?>
 <script>
     $(function () {
+        var branchesCache = [];
+
+        // Carga de catálogo de sucursales con promesa para sincronizar la edición
+        function loadBranchesCatalog() {
+            return $.ajax({
+                url: '<?= base_url('admin/servicelayer/employees/getBranchesAjax') ?>',
+                method: 'GET',
+                dataType: 'json',
+                success: function (data) {
+                    branchesCache = data || [];
+                    var $select =$('#BPLId');
+                    var $selectAssign =$('#selectBranchAssign');
+
+                    $select.empty().append(new Option('Seleccione sucursal...', ''));$selectAssign.empty().append(new Option('Seleccione sucursal para asignar...', ''));
+
+                    $.each(branchesCache, function (i, item) {
+                        $select.append(new Option(item.BPLName, item.BPLId));$selectAssign.append(new Option(item.BPLId + ' - ' + item.BPLName, item.BPLId));
+                    });
+                },
+                error: function () {
+                    $('#BPLId').empty().append(new Option('Error cargando sucursales', ''));
+                }
+            });
+        }
+
+        // Cargar catálogo al inicio
+        loadBranchesCatalog();
+
+        // Datatable de Empleados
         var tableEmployees = $('#tableEmployees').DataTable({
             processing: true,
             serverSide: true,
@@ -158,7 +233,7 @@
                 }
             },
             columnDefs: [
-                {targets: 0, orderable: false, searchable: false, width: '120px'}
+                {targets: 0, orderable: false, searchable: false, width: '60px'}
             ],
             columns: [
                 {
@@ -171,14 +246,12 @@
                             <button class="btn btn-warning btn-sm btnEditEmployee" data-empid="${empID}" title="Editar">
                                 <i class="fas fa-edit"></i>
                             </button>
-                            <button class="btn btn-danger btn-sm btnDeleteEmployee" data-empid="${empID}" title="Eliminar">
-                                <i class="fas fa-trash"></i>
-                            </button>
                         </div>`;
                     }
                 },
                 {data: 'empID'},
                 {data: 'ExtEmpNo'},
+                {data: 'BPLName', defaultContent: ''},
                 {data: 'firstName'},
                 {data: 'lastName'},
                 {data: 'middleName'},
@@ -195,50 +268,65 @@
             }
         });
 
-        // Nuevo
+        // Nuevo Empleado
         $('#btnNewEmployee').on('click', function () {
             $('#formEmployee')[0].reset();
             $('#empID').val(0);
             $('#ExtEmpNo').val('');
             $('#Code').val('');
+            $('#BPLId').val('').trigger('change');
             $('#Active').val('Y');
+            $('#tbodyRoles').html('<tr><td colspan="4" class="text-center"><?= lang('employee.save_first') ?></td></tr>');
+            $('#tbodyBranchesAssign').html('<tr><td colspan="3" class="text-center">Guarde el empleado primero</td></tr>');
             $('#modalEmployeeLabel').text('<?= lang('employee.new_title') ?>');
             $('#modalEmployee').modal('show');
         });
 
-        // Editar
+        // Editar Empleado
         $('#tableEmployees tbody').on('click', '.btnEditEmployee', function () {
             var empID = $(this).attr('data-empid');
             if (!empID) {
                 Swal.fire('Error', 'ID de empleado no válido', 'error');
                 return;
             }
-            $.ajax({
-                url: '<?= base_url('admin/servicelayer/employees/getEmployee') ?>/' + empID,
-                method: 'GET',
-                dataType: 'json',
-                success: function (resp) {
-                    if (resp.empID) {
-                        $('#empID').val(resp.empID);
-                        $('#ExtEmpNo').val(resp.ExtEmpNo || '');
-                        $('#Code').val(resp.Code || '');
-                        $('#firstName').val(resp.firstName || '');
-                        $('#lastName').val(resp.lastName || '');
-                        $('#middleName').val(resp.middleName || '');
-                        $('#Active').val(resp.Active || 'Y');
-                        $('#modalEmployeeLabel').text('<?= lang('employee.edit_title') ?>');
-                        $('#modalEmployee').modal('show');
-                    } else {
-                        Swal.fire('Error', 'No se pudo obtener el empleado', 'error');
+
+            // Asegurar que las sucursales estén cargadas antes de asignar el valor
+            $.when(branchesCache.length === 0 ? loadBranchesCatalog() : true).done(function () {
+                $.ajax({
+                    url: '<?= base_url('admin/servicelayer/employees/getEmployee') ?>/' + empID,
+                    method: 'GET',
+                    dataType: 'json',
+                    success: function (resp) {
+                        if (resp.empID) {
+                            $('#empID').val(resp.empID);
+                            $('#ExtEmpNo').val(resp.ExtEmpNo || '');
+                            $('#Code').val(resp.Code || '');
+                            $('#firstName').val(resp.firstName || '');
+                            $('#lastName').val(resp.lastName || '');
+                            $('#middleName').val(resp.middleName || '');
+                            $('#Active').val(resp.Active || 'Y');
+
+                            // Asignar sucursal seleccionada
+                            var currentBranch = resp.BPLId !== null && resp.BPLId !== undefined && resp.BPLId !== '' ? resp.BPLId : '';
+                            $('#BPLId').val(currentBranch).trigger('change');
+
+                            loadEmployeeRoles(resp.empID);
+                            loadEmployeeBranches(resp.empID);
+
+                            $('#modalEmployeeLabel').text('<?= lang('employee.edit_title') ?>');
+                            $('#modalEmployee').modal('show');
+                        } else {
+                            Swal.fire('Error', resp.message || 'No se pudo obtener el empleado', 'error');
+                        }
+                    },
+                    error: function () {
+                        Swal.fire('Error', 'Error de comunicación al cargar empleado', 'error');
                     }
-                },
-                error: function () {
-                    Swal.fire('Error', 'Error al cargar los datos', 'error');
-                }
+                });
             });
         });
 
-        // Guardar
+        // Guardar Empleado
         $('#btnSaveEmployee').on('click', function () {
             var formData = $('#formEmployee').serializeArray();
             var data = {};
@@ -246,15 +334,18 @@
                 data[field.name] = field.value;
             });
 
-            // Validar número externo
             if (!data.ExtEmpNo || data.ExtEmpNo.trim() === '') {
                 Swal.fire('Atención', 'Debes capturar el número de empleado externo', 'warning');
                 return;
             }
 
-            // Validar nombres obligatorios
             if (!data.firstName || data.firstName.trim() === '' || !data.lastName || data.lastName.trim() === '') {
                 Swal.fire('Atención', 'Nombre y Apellido son obligatorios', 'warning');
+                return;
+            }
+
+            if (!data.BPLId || data.BPLId === '') {
+                Swal.fire('Atención', 'Debes seleccionar una sucursal principal', 'warning');
                 return;
             }
 
@@ -286,48 +377,12 @@
             });
         });
 
-        // Eliminar
-        $('#tableEmployees tbody').on('click', '.btnDeleteEmployee', function () {
-            var empID = $(this).attr('data-empid');
-            Swal.fire({
-                title: '¿Eliminar empleado?',
-                text: 'Esta acción no se puede deshacer',
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonText: 'Sí, eliminar',
-                cancelButtonText: 'Cancelar'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    $.ajax({
-                        url: '<?= base_url('admin/servicelayer/employees/delete') ?>/' + empID,
-                        method: 'DELETE',
-                        dataType: 'json',
-                        success: function (resp) {
-                            if (resp.status === 200) {
-                                Swal.fire('Eliminado', resp.message, 'success');
-                                tableEmployees.ajax.reload(null, false);
-                            } else {
-                                Swal.fire('Error', resp.message || 'Error al eliminar', 'error');
-                            }
-                        },
-                        error: function () {
-                            Swal.fire('Error', 'No se pudo eliminar', 'error');
-                        }
-                    });
-                }
-            });
-        });
-
-        // Draggable
         $('#modalEmployee').draggable({
             handle: '.modal-header'
         });
     });
 
     // ===== GESTIÓN DE ROLES =====
-    var currentEmpID = 0;
-
-    // Inicializar select2 para roles
     $('#selectRole').select2({
         dropdownParent: $('#modalEmployee'),
         ajax: {
@@ -344,17 +399,10 @@
             cache: true
         },
         placeholder: '<?= lang('employee.select_role') ?>',
-        allowClear: true,
-        language: {
-            noResults: function () {
-                return '<?= lang('employee.no_results') ?>';
-            }
-        }
+        allowClear: true
     });
 
-    // Función para cargar roles del empleado actual
     function loadEmployeeRoles(empID) {
-        currentEmpID = empID;
         $.ajax({
             url: '<?= base_url('admin/servicelayer/employees/getEmployeeRoles') ?>/' + empID,
             method: 'GET',
@@ -362,46 +410,34 @@
             success: function (resp) {
                 var tbody = $('#tbodyRoles');
                 tbody.empty();
-                if (resp.length === 0) {
+                if (!resp || resp.length === 0) {
                     tbody.append('<tr><td colspan="4" class="text-center"><?= lang('employee.no_roles') ?></td></tr>');
                     return;
                 }
                 $.each(resp, function (i, role) {
+                    var roleID = role.roleID !== undefined ? role.roleID : role.RoleID;
                     var tr = '<tr>' +
-                            '<td>' + (role.roleID || '') + '</td>' +
-                            '<td>' + (role.RoleName || '') + '</td>' +
-                            '<td>' + (role.Description || '') + '</td>' +
-                            '<td><button type="button" class="btn btn-danger btn-sm btnRemoveRole" data-rolecode="' + role.roleID + '"><i class="fas fa-trash"></i></button></td>' +
+                            '<td>' + roleID + '</td>' +
+                            '<td>' + (role.RoleName || role.name || '') + '</td>' +
+                            '<td>' + (role.Description || role.descriptio || '') + '</td>' +
+                            '<td><button type="button" class="btn btn-danger btn-sm btnRemoveRole" data-rolecode="' + roleID + '"><i class="fas fa-trash"></i></button></td>' +
                             '</tr>';
                     tbody.append(tr);
                 });
-            },
-            error: function () {
-                Swal.fire('Error', 'No se pudieron cargar los roles', 'error');
             }
         });
     }
 
-    // Al abrir el modal de edición, cargar roles
-    $('#modalEmployee').on('show.bs.modal', function (e) {
-        var empID = $('#empID').val();
-        if (empID > 0) {
-            loadEmployeeRoles(empID);
-            $('#selectRole').val(null).trigger('change');
-        } else {
-            $('#tbodyRoles').html('<tr><td colspan="4" class="text-center"><?= lang('employee.save_first') ?></td></tr>');
-        }
-    });
-
-    // Agregar rol
+    // Agregar rol (permite -2)
     $('#btnAddRole').on('click', function () {
         var empID = $('#empID').val();
         if (empID == 0) {
             Swal.fire('Error', 'Primero guarda el empleado', 'warning');
             return;
         }
+
         var roleCode = $('#selectRole').val();
-        if (!roleCode) {
+        if (roleCode === null || roleCode === undefined || roleCode === '') {
             Swal.fire('Error', 'Selecciona un rol', 'warning');
             return;
         }
@@ -413,103 +449,108 @@
             dataType: 'json',
             success: function (resp) {
                 if (resp.status === 200) {
-                    Swal.fire({
-                        toast: true,
-                        position: 'top-end',
-                        icon: 'success',
-                        title: resp.message,
-                        showConfirmButton: false,
-                        timer: 2000
-                    });
                     loadEmployeeRoles(empID);
                     $('#selectRole').val(null).trigger('change');
                 } else {
                     Swal.fire('Error', resp.message || 'Error al asignar rol', 'error');
                 }
-            },
-            error: function (xhr) {
-                var msg = xhr.responseJSON?.message || 'Error de red';
-                Swal.fire('Error', msg, 'error');
             }
         });
     });
 
-    // Eliminar rol (evento delegado)
+    // Eliminar rol
     $(document).off('click', '#tbodyRoles .btnRemoveRole').on('click', '#tbodyRoles .btnRemoveRole', function (e) {
         e.preventDefault();
-        e.stopPropagation();
-
         var empID = $('#empID').val();
-        var roleCode = $(this).data('rolecode');
+        var roleCode = $(this).attr('data-rolecode');
 
-        if (!empID || !roleCode) {
-            Swal.fire('Error', 'Faltan datos para eliminar el rol', 'error');
+        $.ajax({
+            url: '<?= base_url('admin/servicelayer/employees/removeEmployeeRole') ?>/' + empID + '/' + encodeURIComponent(roleCode),
+            method: 'DELETE',
+            dataType: 'json',
+            success: function (resp) {
+                if (resp.status === 200) {
+                    loadEmployeeRoles(empID);
+                } else {
+                    Swal.fire('Error', resp.message || 'Error al eliminar', 'error');
+                }
+            }
+        });
+    });
+
+    // ===== GESTIÓN DE MÚLTIPLES SUCURSALES =====
+    function loadEmployeeBranches(empID) {
+        $.ajax({
+            url: '<?= base_url('admin/servicelayer/employees/getEmployeeBranches') ?>/' + empID,
+            method: 'GET',
+            dataType: 'json',
+            success: function (resp) {
+                var tbody = $('#tbodyBranchesAssign');
+                tbody.empty();
+                if (!resp || resp.length === 0) {
+                    tbody.append('<tr><td colspan="3" class="text-center">Sin sucursales asignadas</td></tr>');
+                    return;
+                }
+                $.each(resp, function (i, b) {
+                    var tr = '<tr>' +
+                            '<td>' + b.BPLId + '</td>' +
+                            '<td>' + b.BPLName + '</td>' +
+                            '<td><button type="button" class="btn btn-danger btn-sm btnRemoveBranch" data-bplid="' + b.BPLId + '"><i class="fas fa-trash"></i></button></td>' +
+                            '</tr>';
+                    tbody.append(tr);
+                });
+            }
+        });
+    }
+
+    // Asignar sucursal secundaria
+    $('#btnAddBranch').on('click', function () {
+        var empID = $('#empID').val();
+        if (empID == 0) {
+            Swal.fire('Error', 'Primero guarda el empleado', 'warning');
             return;
         }
 
-        Swal.fire({
-            title: '¿Eliminar rol?',
-            text: 'Rol: ' + roleCode,
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonText: 'Sí, eliminar',
-            cancelButtonText: 'Cancelar'
-        }).then((result) => {
-            if (!result.value) {
-                return;
-            }
+        var bplId = $('#selectBranchAssign').val();
+        if (!bplId) {
+            Swal.fire('Error', 'Selecciona una sucursal para asignar', 'warning');
+            return;
+        }
 
-            $.ajax({
-                url: '<?= base_url('admin/servicelayer/employees/removeEmployeeRole') ?>/' + empID + '/' + encodeURIComponent(roleCode),
-                method: 'DELETE',
-                dataType: 'json',
-                success: function (resp) {
-                    if (resp.status === 200) {
-                        Swal.fire({
-                            toast: true,
-                            position: 'top-end',
-                            icon: 'success',
-                            title: resp.message || 'Rol eliminado',
-                            showConfirmButton: false,
-                            timer: 2000
-                        });
-                        loadEmployeeRoles(empID);
-                    } else {
-                        Swal.fire('Error', resp.message || 'Error al eliminar', 'error');
-                    }
-                },
-                error: function (xhr) {
-                    var msg = xhr.responseJSON?.message || 'No se pudo eliminar el rol';
-                    Swal.fire('Error', msg, 'error');
+        $.ajax({
+            url: '<?= base_url('admin/servicelayer/employees/addEmployeeBranch') ?>',
+            method: 'POST',
+            data: {empID: empID, BPLId: bplId},
+            dataType: 'json',
+            success: function (resp) {
+                if (resp.status === 200) {
+                    loadEmployeeBranches(empID);
+                    $('#selectBranchAssign').val('').trigger('change');
+                } else {
+                    Swal.fire('Error', resp.message || 'Error al asignar sucursal', 'error');
                 }
-            });
+            }
         });
     });
 
-    // Editar rol (reemplazar)
-    $('#tbodyRoles').on('click', '.btnEditRole', function () {
+    // Remover sucursal asignada
+    $(document).off('click', '#tbodyBranchesAssign .btnRemoveBranch').on('click', '#tbodyBranchesAssign .btnRemoveBranch', function (e) {
+        e.preventDefault();
         var empID = $('#empID').val();
-        var oldRoleID = $(this).data('roleid');
-        var newRoleID = prompt('Nuevo ID de rol:', oldRoleID);
-        if (newRoleID && newRoleID != oldRoleID) {
-            $.ajax({
-                url: '<?= base_url('admin/servicelayer/employees/updateEmployeeRole') ?>',
-                method: 'POST',
-                data: {empID: empID, oldRoleID: oldRoleID, newRoleID: newRoleID},
-                dataType: 'json',
-                success: function (resp) {
-                    if (resp.status === 200) {
-                        Swal.fire('Actualizado', resp.message, 'success');
-                        loadEmployeeRoles(empID);
-                    } else {
-                        Swal.fire('Error', resp.message, 'error');
-                    }
-                },
-                error: function () {
-                    Swal.fire('Error', 'No se pudo actualizar el rol', 'error');
+        var bplId = $(this).attr('data-bplid');
+
+        $.ajax({
+            url: '<?= base_url('admin/servicelayer/employees/removeEmployeeBranch') ?>/' + empID + '/' + bplId,
+            method: 'DELETE',
+            dataType: 'json',
+            success: function (resp) {
+                if (resp.status === 200) {
+                    loadEmployeeBranches(empID);
+                } else {
+                    Swal.fire('Error', resp.message || 'Error al eliminar', 'error');
                 }
-            });
-        }
+            }
+        });
     });
 </script>
 <?= $this->endSection() ?>

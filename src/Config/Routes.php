@@ -269,47 +269,25 @@ $routes->group('admin', function ($routes) {
     );
 
     // EmployeeSAPController
-    $routes->get('servicelayer/employees'
-            , 'EmployeeSAPController::index'
-            , ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
-    );
 
-    $routes->get('servicelayer/employees/getEmployee/(:num)'
-            , 'EmployeeSAPController::getEmployee/$1'
-            , ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
-
-    $routes->post('servicelayer/employees/save'
-            , 'EmployeeSAPController::save'
-            , ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
-
-    $routes->delete('servicelayer/employees/delete/(:num)'
-            , 'EmployeeSAPController::delete/$1', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
-
-    $routes->post('servicelayer/employees/getEmployeesAjaxSelect2'
-            , 'EmployeeSAPController::getEmployeesAjaxSelect2'
-            , ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
+    $routes->get('servicelayer/employees', 'EmployeeSAPController::index', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
+    $routes->get('servicelayer/employees/getBranchesAjax', 'EmployeeSAPController::getBranchesAjax', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
+    $routes->get('servicelayer/employees/getEmployee/(:num)', 'EmployeeSAPController::getEmployee/$1', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
+    $routes->post('servicelayer/employees/save', 'EmployeeSAPController::save', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
+    $routes->post('servicelayer/employees/getEmployeesAjaxSelect2', 'EmployeeSAPController::getEmployeesAjaxSelect2', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
 
     // Roles de empleados
-    $routes->get('servicelayer/employees/getEmployeeRoles/(:num)'
-            , 'EmployeeSAPController::getEmployeeRoles/$1'
-            , ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
+    $routes->get('servicelayer/employees/getEmployeeRoles/(:num)', 'EmployeeSAPController::getEmployeeRoles/$1', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
+    $routes->post('servicelayer/employees/getRolesAjaxSelect2', 'EmployeeSAPController::getRolesAjaxSelect2', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
+    $routes->post('servicelayer/employees/addEmployeeRole', 'EmployeeSAPController::addEmployeeRole', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
+    $routes->post('servicelayer/employees/updateEmployeeRole', 'EmployeeSAPController::updateEmployeeRole', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
+    $routes->delete('servicelayer/employees/removeEmployeeRole/(:num)/(:any)', 'EmployeeSAPController::removeEmployeeRole/$1/$2', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
 
-    $routes->post('servicelayer/employees/getRolesAjaxSelect2'
-            , 'EmployeeSAPController::getRolesAjaxSelect2'
-            , ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
-
-    $routes->post('servicelayer/employees/addEmployeeRole'
-            , 'EmployeeSAPController::addEmployeeRole'
-            , ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
-
-    $routes->delete('servicelayer/employees/removeEmployeeRole/(:num)/(:any)'
-            , 'EmployeeSAPController::removeEmployeeRole/$1/$2'
-            , ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
-
-    $routes->post('servicelayer/employees/updateEmployeeRole'
-            , 'EmployeeSAPController::updateEmployeeRole'
-            , ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
-
+    // Múltiples sucursales
+    $routes->get('servicelayer/employees/getEmployeeBranches/(:num)', 'EmployeeSAPController::getEmployeeBranches/$1', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
+    $routes->post('servicelayer/employees/addEmployeeBranch', 'EmployeeSAPController::addEmployeeBranch', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
+    $routes->delete('servicelayer/employees/removeEmployeeBranch/(:num)/(:num)', 'EmployeeSAPController::removeEmployeeBranch/$1/$2', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
+  
 // ==========================================
     // RUTAS PARA ARTÍCULOS SAP (OITM)
     // ==========================================
