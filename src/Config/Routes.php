@@ -233,6 +233,20 @@ $routes->group('admin', function ($routes) {
             , ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
     );
 
+    // ==========================================
+    // REEMBOLSOS / COMPROBANTES (REFUNDSAUTH)
+    // ==========================================
+    $routes->group('servicelayer/refundsauth', [
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers',
+        'filter' => 'permission:refundsauth-permission'
+            ], function ($routes) {
+                $routes->get('/', 'RefundsAuthController::index');
+                $routes->get('getAuthorized', 'RefundsAuthController::getAuthorized');
+                $routes->post('authorizeVoucher', 'RefundsAuthController::authorizeVoucher');
+                $routes->post('unauthorizeVoucher', 'RefundsAuthController::unauthorizeVoucher');
+                $routes->post('showVoucherDetails', 'RefundsAuthController::showVoucherDetails');
+            });
+
     $routes->post('servicelayer/refunds/getUser_sap_link'
             , 'RefundsController::getUser_sap_link'
             , ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
@@ -287,7 +301,7 @@ $routes->group('admin', function ($routes) {
     $routes->get('servicelayer/employees/getEmployeeBranches/(:num)', 'EmployeeSAPController::getEmployeeBranches/$1', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
     $routes->post('servicelayer/employees/addEmployeeBranch', 'EmployeeSAPController::addEmployeeBranch', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
     $routes->delete('servicelayer/employees/removeEmployeeBranch/(:num)/(:num)', 'EmployeeSAPController::removeEmployeeBranch/$1/$2', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
-  
+
 // ==========================================
     // RUTAS PARA ARTÍCULOS SAP (OITM)
     // ==========================================

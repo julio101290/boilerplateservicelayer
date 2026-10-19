@@ -37,7 +37,7 @@ class RefundsAuthController extends BaseController {
     }
 
     // -----------------------------------------------------------------
-    // Vista principal (DataTable)
+    // Vista principal y DataTable de Pendientes (U_Status = 2)
     // -----------------------------------------------------------------
     public function index() {
         helper('auth');
@@ -55,84 +55,104 @@ class RefundsAuthController extends BaseController {
             $orderColumnIndex = (int) ($request->getGet('order')[0]['column'] ?? 0);
             $orderDir = strtolower($request->getGet('order')[0]['dir'] ?? 'asc');
 
-            // Columnas permitidas para ordenar
             $columns = [
-                'Code',
-                'U_Folio',
-                'U_Area',
-                'U_Employee',
-                'U_Date',
-                'U_Total',
-                'U_Status',
-                'U_UserCode',
-                'U_CodeMov',
-                'U_TypeVoucher',
-                'U_Branch'
+                'Code', 'U_Folio', 'U_Area', 'U_Employee', 'U_Coments',
+                'U_Date', 'U_Total', 'U_TypeVoucher', 'U_Branch', 'U_UserCode'
             ];
             $orderField = $columns[$orderColumnIndex] ?? 'Code';
 
-            $dataConect = $this->serviceLayerModel->first(); // array
-            // Obtener usuario SAP vinculado (opcional)
-            $userLinkSap = $this->user_sap_link
-                    ->select('*')
-                    ->where('iduser', $idUser)
-                    ->first();
-            $autorizador = $userLinkSap['sapuser'] ?? null;
+            $dataConect = $this->serviceLayerModel->first();
 
-            $result = $this->showVouchersWithoutAuth(
-                    $searchValue,
-                    $start,
-                    $length,
-                    $orderField,
-                    $orderDir,
-                    $dataConect
+            $result = $this->fetchVouchersByStatus(
+                2, // Pendientes
+                $searchValue,
+                $start,
+                $length,
+                $orderField,
+                $orderDir,
+                $dataConect
             );
 
             return $this->response->setJSON([
-                        'draw' => $draw,
-                        'recordsTotal' => $result['recordsTotal'],
-                        'recordsFiltered' => $result['recordsFiltered'],
-                        'data' => $result['data'],
+                'draw' => $draw,
+                'recordsTotal' => $result['recordsTotal'],
+                'recordsFiltered' => $result['recordsFiltered'],
+                'data' => $result['data'],
             ]);
         }
 
         $titulos["title"] = 'Autorización de Comprobantes';
-        $titulos["subtitle"] = 'Comprobantes pendientes de autorización';
+        $titulos["subtitle"] = 'Gestión de comprobantes y reembolsos';
 
         return view('julio101290\boilerplateservicelayer\Views\refundsAuth', $titulos);
     }
 
     // -----------------------------------------------------------------
-    // Consulta ODBC para obtener comprobantes pendientes (U_Status = 2)
+    // DataTable AJAX: Comprobantes Autorizados (U_Status = 4)
     // -----------------------------------------------------------------
-    public function showVouchersWithoutAuth(
-            string $search,
-            int $start,
-            int $length,
-            string $orderField,
-            string $orderDir,
-            array $dataConect   // ← ahora es array
+    public function getAuthorized() {
+        $request = service('request');
+
+        $draw = (int) $request->getGet('draw');
+        $start = (int) $request->getGet('start');
+        $length = (int) $request->getGet('length');
+        $searchValue = trim($request->getGet('search')['value'] ?? '');
+        $orderColumnIndex = (int) ($request->getGet('order')[0]['column'] ?? 0);
+        $orderDir = strtolower($request->getGet('order')[0]['dir'] ?? 'desc');
+
+        $columns = [
+            'Code', 'U_Folio', 'U_CodeMov', 'U_Area', 'U_Employee',
+            'U_Coments', 'U_Date', 'U_Total', 'U_TypeVoucher', 'U_Branch', 'U_UserCode'
+        ];
+        $orderField = $columns[$orderColumnIndex] ?? 'Code';
+
+        $dataConect = $this->serviceLayerModel->first();
+
+        $result = $this->fetchVouchersByStatus(
+            4, // Autorizados
+            $searchValue,
+            $start,
+            $length,
+            $orderField,
+            $orderDir,
+            $dataConect
+        );
+
+        return $this->response->setJSON([
+            'draw' => $draw,
+            'recordsTotal' => $result['recordsTotal'],
+            'recordsFiltered' => $result['recordsFiltered'],
+            'data' => $result['data'],
+        ]);
+    }
+
+    // -----------------------------------------------------------------
+    // Consulta ODBC por estatus (2 = Pendiente, 4 = Autorizado)
+    // -----------------------------------------------------------------
+    protected function fetchVouchersByStatus(
+        int $status,
+        string $search,
+        int $start,
+        int $length,
+        string $orderField,
+        string $orderDir,
+        array $dataConect
     ): array {
         try {
             $conn = odbc_connect(
-                    $dataConect['nameODBC'],
-                    $dataConect['userODBC'],
-                    $dataConect['passwordODBC']
+                $dataConect['nameODBC'],
+                $dataConect['userODBC'],
+                $dataConect['passwordODBC']
             );
             if (!$conn) {
                 throw new \Exception('Error conexión ODBC: ' . odbc_errormsg());
             }
 
-            // Establecer esquema
-            $schemaSet = odbc_exec($conn, 'SET SCHEMA "' . $dataConect['companyDB'] . '"');
-            if (!$schemaSet) {
-                log_message('error', 'Error SET SCHEMA: ' . odbc_errormsg($conn));
-            }
+            odbc_exec($conn, 'SET SCHEMA "' . $dataConect['companyDB'] . '"');
 
             $tableName = '"' . $dataConect['companyDB'] . '"."@QSYS_GLO_VOUC"';
-            $where = '"U_Status" = 2';
+            $where = '"U_Status" = ' . $status;
 
-            // Búsqueda
             if (!empty($search)) {
                 $escaped = str_replace("'", "''", $search);
                 $where .= ' AND (
@@ -145,21 +165,21 @@ class RefundsAuthController extends BaseController {
                 )';
             }
 
-            // Ordenamiento
             $allowedOrder = ['Code', 'U_Folio', 'U_Area', 'U_Employee', 'U_Date', 'U_Total', 'U_Status', 'U_UserCode', 'U_CodeMov', 'U_TypeVoucher', 'U_Branch'];
             if (!in_array($orderField, $allowedOrder, true)) {
                 $orderField = 'Code';
             }
             $orderDir = strtoupper($orderDir) === 'DESC' ? 'DESC' : 'ASC';
 
-            // Total de registros
+            // Conteo total
             $sqlCount = "SELECT COUNT(*) AS total FROM $tableName WHERE $where";
             $rsCount = odbc_exec($conn, $sqlCount);
             if (!$rsCount) {
                 throw new \Exception('Error COUNT: ' . odbc_errormsg($conn));
             }
             $totalRow = odbc_fetch_array($rsCount);
-            $recordsTotal = (int) ($totalRow['total'] ?? 0);
+            // HANA ODBC devuelve columnas sin comillas en mayúsculas (TOTAL)
+            $recordsTotal = (int) ($totalRow['TOTAL'] ?? $totalRow['total'] ?? 0);
             odbc_free_result($rsCount);
 
             // Consulta paginada con ROW_NUMBER()
@@ -195,19 +215,29 @@ class RefundsAuthController extends BaseController {
             while ($row = odbc_fetch_array($rsData)) {
                 unset($row['rn']);
                 $row = $this->utf8ize($row);
+
+                $folio = trim((string)($row['U_Folio'] ?? ''));
+                $codeMov = trim((string)($row['U_CodeMov'] ?? ''));
+                $rowStatus = (int)($row['U_Status'] ?? 0);
+
+                // Solo se considera movimiento posterior si status es 5 (Cerrado/Pagado)
+                // o si U_CodeMov tiene valor, no es '0' y NO es igual al folio del comprobante
+                $hasMovements = ($rowStatus === 5) || (!empty($codeMov) && $codeMov !== '0' && $codeMov !== $folio);
+
                 $data[] = [
-                    'Code' => $row['Code'],
-                    'U_Folio' => $row['U_Folio'],
-                    'U_Area' => $row['U_Area'],
-                    'U_Employee' => $row['U_Employee'],
-                    'U_Coments' => $row['U_Coments'],
-                    'U_Date' => $row['U_Date'],
-                    'U_Total' => round((float) $row['U_Total'], 2),
-                    'U_Status' => $row['U_Status'],
-                    'U_UserCode' => $row['U_UserCode'],
-                    'U_CodeMov' => $row['U_CodeMov'],
-                    'U_TypeVoucher' => $row['U_TypeVoucher'],
-                    'U_Branch' => $row['U_Branch'],
+                    'Code'         => $row['Code'],
+                    'U_Folio'      => $folio,
+                    'U_Area'       => $row['U_Area'],
+                    'U_Employee'   => $row['U_Employee'],
+                    'U_Coments'    => $row['U_Coments'],
+                    'U_Date'       => $row['U_Date'],
+                    'U_Total'      => round((float) $row['U_Total'], 2),
+                    'U_Status'     => $rowStatus,
+                    'U_UserCode'   => $row['U_UserCode'],
+                    'U_CodeMov'    => $codeMov,
+                    'hasMovements' => $hasMovements,
+                    'U_TypeVoucher'=> $row['U_TypeVoucher'],
+                    'U_Branch'     => $row['U_Branch'],
                 ];
             }
 
@@ -220,7 +250,7 @@ class RefundsAuthController extends BaseController {
                 'data' => $data,
             ];
         } catch (\Throwable $e) {
-            log_message('error', 'Error en showVouchersWithoutAuth: ' . $e->getMessage());
+            log_message('error', 'Error en fetchVouchersByStatus: ' . $e->getMessage());
             return [
                 'recordsTotal' => 0,
                 'recordsFiltered' => 0,
@@ -231,8 +261,12 @@ class RefundsAuthController extends BaseController {
         }
     }
 
+    public function showVouchersWithoutAuth(string $search, int $start, int $length, string $orderField, string $orderDir, array $dataConect): array {
+        return $this->fetchVouchersByStatus(2, $search, $start, $length, $orderField, $orderDir, $dataConect);
+    }
+
     // -----------------------------------------------------------------
-    // Autorizar un comprobante (cambiar U_Status de 2 a 4)
+    // Autorizar comprobante (cambiar U_Status de 2 a 4)
     // -----------------------------------------------------------------
     public function authorizeVoucher() {
         helper('auth');
@@ -240,38 +274,29 @@ class RefundsAuthController extends BaseController {
         $userName = user()->username;
 
         $inputJson = $request->getJSON(true);
-        if (!empty($inputJson)) {
-            $code = (int) ($inputJson['code'] ?? 0);
-            $folio = $inputJson['folio'] ?? null;
-        } else {
-            $code = (int) $request->getPost('code');
-            $folio = $request->getPost('folio');
-        }
+        $code = (int) ($inputJson['code'] ?? $request->getPost('code') ?? 0);
+        $folio = $inputJson['folio'] ?? $request->getPost('folio');
 
         if (!$code) {
             return $this->response->setStatusCode(400)->setJSON([
-                        'success' => false,
-                        'error' => 'Falta el parámetro "code"'
+                'success' => false,
+                'error' => 'Falta el parámetro "code"'
             ]);
         }
 
-        $dataConect = $this->serviceLayerModel->first(); // array
+        $dataConect = $this->serviceLayerModel->first();
         if (!$dataConect) {
             return $this->response->setStatusCode(500)->setJSON([
-                        'success' => false,
-                        'error' => 'No hay configuración de conexión SAP'
+                'success' => false,
+                'error' => 'No hay configuración de conexión SAP'
             ]);
         }
 
-        $conn = odbc_connect(
-                $dataConect['nameODBC'],
-                $dataConect['userODBC'],
-                $dataConect['passwordODBC']
-        );
+        $conn = odbc_connect($dataConect['nameODBC'], $dataConect['userODBC'], $dataConect['passwordODBC']);
         if (!$conn) {
             return $this->response->setStatusCode(500)->setJSON([
-                        'success' => false,
-                        'error' => 'Error conexión ODBC: ' . odbc_errormsg()
+                'success' => false,
+                'error' => 'Error conexión ODBC: ' . odbc_errormsg()
             ]);
         }
 
@@ -283,8 +308,8 @@ class RefundsAuthController extends BaseController {
         if (!$rsCheck || !($row = odbc_fetch_array($rsCheck))) {
             odbc_close($conn);
             return $this->response->setStatusCode(404)->setJSON([
-                        'success' => false,
-                        'error' => 'Comprobante no encontrado'
+                'success' => false,
+                'error' => 'Comprobante no encontrado'
             ]);
         }
 
@@ -294,49 +319,142 @@ class RefundsAuthController extends BaseController {
         if ($currentStatus !== 2) {
             odbc_close($conn);
             return $this->response->setStatusCode(400)->setJSON([
-                        'success' => false,
-                        'error' => "El comprobante no está pendiente de autorización (status actual: $currentStatus). Se requiere status = 2."
+                'success' => false,
+                'error' => "El comprobante no está pendiente de autorización (estatus actual: $currentStatus)."
             ]);
         }
 
-        // Actualizar status a 4
+        // Actualizar a estatus 4
         $sqlUpdate = "UPDATE $tableName SET \"U_Status\" = 4 WHERE \"Code\" = $code";
         $rsUpdate = odbc_exec($conn, $sqlUpdate);
         if (!$rsUpdate) {
             $errMsg = odbc_errormsg($conn);
             odbc_close($conn);
             return $this->response->setStatusCode(500)->setJSON([
-                        'success' => false,
-                        'error' => "Error al actualizar: $errMsg"
+                'success' => false,
+                'error' => "Error al actualizar: $errMsg"
             ]);
         }
 
         odbc_close($conn);
 
-        // Registrar bitácora
         $this->log->save([
             'description' => "Usuario {$userName} autorizó el comprobante {$folioActual} (Code: {$code})",
             'user' => $userName
         ]);
 
         return $this->response->setJSON([
-                    'success' => true,
-                    'message' => "Comprobante {$folioActual} autorizado correctamente",
-                    'code' => $code,
-                    'folio' => $folioActual
+            'success' => true,
+            'message' => "Comprobante {$folioActual} autorizado correctamente",
+            'code' => $code,
+            'folio' => $folioActual
         ]);
     }
 
     // -----------------------------------------------------------------
-    // Mostrar detalle (líneas) de un comprobante (DataTable)
+    // Desautorizar comprobante (cambiar U_Status de 4 a 2)
+    // -----------------------------------------------------------------
+    public function unauthorizeVoucher() {
+        helper('auth');
+        $request = service('request');
+        $userName = user()->username;
+
+        $inputJson = $request->getJSON(true);
+        $code = (int) ($inputJson['code'] ?? $request->getPost('code') ?? 0);
+        $folio = $inputJson['folio'] ?? $request->getPost('folio');
+
+        if (!$code) {
+            return $this->response->setStatusCode(400)->setJSON([
+                'success' => false,
+                'error' => 'Falta el parámetro "code"'
+            ]);
+        }
+
+        $dataConect = $this->serviceLayerModel->first();
+        if (!$dataConect) {
+            return $this->response->setStatusCode(500)->setJSON([
+                'success' => false,
+                'error' => 'No hay configuración de conexión SAP'
+            ]);
+        }
+
+        $conn = odbc_connect($dataConect['nameODBC'], $dataConect['userODBC'], $dataConect['passwordODBC']);
+        if (!$conn) {
+            return $this->response->setStatusCode(500)->setJSON([
+                'success' => false,
+                'error' => 'Error conexión ODBC: ' . odbc_errormsg()
+            ]);
+        }
+
+        $tableName = '"' . $dataConect['companyDB'] . '"."@QSYS_GLO_VOUC"';
+
+        // 1. Verificar estado actual y movimiento posterior
+        $sqlCheck = "SELECT \"U_Status\", \"U_Folio\", \"U_CodeMov\" FROM $tableName WHERE \"Code\" = $code";
+        $rsCheck = odbc_exec($conn, $sqlCheck);
+        if (!$rsCheck || !($row = odbc_fetch_array($rsCheck))) {
+            odbc_close($conn);
+            return $this->response->setStatusCode(404)->setJSON([
+                'success' => false,
+                'error' => 'Comprobante no encontrado'
+            ]);
+        }
+
+        $currentStatus = (int) ($row['U_Status'] ?? 0);
+        $folioActual   = trim((string)($row['U_Folio'] ?? $folio));
+        $codeMov       = trim((string)($row['U_CodeMov'] ?? ''));
+
+        if ($currentStatus !== 4) {
+            odbc_close($conn);
+            return $this->response->setStatusCode(400)->setJSON([
+                'success' => false,
+                'error' => "El comprobante no está en estatus Autorizado (estatus actual: $currentStatus)."
+            ]);
+        }
+
+        // 2. VALIDACIÓN: Solo se bloquea si U_CodeMov tiene un valor real distinto a su propio folio
+        if (!empty($codeMov) && $codeMov !== '0' && $codeMov !== $folioActual) {
+            odbc_close($conn);
+            return $this->response->setStatusCode(400)->setJSON([
+                'success' => false,
+                'error' => "No es posible desautorizar el comprobante {$folioActual}: ya cuenta con el movimiento posterior '{$codeMov}' registrado."
+            ]);
+        }
+
+        // 3. Revertir a estatus 2 (Pendiente)
+        $sqlUpdate = "UPDATE $tableName SET \"U_Status\" = 2 WHERE \"Code\" = $code";
+        $rsUpdate = odbc_exec($conn, $sqlUpdate);
+        if (!$rsUpdate) {
+            $errMsg = odbc_errormsg($conn);
+            odbc_close($conn);
+            return $this->response->setStatusCode(500)->setJSON([
+                'success' => false,
+                'error' => "Error al desautorizar: $errMsg"
+            ]);
+        }
+
+        odbc_close($conn);
+
+        // Bitácora
+        $this->log->save([
+            'description' => "Usuario {$userName} desautorizó el comprobante {$folioActual} (Code: {$code}), regresó a estatus Pendiente (2)",
+            'user' => $userName
+        ]);
+
+        return $this->response->setJSON([
+            'success' => true,
+            'message' => "Comprobante {$folioActual} desautorizado correctamente. Ha regresado a pendientes.",
+            'code' => $code,
+            'folio' => $folioActual
+        ]);
+    }
+
+    // -----------------------------------------------------------------
+    // Mostrar detalle (líneas) de un comprobante
     // -----------------------------------------------------------------
     public function showVoucherDetails() {
         $request = service('request');
 
-        $input = $request->getJSON(true);
-        if (empty($input)) {
-            $input = $request->getPost();
-        }
+        $input = $request->getJSON(true) ?: $request->getPost();
 
         $draw = (int) ($input['draw'] ?? 0);
         $start = (int) ($input['start'] ?? 0);
@@ -345,55 +463,34 @@ class RefundsAuthController extends BaseController {
         $orderColumnIndex = (int) ($input['order'][0]['column'] ?? 1);
         $orderDir = strtolower($input['order'][0]['dir'] ?? 'asc') === 'desc' ? 'desc' : 'asc';
 
-        // Código del comprobante (Code de VOUC)
         $codeVoucher = (int) ($input['code'] ?? 0);
         if ($codeVoucher <= 0) {
             return $this->response->setStatusCode(400)->setJSON([
-                        'draw' => $draw,
-                        'recordsTotal' => 0,
-                        'recordsFiltered' => 0,
-                        'data' => [],
-                        'error' => 'Se requiere el parámetro "code"'
+                'draw' => $draw, 'recordsTotal' => 0, 'recordsFiltered' => 0, 'data' => [],
+                'error' => 'Se requiere el parámetro "code"'
             ]);
         }
 
         $dataConect = $this->serviceLayerModel->first();
         if (!$dataConect) {
             return $this->response->setStatusCode(500)->setJSON([
-                        'draw' => $draw,
-                        'recordsTotal' => 0,
-                        'recordsFiltered' => 0,
-                        'data' => [],
-                        'error' => 'No hay configuración ODBC'
+                'draw' => $draw, 'recordsTotal' => 0, 'recordsFiltered' => 0, 'data' => [],
+                'error' => 'No hay configuración ODBC'
             ]);
         }
 
-        $conn = odbc_connect(
-                $dataConect['nameODBC'],
-                $dataConect['userODBC'],
-                $dataConect['passwordODBC']
-        );
+        $conn = odbc_connect($dataConect['nameODBC'], $dataConect['userODBC'], $dataConect['passwordODBC']);
         if (!$conn) {
             return $this->response->setStatusCode(500)->setJSON([
-                        'draw' => $draw,
-                        'recordsTotal' => 0,
-                        'recordsFiltered' => 0,
-                        'data' => [],
-                        'error' => 'No se pudo conectar a HANA vía ODBC'
+                'draw' => $draw, 'recordsTotal' => 0, 'recordsFiltered' => 0, 'data' => [],
+                'error' => 'No se pudo conectar a HANA vía ODBC'
             ]);
         }
 
-        // Consulta directa a VODE usando U_CodeVoucher = Code del voucher
         $tableVode = '"' . $dataConect['companyDB'] . '"."@QSYS_GLO_VODE"';
         $sqlDetails = "SELECT
-                        \"U_Line\",
-                        \"U_NA\",
-                        \"U_Type\",
-                        \"U_Provider\",
-                        \"U_Subtotal\",
-                        \"U_IVA\",
-                        \"U_Total\",
-                        \"U_Coments\"
+                        \"U_Line\", \"U_NA\", \"U_Type\", \"U_Provider\",
+                        \"U_Subtotal\", \"U_IVA\", \"U_Total\", \"U_Coments\"
                     FROM $tableVode
                     WHERE \"U_CodeVoucher\" = $codeVoucher
                     ORDER BY \"U_Line\" ASC";
@@ -402,11 +499,8 @@ class RefundsAuthController extends BaseController {
         if (!$stmt) {
             odbc_close($conn);
             return $this->response->setStatusCode(500)->setJSON([
-                        'draw' => $draw,
-                        'recordsTotal' => 0,
-                        'recordsFiltered' => 0,
-                        'data' => [],
-                        'error' => 'Error ejecutando query ODBC: ' . odbc_errormsg($conn)
+                'draw' => $draw, 'recordsTotal' => 0, 'recordsFiltered' => 0, 'data' => [],
+                'error' => 'Error ejecutando query ODBC: ' . odbc_errormsg($conn)
             ]);
         }
 
@@ -417,87 +511,64 @@ class RefundsAuthController extends BaseController {
         odbc_free_result($stmt);
         odbc_close($conn);
 
-        // Si no hay líneas, retornar vacío
         if (empty($lines)) {
             return $this->response->setJSON([
-                        'draw' => $draw,
-                        'recordsTotal' => 0,
-                        'recordsFiltered' => 0,
-                        'data' => []
+                'draw' => $draw, 'recordsTotal' => 0, 'recordsFiltered' => 0, 'data' => []
             ]);
         }
 
-        // Filtrado local (por búsqueda en proveedor, tipo o comentarios)
         $filtered = $lines;
         if ($searchValue !== '') {
             $s = mb_strtolower($searchValue);
-            $filtered = array_filter($lines, function ($ln) use ($s) {
-                $provider = mb_strtolower((string) ($ln['U_Provider'] ?? ''));
-                $type = mb_strtolower((string) ($ln['U_Type'] ?? ''));
-                $comments = mb_strtolower((string) ($ln['U_Coments'] ?? ''));
-                return strpos($provider, $s) !== false ||
-                        strpos($type, $s) !== false ||
-                        strpos($comments, $s) !== false;
-            });
-            $filtered = array_values($filtered);
+            $filtered = array_values(array_filter($lines, function ($ln) use ($s) {
+                return strpos(mb_strtolower((string)($ln['U_Provider'] ?? '')), $s) !== false ||
+                       strpos(mb_strtolower((string)($ln['U_Type'] ?? '')), $s) !== false ||
+                       strpos(mb_strtolower((string)($ln['U_Coments'] ?? '')), $s) !== false;
+            }));
         }
 
         $recordsTotal = count($lines);
         $recordsFiltered = count($filtered);
 
-        // Columnas para ordenar (mapeo según las columnas mostradas en DataTable)
         $columnsMap = [
-            0 => 'U_Line',
-            1 => 'U_NA',
-            2 => 'U_Type',
-            3 => 'U_Provider',
-            4 => 'U_Subtotal',
-            5 => 'U_IVA',
-            6 => 'U_Total'
+            0 => 'U_Line', 1 => 'U_NA', 2 => 'U_Type', 3 => 'U_Provider',
+            4 => 'U_Subtotal', 5 => 'U_IVA', 6 => 'U_Total'
         ];
         $orderField = $columnsMap[$orderColumnIndex] ?? 'U_Line';
 
         usort($filtered, function ($a, $b) use ($orderField, $orderDir) {
             $va = $a[$orderField] ?? '';
             $vb = $b[$orderField] ?? '';
-            if (is_numeric($va) && is_numeric($vb)) {
-                $cmp = $va <=> $vb;
-            } else {
-                $cmp = strcasecmp((string) $va, (string) $vb);
-            }
+            $cmp = (is_numeric($va) && is_numeric($vb)) ? ($va <=> $vb) : strcasecmp((string)$va, (string)$vb);
             return ($orderDir === 'desc') ? -$cmp : $cmp;
         });
 
-        // Paginación
         $paged = ($length > 0) ? array_slice($filtered, $start, $length) : $filtered;
 
         $out = [];
         $idx = $start + 1;
         foreach ($paged as $line) {
             $out[] = [
-                'No' => $idx++,
-                'Linea' => $line['U_Line'] ?? '',
-                'NA' => $line['U_NA'] ?? '',
-                'Tipo' => $line['U_Type'] ?? '',
-                'Proveedor' => $line['U_Provider'] ?? '',
-                'Subtotal' => isset($line['U_Subtotal']) ? round((float) $line['U_Subtotal'], 2) : 0,
-                'IVA' => isset($line['U_IVA']) ? round((float) $line['U_IVA'], 2) : 0,
-                'Total' => isset($line['U_Total']) ? round((float) $line['U_Total'], 2) : 0,
+                'No'          => $idx++,
+                'Linea'       => $line['U_Line'] ?? '',
+                'NA'          => $line['U_NA'] ?? '',
+                'Tipo'        => $line['U_Type'] ?? '',
+                'Proveedor'   => $line['U_Provider'] ?? '',
+                'Subtotal'    => isset($line['U_Subtotal']) ? round((float) $line['U_Subtotal'], 2) : 0,
+                'IVA'         => isset($line['U_IVA']) ? round((float) $line['U_IVA'], 2) : 0,
+                'Total'       => isset($line['U_Total']) ? round((float) $line['U_Total'], 2) : 0,
                 'Comentarios' => $line['U_Coments'] ?? '',
             ];
         }
 
         return $this->response->setJSON([
-                    'draw' => $draw,
-                    'recordsTotal' => $recordsTotal,
-                    'recordsFiltered' => $recordsFiltered,
-                    'data' => $out
+            'draw' => $draw,
+            'recordsTotal' => $recordsTotal,
+            'recordsFiltered' => $recordsFiltered,
+            'data' => $out
         ]);
     }
 
-    // -----------------------------------------------------------------
-    // Métodos auxiliares (heredados del controlador original)
-    // -----------------------------------------------------------------
     public function getUser_sap_link() {
         helper('auth');
         $idUser = user()->id;
@@ -596,9 +667,6 @@ class RefundsAuthController extends BaseController {
         echo $jsonVariable;
     }
 
-    // -----------------------------------------------------------------
-    // Utilidad UTF-8
-    // -----------------------------------------------------------------
     private function utf8ize($mixed) {
         if (is_array($mixed)) {
             foreach ($mixed as $key => $value) {
