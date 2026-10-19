@@ -1004,16 +1004,28 @@ class EmployeeSAPController extends BaseController {
             $empID = (int) $empID;
             list($conn) = $this->getOdbcConnection();
 
-            // Enlazar OHEM con OUSR por USERID y luego con USR6 por USER_CODE
+            // Consulta unificada:
+            // 1. HEM10: Sucursales asignadas directamente a la ficha del empleado (con o sin usuario).
+            // 2. USR6: Sucursales del usuario SAP si tiene uno vinculado en OHEM.
             $sql = "
+            SELECT DISTINCT T.\"BPLId\", T.\"BPLName\"
+            FROM (
+                SELECT T2.\"BPLId\", T2.\"BPLName\"
+                FROM HEM10 T1
+                INNER JOIN OBPL T2 ON T1.\"BPLId\" = T2.\"BPLId\"
+                WHERE T1.\"empID\" = {$empID}
+
+                UNION
+
                 SELECT T2.\"BPLId\", T2.\"BPLName\"
                 FROM OHEM T0
                 INNER JOIN OUSR T3 ON T0.\"userId\" = T3.\"USERID\"
                 INNER JOIN USR6 T1 ON T3.\"USER_CODE\" = T1.\"UserCode\"
                 INNER JOIN OBPL T2 ON T1.\"BPLId\" = T2.\"BPLId\"
                 WHERE T0.\"empID\" = {$empID}
-                ORDER BY T2.\"BPLId\" ASC
-            ";
+            ) T
+            ORDER BY T.\"BPLId\" ASC
+        ";
 
             $rs = odbc_exec($conn, $sql);
             if (!$rs) {
@@ -1072,7 +1084,7 @@ class EmployeeSAPController extends BaseController {
     }
 
     /**
-     * Asigna una sucursal a un empleado (sincronizando en EmployeesInfo y Users de SAP)
+     * Asigna una sucursal a un empleado (en EmployeesInfo y, si tiene cuenta, en Users de SAP)
      */
     public function addEmployeeBranch() {
         helper('auth');
@@ -1091,11 +1103,11 @@ class EmployeeSAPController extends BaseController {
 
         try {
             $conexionSap = $this->serviceLayerController->login(
-                $dataSL['url'],
-                $dataSL['port'],
-                $dataSL['password'],
-                $dataSL['username'],
-                $dataSL['companyDB']
+                    $dataSL['url'],
+                    $dataSL['port'],
+                    $dataSL['password'],
+                    $dataSL['username'],
+                    $dataSL['companyDB']
             );
         } catch (\Exception $e) {
             return $this->respond(['status' => 500, 'message' => 'Error login SL: ' . $e->getMessage()], 500);
@@ -1123,10 +1135,11 @@ class EmployeeSAPController extends BaseController {
         ];
 
         $wasModified = false;
-        $alreadyAssigned = true;
+        $userAlreadyHadIt = true;
+        $empAlreadyHadIt = true;
 
         // =========================================================
-        // 1. VERIFICAR USUARIO VINCULADO (OHEM -> USR6)
+        // 1. VERIFICAR SI TIENE USUARIO VINCULADO (OHEM)
         // =========================================================
         list($conn) = $this->getOdbcConnection();
         $sqlUser = "SELECT \"userId\" FROM OHEM WHERE \"empID\" = {$empID}";
@@ -1137,81 +1150,75 @@ class EmployeeSAPController extends BaseController {
 
         $userId = !empty($rowUser['userId']) ? (int) $rowUser['userId'] : 0;
 
-        if ($userId <= 0) {
-            return $this->respond([
-                'status' => 400,
-                'message' => 'Para asignar múltiples sucursales, el empleado debe tener un Usuario de SAP vinculado (campo userId).'
-            ], 400);
-        }
-
         // =========================================================
-        // 2. AGREGAR AL USUARIO SAP (Users / USR6)
+        // 2. AGREGAR AL USUARIO SAP (SOLO SI TIENE USUARIO)
         // =========================================================
-        // Se retira el $select defectuoso para traer el objeto completo
-        $getUserUrl = $slRoot . "/Users({$userId})";
+        if ($userId > 0) {
+            $getUserUrl = $slRoot . "/Users({$userId})";
 
-        $ch = curl_init();
-        curl_setopt_array($ch, [
-            CURLOPT_URL => $getUserUrl,
-            CURLOPT_PORT => $dataSL['port'],
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_COOKIE => $cookie,
-            CURLOPT_SSL_VERIFYHOST => false,
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_HTTPHEADER => $headers,
-            CURLOPT_TIMEOUT => 30
-        ]);
-        $userResp = curl_exec($ch);
-        $userHttp = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+            $ch = curl_init();
+            curl_setopt_array($ch, [
+                CURLOPT_URL => $getUserUrl,
+                CURLOPT_PORT => $dataSL['port'],
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_COOKIE => $cookie,
+                CURLOPT_SSL_VERIFYHOST => false,
+                CURLOPT_SSL_VERIFYPEER => false,
+                CURLOPT_HTTPHEADER => $headers,
+                CURLOPT_TIMEOUT => 30
+            ]);
+            $userResp = curl_exec($ch);
+            $userHttp = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
 
-        if ($userHttp === 200) {
-            $userData = json_decode($userResp, true);
-            $userBranches = $userData['UserBranchAssignment'] ?? $userData['UserBranchAssignmentCollection'] ?? [];
+            if ($userHttp === 200) {
+                $userData = json_decode($userResp, true);
+                $userBranches = $userData['UserBranchAssignment'] ?? $userData['UserBranchAssignmentCollection'] ?? [];
 
-            $newUserBranches = [];
-            $foundInUser = false;
-            foreach ($userBranches as $ub) {
-                $ubBpl = (int) ($ub['BPLID'] ?? $ub['BPLId'] ?? 0);
-                if ($ubBpl > 0) {
-                    $newUserBranches[] = ['BPLID' => $ubBpl];
-                    if ($ubBpl === $bplId) {
-                        $foundInUser = true;
+                $newUserBranches = [];
+                $foundInUser = false;
+                foreach ($userBranches as $ub) {
+                    $ubBpl = (int) ($ub['BPLID'] ?? $ub['BPLId'] ?? 0);
+                    if ($ubBpl > 0) {
+                        $newUserBranches[] = ['BPLID' => $ubBpl];
+                        if ($ubBpl === $bplId) {
+                            $foundInUser = true;
+                        }
+                    }
+                }
+
+                if (!$foundInUser) {
+                    $userAlreadyHadIt = false;
+                    $newUserBranches[] = ['BPLID' => $bplId];
+
+                    $patchUserUrl = $slRoot . "/Users({$userId})";
+                    $ch = curl_init();
+                    curl_setopt_array($ch, [
+                        CURLOPT_URL => $patchUserUrl,
+                        CURLOPT_PORT => $dataSL['port'],
+                        CURLOPT_RETURNTRANSFER => true,
+                        CURLOPT_CUSTOMREQUEST => 'PATCH',
+                        CURLOPT_POSTFIELDS => json_encode(['UserBranchAssignment' => $newUserBranches]),
+                        CURLOPT_COOKIE => $cookie,
+                        CURLOPT_SSL_VERIFYHOST => false,
+                        CURLOPT_SSL_VERIFYPEER => false,
+                        CURLOPT_HTTPHEADER => $headers,
+                        CURLOPT_TIMEOUT => 30
+                    ]);
+                    $patchUserResp = curl_exec($ch);
+                    $patchUserHttp = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                    curl_close($ch);
+
+                    if ($patchUserHttp >= 200 && $patchUserHttp < 300) {
+                        $wasModified = true;
                     }
                 }
             }
-
-            // Si no la tiene asignada, la agregamos al array y lanzamos el PATCH
-            if (!$foundInUser) {
-                $alreadyAssigned = false;
-                $newUserBranches[] = ['BPLID' => $bplId];
-
-                $patchUserUrl = $slRoot . "/Users({$userId})";
-                $ch = curl_init();
-                curl_setopt_array($ch, [
-                    CURLOPT_URL => $patchUserUrl,
-                    CURLOPT_PORT => $dataSL['port'],
-                    CURLOPT_RETURNTRANSFER => true,
-                    CURLOPT_CUSTOMREQUEST => 'PATCH',
-                    CURLOPT_POSTFIELDS => json_encode(['UserBranchAssignment' => $newUserBranches]),
-                    CURLOPT_COOKIE => $cookie,
-                    CURLOPT_SSL_VERIFYHOST => false,
-                    CURLOPT_SSL_VERIFYPEER => false,
-                    CURLOPT_HTTPHEADER => $headers,
-                    CURLOPT_TIMEOUT => 30
-                ]);
-                $patchUserResp = curl_exec($ch);
-                $patchUserHttp = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-                curl_close($ch);
-
-                if ($patchUserHttp >= 200 && $patchUserHttp < 300) {
-                    $wasModified = true;
-                }
-            }
         }
 
         // =========================================================
-        // 3. AGREGAR A LA TABLA DEL EMPLEADO (EmployeesInfo / HEM10)
+        // 3. AGREGAR A LA FICHA DEL EMPLEADO (EmployeesInfo / HEM10)
+        // Se ejecuta SIEMPRE, tenga o no usuario de SAP
         // =========================================================
         $getEmpUrl = $slRoot . "/EmployeesInfo({$empID})";
 
@@ -1246,9 +1253,8 @@ class EmployeeSAPController extends BaseController {
                 }
             }
 
-            // Si no la tiene asignada en el empleado, la agregamos al array y lanzamos el PATCH
             if (!$foundInEmp) {
-                $alreadyAssigned = false;
+                $empAlreadyHadIt = false;
                 $newEmpBranches[] = ['BPLID' => $bplId];
 
                 $patchEmpUrl = $slRoot . "/EmployeesInfo({$empID})";
@@ -1278,22 +1284,25 @@ class EmployeeSAPController extends BaseController {
         // =========================================================
         // 4. RESPUESTA FINAL
         // =========================================================
+        $alreadyAssigned = ($userId > 0) ? ($userAlreadyHadIt && $empAlreadyHadIt) : $empAlreadyHadIt;
+
         if ($alreadyAssigned) {
             return $this->respond([
-                'status' => 400,
-                'message' => 'La sucursal ya se encuentra asignada al empleado y a su usuario de SAP.'
-            ], 400);
+                        'status' => 400,
+                        'message' => 'La sucursal ya se encuentra asignada al empleado' . ($userId > 0 ? ' y a su usuario de SAP.' : '.')
+                            ], 400);
         }
 
         if (!$wasModified) {
             return $this->respond([
-                'status' => 500,
-                'message' => 'Ocurrió un error al intentar comunicar la asignación a SAP.'
-            ], 500);
+                        'status' => 500,
+                        'message' => 'Ocurrió un error al intentar comunicar la asignación a SAP.'
+                            ], 500);
         }
 
+        $detailUser = $userId > 0 ? " (Usuario SAP: {$userId})" : " (Empleado RH sin usuario)";
         $this->log->save([
-            "description" => "Asignación de sucursal BPLID '$bplId' al empleado $empID (vía SL)",
+            "description" => "Asignación de sucursal BPLID '{$bplId}' al empleado {$empID}{$detailUser}",
             "user" => $userName
         ]);
 
