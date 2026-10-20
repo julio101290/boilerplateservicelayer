@@ -574,4 +574,25 @@ $routes->group('admin', function ($routes) {
             'VendorInvoiceController::descargaAcuseCancelacion/$1',
             ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
     );
+
+    // Módulo de Control de Vales SAP (@VALESINFO)
+    $routes->get('servicelayer/vouchers', 'SapVouchersController::index', [
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers',
+        'filter' => 'permission:sapvouchers'
+    ]);
+
+    $routes->get('servicelayer/vouchers/getWarehousesAjax', 'SapVouchersController::getWarehousesAjax', [
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers',
+        'filter' => 'permission:sapvouchers'
+    ]);
+
+    $routes->get('servicelayer/vouchers/getVoucher/(:any)', 'SapVouchersController::getVoucher/$1', [
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers',
+        'filter' => 'permission:sapvouchers'
+    ]);
+
+    $routes->post('servicelayer/vouchers/save', 'SapVouchersController::save', [
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers',
+        'filter' => 'permission:sapvouchers'
+    ]);
 });
