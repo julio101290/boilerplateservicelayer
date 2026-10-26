@@ -3,17 +3,15 @@
 namespace julio101290\boilerplateservicelayer\Controllers;
 
 use App\Controllers\BaseController;
-use julio101290\boilerplateservicelayer\Models\{
-    Link_sap_branchofficeModel
-};
+use julio101290\boilerplateservicelayer\Models\Link_sap_branchofficeModel;
 use CodeIgniter\API\ResponseTrait;
 use julio101290\boilerplatelog\Models\LogModel;
 use julio101290\boilerplatecompanies\Models\EmpresasModel;
 use julio101290\boilerplateservicelayer\Models\SapservicelayerModel;
 use julio101290\boilerplatebranchoffice\Models\BranchofficesModel;
 
-class Link_sap_branchofficeController extends BaseController {
-
+class Link_sap_branchofficeController extends BaseController
+{
     use ResponseTrait;
 
     protected $log;
@@ -22,7 +20,8 @@ class Link_sap_branchofficeController extends BaseController {
     protected $serviceLayerModel;
     protected $branchoffice;
 
-    public function __construct() {
+    public function __construct()
+    {
         $this->link_sap_branchoffice = new Link_sap_branchofficeModel();
         $this->log = new LogModel();
         $this->empresa = new EmpresasModel();
@@ -31,7 +30,8 @@ class Link_sap_branchofficeController extends BaseController {
         helper(['menu', 'utilerias']);
     }
 
-    public function index() {
+    public function index()
+    {
         helper('auth');
 
         $idUser = user()->id;
@@ -45,37 +45,59 @@ class Link_sap_branchofficeController extends BaseController {
             $start = (int) $request->getGet('start');
             $length = (int) $request->getGet('length');
             $searchValue = $request->getGet('search')['value'] ?? '';
-            $orderColumnIndex = (int) $request->getGet('order')[0]['column'] ?? 0;
+            $orderColumnIndex = (int) ($request->getGet('order')[0]['column'] ?? 0);
             $orderDir = $request->getGet('order')[0]['dir'] ?? 'asc';
 
-            $fields = $this->link_sap_branchoffice->allowedFields;
-            $orderField = $fields[$orderColumnIndex] ?? 'id';
+            // Mapeo de columnas de DataTable a campos SQL
+            $columnsMap = [
+                0 => 'a.id',
+                1 => 'b.nombre',
+                2 => 'c.name',
+                3 => 'a.idBranchOfficeSAP',
+                4 => 'a.created_at',
+                5 => 'a.updated_at',
+            ];
+            $orderField = $columnsMap[$orderColumnIndex] ?? 'a.id';
 
             $builder = $this->link_sap_branchoffice->mdlGetLink_sap_branchoffice($empresasID);
 
             $total = clone $builder;
             $recordsTotal = $total->countAllResults(false);
 
+            // Búsqueda global (incluye nombre de empresa y nombre de sucursal local)
             if (!empty($searchValue)) {
-                $builder->groupStart();
-                foreach ($fields as $field) {
-                    $builder->orLike("a." . $field, $searchValue);
-                }
-                $builder->groupEnd();
+                $builder->groupStart()
+                    ->like('a.id', $searchValue)
+                    ->orLike('b.nombre', $searchValue)
+                    ->orLike('c.name', $searchValue)
+                    ->orLike('a.idBranchOfficeSAP', $searchValue)
+                ->groupEnd();
             }
 
             $filteredBuilder = clone $builder;
             $recordsFiltered = $filteredBuilder->countAllResults(false);
 
-            $data = $builder->orderBy("a." . $orderField, $orderDir)
-                    ->get($length, $start)
-                    ->getResultArray();
+            $data = $builder->orderBy($orderField, $orderDir)
+                ->get($length, $start)
+                ->getResultArray();
+
+            // Consultar nombres de sucursales SAP únicamente para los registros paginados
+            $sapIds = array_column($data, 'idBranchOfficeSAP');
+            $sapNamesMap = $this->getSapBranchOfficeNames($sapIds);
+
+            // Inyectar nombres descriptivos para el DataTable
+            foreach ($data as &$row) {
+                $sapId = (int) $row['idBranchOfficeSAP'];
+                $row['nombreBranchOffice']    = $row['nombreBranchOffice'] ?? 'Sin asignar';
+                $row['nombreBranchOfficeSAP'] = $sapNamesMap[$sapId] ?? ($sapId === 0 ? '0 Todas las sucursales' : "SAP ID: {$sapId}");
+            }
+            unset($row);
 
             return $this->response->setJSON([
-                        'draw' => $draw,
-                        'recordsTotal' => $recordsTotal,
-                        'recordsFiltered' => $recordsFiltered,
-                        'data' => $data,
+                'draw'            => $draw,
+                'recordsTotal'    => $recordsTotal,
+                'recordsFiltered' => $recordsFiltered,
+                'data'            => $data,
             ]);
         }
 
@@ -84,7 +106,65 @@ class Link_sap_branchofficeController extends BaseController {
         return view('julio101290\boilerplateservicelayer\Views\link_sap_branchoffice', $titulos);
     }
 
-    public function getLink_sap_branchoffice() {
+    /**
+     * Consulta en batch por ODBC los nombres de sucursales en SAP (OBPL)
+     */
+    private function getSapBranchOfficeNames(array $sapIds): array
+    {
+        $sapIds = array_unique(array_filter($sapIds, fn($id) => $id !== null && $id !== ''));
+        $names = [0 => '0 Todas las sucursales'];
+
+        $searchIds = array_diff($sapIds, [0]);
+        if (empty($searchIds)) {
+            return $names;
+        }
+
+        try {
+            $dataConect = $this->serviceLayerModel->first();
+            if (!$dataConect) {
+                return $names;
+            }
+
+            $conn = @odbc_connect(
+                $dataConect['nameODBC'],
+                $dataConect['userODBC'],
+                $dataConect['passwordODBC']
+            );
+
+            if (!$conn) {
+                return $names;
+            }
+
+            if (!empty($dataConect['companyDB'])) {
+                @odbc_exec($conn, 'SET SCHEMA "' . $dataConect['companyDB'] . '"');
+            }
+
+            $idsString = implode(',', array_map('intval', $searchIds));
+            $sql = '
+                SELECT "BPLId", "BPLName"
+                FROM OBPL
+                WHERE "Disabled" <> \'Y\'
+                  AND "BPLId" IN (' . $idsString . ')
+            ';
+
+            $rs = @odbc_exec($conn, $sql);
+            if ($rs) {
+                while ($row = odbc_fetch_array($rs)) {
+                    $names[(int)$row['BPLId']] = $row['BPLId'] . ' - ' . $row['BPLName'];
+                }
+                odbc_free_result($rs);
+            }
+
+            odbc_close($conn);
+        } catch (\Throwable $e) {
+            log_message('error', 'Error al consultar nombres SAP OBPL: ' . $e->getMessage());
+        }
+
+        return $names;
+    }
+
+    public function getLink_sap_branchoffice()
+    {
         helper('auth');
 
         $idUser = user()->id;
@@ -93,71 +173,26 @@ class Link_sap_branchofficeController extends BaseController {
 
         $idLink_sap_branchoffice = $this->request->getPost("idLink_sap_branchoffice");
         $dato = $this->link_sap_branchoffice->whereIn('idEmpresa', $empresasID)
-                ->where('id', $idLink_sap_branchoffice)
-                ->first();
+            ->where('id', $idLink_sap_branchoffice)
+            ->first();
 
-        //GET BRANCH OFFICE LOCAL
+        if (!$dato) {
+            return $this->response->setJSON(['error' => true, 'message' => 'Registro no encontrado']);
+        }
+
+        // Sucursal Local
         $branchOfficeLocal = $this->branchoffice->where("id", $dato["idBranchOffice"])->asArray()->first();
+        $dato["descriptionBranchofficelocal"] = $branchOfficeLocal["name"] ?? 'Sin asignar';
 
-        $dato["descriptionBranchofficelocal"] = $branchOfficeLocal["name"];
-
-        //GET BRANCH OFFICE SAP
-        // -----------------------------
-// Conexión ODBC
-// -----------------------------
-        $dataConect = $this->serviceLayerModel->first();
-        $conn = odbc_connect(
-                $dataConect['nameODBC'],
-                $dataConect['userODBC'],
-                $dataConect['passwordODBC']
-        );
-
-        if (!$conn) {
-            throw new \Exception('Error conexión ODBC: ' . odbc_errormsg());
-        }
-
-// 🔥 FIJAR SCHEMA
-        if (!odbc_exec($conn, 'SET SCHEMA "' . $dataConect['companyDB'] . '"')) {
-            throw new \Exception('Error SET SCHEMA: ' . odbc_errormsg($conn));
-        }
-
-// -----------------------------
-// SQL OBPL (1 solo registro)
-// -----------------------------
-        $sql = '
-    SELECT
-        "BPLId",
-        "BPLName"
-    FROM OBPL
-    WHERE "Disabled" <> \'Y\'
-      AND "BPLId" = ' . $dato["idBranchOfficeSAP"] . '
-';
-
-        $rs = odbc_exec($conn, $sql);
-        if (!$rs) {
-            throw new \Exception('Error SQL: ' . odbc_errormsg($conn));
-        }
-
-// -----------------------------
-// Fetch único
-// -----------------------------
-        $row = odbc_fetch_array($rs);
-
-        odbc_free_result($rs);
-        odbc_close($conn);
-
-// Resultado directo
-        $resultado = $row ? [
-            'BPLId' => $row['BPLId'],
-            'BPLName' => $row['BPLName'],
-                ] : null;
-
-        $dato["descriptionBranchOfficeSAP"] = $resultado["BPLName"];
+        // Sucursal SAP
+        $sapNames = $this->getSapBranchOfficeNames([(int)$dato["idBranchOfficeSAP"]]);
+        $dato["descriptionBranchOfficeSAP"] = $sapNames[(int)$dato["idBranchOfficeSAP"]] ?? 'No disponible';
 
         return $this->response->setJSON($dato);
     }
 
-    public function save() {
+    public function save()
+    {
         helper('auth');
 
         $userName = user()->username;
@@ -191,7 +226,8 @@ class Link_sap_branchofficeController extends BaseController {
         }
     }
 
-    public function delete($id) {
+    public function delete($id)
+    {
         helper('auth');
 
         $userName = user()->username;
@@ -210,16 +246,9 @@ class Link_sap_branchofficeController extends BaseController {
         return $this->respondDeleted($registro, lang("link_sap_branchoffice.msg_delete"));
     }
 
-    /**
-     * Get branchoffice for select2 via AJAX
-     */
-
-    /**
-     * Get Storages via AJax
-     */
-    public function getSucursalesAjax() {
+    public function getSucursalesAjax()
+    {
         try {
-
             $request = service('request');
             $postData = $request->getPost();
 
@@ -227,31 +256,23 @@ class Link_sap_branchofficeController extends BaseController {
             $response['token'] = csrf_hash();
 
             helper('auth');
-            $idUser = user()->id;
 
-            // --------------------------------
-            // 2) Conexión ODBC HANA
-            // --------------------------------
             $dataConect = $this->serviceLayerModel->first();
 
             $conn = odbc_connect(
-                    $dataConect['nameODBC'],
-                    $dataConect['userODBC'],
-                    $dataConect['passwordODBC']
+                $dataConect['nameODBC'],
+                $dataConect['userODBC'],
+                $dataConect['passwordODBC']
             );
 
             if (!$conn) {
                 throw new \Exception('Error conexión ODBC: ' . odbc_errormsg());
             }
 
-            // FIJAR SCHEMA
             if (!odbc_exec($conn, 'SET SCHEMA "' . $dataConect['companyDB'] . '"')) {
                 throw new \Exception('Error SET SCHEMA: ' . odbc_errormsg($conn));
             }
 
-            // --------------------------------
-            // 3) SQL OBPL (Sucursales)
-            // --------------------------------
             $whereSearch = '';
             if (!empty($postData['searchTerm'])) {
                 $search = addslashes($postData['searchTerm']);
@@ -259,29 +280,22 @@ class Link_sap_branchofficeController extends BaseController {
                 AND (
                     "BPLName" LIKE \'%' . $search . '%\'
                     OR "BPLId" LIKE \'%' . $search . '%\'
-                )
-            ';
+                )';
             }
 
-
             $sql = '
-            SELECT
-                "BPLId",
-                "BPLName"
-            FROM OBPL
-            WHERE "Disabled" <> \'Y\'
-              ' . $whereSearch . '
-            ORDER BY "BPLId", "BPLName"
-        ';
+                SELECT "BPLId", "BPLName"
+                FROM OBPL
+                WHERE "Disabled" <> \'Y\'
+                  ' . $whereSearch . '
+                ORDER BY "BPLId", "BPLName"
+            ';
 
             $rs = odbc_exec($conn, $sql);
             if (!$rs) {
                 throw new \Exception('Error SQL: ' . odbc_errormsg($conn));
             }
 
-            // --------------------------------
-            // 4) Formatear respuesta (Select2)
-            // --------------------------------
             $data = [];
             $data[] = [
                 'id' => 0,
@@ -299,14 +313,13 @@ class Link_sap_branchofficeController extends BaseController {
             odbc_close($conn);
 
             $response['data'] = $data;
-
             return $this->response->setJSON($response);
         } catch (\Throwable $e) {
             return $this->response->setJSON([
-                        'token' => csrf_hash(),
-                        'data' => [],
-                        'error' => true,
-                        'message' => $e->getMessage()
+                'token'   => csrf_hash(),
+                'data'    => [],
+                'error'   => true,
+                'message' => $e->getMessage()
             ]);
         }
     }

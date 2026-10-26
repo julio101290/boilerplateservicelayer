@@ -2,8 +2,10 @@
 <?= $this->include('julio101290\boilerplate\Views\load\datatables') ?>
 <?= $this->include('julio101290\boilerplate\Views\load\nestable') ?>
 <?= $this->extend('julio101290\boilerplate\Views\layout\index') ?>
+
 <?= $this->section('content') ?>
 <?= $this->include('julio101290\boilerplateservicelayer\Views\modulesLink_sap_branchoffice/modalCaptureLink_sap_branchoffice') ?>
+
 <div class="card card-default">
     <div class="card-header">
         <div class="float-right">
@@ -28,7 +30,6 @@
                                 <th><?= lang('link_sap_branchoffice.fields.created_at') ?></th>
                                 <th><?= lang('link_sap_branchoffice.fields.updated_at') ?></th>
                                 <th><?= lang('link_sap_branchoffice.fields.deleted_at') ?></th>
-
                                 <th><?= lang('link_sap_branchoffice.fields.actions') ?></th>
                             </tr>
                         </thead>
@@ -40,6 +41,7 @@
     </div>
 </div>
 <?= $this->endSection() ?>
+
 <?= $this->section('js') ?>
 <script>
     var tableLink_sap_branchoffice = $('#tableLink_sap_branchoffice').DataTable({
@@ -53,28 +55,43 @@
             method: 'GET',
             dataType: "json"
         },
-        columnDefs: [{
-                orderable: false,
-                targets: [7],
-                searchable: false,
-                targets: [7]
-            }],
-        columns: [{'data': 'id'},
-            {'data': 'nombreEmpresa'},
-            {'data': 'idBranchOffice'},
-            {'data': 'idBranchOfficeSAP'},
-            {'data': 'created_at'},
-            {'data': 'updated_at'},
-            {'data': 'deleted_at'},
-
+        columnDefs: [
             {
-                "data": function (data) {
+                orderable: false,
+                searchable: false,
+                targets: [7] // Deshabilita orden y búsqueda en la columna de acciones
+            }
+        ],
+        columns: [
+            { 'data': 'id' },
+            { 'data': 'nombreEmpresa' },
+            { 
+                'data': 'nombreBranchOffice',
+                'render': function (data, type, row) {
+                    return row.idBranchOffice ? `${row.idBranchOffice} - ${data || 'Sin asignar'}` : 'Sin asignar';
+                }
+            },
+            { 
+                'data': 'nombreBranchOfficeSAP',
+                'render': function (data, type, row) {
+                    return data ? data : (row.idBranchOfficeSAP ?? 'N/A');
+                }
+            },
+            { 'data': 'created_at' },
+            { 'data': 'updated_at' },
+            { 'data': 'deleted_at' },
+            {
+                'data': function (data) {
                     return `<td class="text-right py-0 align-middle">
                          <div class="btn-group btn-group-sm">
-                             <button class="btn btn-warning btnEditLink_sap_branchoffice" data-toggle="modal" idLink_sap_branchoffice="${data.id}" data-target="#modalAddLink_sap_branchoffice">  <i class=" fa fa-edit"></i></button>
-                             <button class="btn btn-danger btn-delete" data-id="${data.id}"><i class="fas fa-trash"></i></button>
+                             <button class="btn btn-warning btnEditLink_sap_branchoffice" data-toggle="modal" idLink_sap_branchoffice="${data.id}" data-target="#modalAddLink_sap_branchoffice">
+                                 <i class="fa fa-edit"></i>
+                             </button>
+                             <button class="btn btn-danger btn-delete" data-id="${data.id}">
+                                 <i class="fas fa-trash"></i>
+                             </button>
                          </div>
-                         </td>`
+                     </td>`;
                 }
             }
         ]
@@ -132,6 +149,7 @@
         var idLink_sap_branchoffice = $(this).attr("idLink_sap_branchoffice");
         var datos = new FormData();
         datos.append("idLink_sap_branchoffice", idLink_sap_branchoffice);
+        
         $.ajax({
             url: "<?= base_url('admin/link_sap_branchoffice/getLink_sap_branchoffice') ?>",
             method: "POST",
@@ -144,22 +162,25 @@
                 $("#idLink_sap_branchoffice").val(respuesta["id"]);
                 $("#idEmpresa").val(respuesta["idEmpresa"]).trigger("change");
                 
-                
-                
+                // Sucursal Local
                 $("#idBranchOffice").val(respuesta["idBranchOffice"]);
-                var newOptionBranchoffice = new Option(respuesta["idBranchOffice"] + ' ' + respuesta["descriptionBranchofficelocal"], respuesta["idBranchOffice"], true, true);
+                var newOptionBranchoffice = new Option(
+                    respuesta["idBranchOffice"] + ' ' + (respuesta["descriptionBranchofficelocal"] || ''), 
+                    respuesta["idBranchOffice"], 
+                    true, 
+                    true
+                );
                 $('#idBranchOffice').append(newOptionBranchoffice).trigger('change');
-                $("#idBranchOffice").val(respuesta["idBranchOffice"]);
                 
-                
-                
-                
+                // Sucursal SAP
                 $("#idBranchOfficeSAP").val(respuesta["idBranchOfficeSAP"]);
-                
-                 var newOptionBranchofficeSAP = new Option(respuesta["idBranchOfficeSAP"] + ' ' + respuesta["descriptionBranchOfficeSAP"], respuesta["idBranchOfficeSAP"], true, true);
+                var newOptionBranchofficeSAP = new Option(
+                    respuesta["descriptionBranchOfficeSAP"] || (respuesta["idBranchOfficeSAP"] + ' - N/A'), 
+                    respuesta["idBranchOfficeSAP"], 
+                    true, 
+                    true
+                );
                 $('#idBranchOfficeSAP').append(newOptionBranchofficeSAP).trigger('change');
-                $("#idBranchOfficeSAP").val(respuesta["idBranchOfficeSAP"]);
-
             }
         });
     });
@@ -188,7 +209,7 @@
                 }).fail((error) => {
                     Toast.fire({
                         icon: 'error',
-                        title: error.responseJSON.messages.error,
+                        title: error.responseJSON?.messages?.error || "Error al eliminar",
                     });
                 });
             }

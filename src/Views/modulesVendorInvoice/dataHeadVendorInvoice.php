@@ -220,37 +220,37 @@
 
                                                 $list .= <<<EOF
                                                     
-                                                <div class="form-group row nuevoProduct"><div class="col-1"> <button type="button" class="btn btn-danger quitProduct"><span class="far fa-trash-alt"></button>
-                                                <button type="button"  data-toggle="modal" data-target="#modelMoreInfoRow" class="btn btn-primary  btnInfo" ><span class="fa fa-fw fa-pencil-alt"></span></button>
-                                                </div>
-                                                <div class="col-1"> <input type="text" id="codeProduct" class="form-control codeProduct" name="codeProduct" value="$value[codeProduct]" required=""> 
-                                                <input type="hidden" id="claveProductoSATR" class="form-control claveProductoSATR"  name="claveProductoSATR" value="$value[claveProductoSAT]" required="">
-                                                <input type="hidden" id="claveUnidadSatR" class="form-control claveUnidadSatR"  name="claveUnidadSatR" value="$value[claveUnidadSAT]" required="">
-                                                <input type="hidden" id="unidad" class="form-control unidad"  name="unidad" value="$value[unidad]" required="">
-                                                <input type="hidden" id="lote" class="form-control lote"  name="lote" value="$value[lote]" required="">    
-                                                <input type="hidden" id="idAlmacen" class="form-control idAlmacen"  name="idAlmacen" value="$value[idAlmacen]" required="">
-                                                    
-                                                </div>
-                                                <div class="col-7"> <input type="text" id="description" class="form-control description" idproducto="$value[idProduct]" name="description" value="$value[description]" required=""> </div>
-                                                <div class="col-1"> <input type="number" id="cant" class="form-control cant" name="cant" value="$value[cant]" required=""> 
-                                                
-                                                <input type="hidden" id="porcentIVARetenido" class="form-control porcentIVARetenido" name="porcentIVARetenido" value="$value[porcentIVARetenido]" required="">
-                                                <input type="hidden" id="porcentISRRetenido" class="form-control porcentISRRetenido" name="porcentISRRetenido" value="$value[porcentISRRetenido]" required="">
-                                                <input type="hidden" id="porcentTax" class="form-control porcentTax" name="porcentTax" value="$value[porcentTax]" required=""></div>
-                                                <div class="col-1"> <input type="number" id="price" class="form-control price" name="price" value="$value[price]" required="">
-                                                
-                                                <input type="hidden" id="IVARetenido" class="form-control IVARetenido" name="IVARetenido" value="$value[IVARetenido]" required="">
-                                                <input type="hidden" id="ISRRetenido" class="form-control ISRRetenido" name="ISRRetenido" value="$value[ISRRetenido]" required="">
-                                                        
-                                                <input type="hidden" id="tasaExcenta" class="form-control tasaExcenta" name="tasaExcenta" value='$value[valorTasaExenta]' required="">        
-                                                
-                                                <input type="hidden" id="predialR" class="form-control predialR" name="predialR" value='$value[predial]' required="">
-                                                        
-                                                        
-                                                <input type="hidden" id="tax" class="form-control tax" name="tax" value="$value[tax]" required=""> </div>
-                                                <div class="col-1"> <input readonly="" type="number" id="total" class="form-control total" name="total" value="$value[total]" required="">
-                                                <input type="hidden" id="neto" class="form-control neto" name="neto" value="$value[neto]" required="">
-                                                </div></div>
+                                                    <div class="form-group row nuevoProduct"><div class="col-1"> <button type="button" class="btn btn-danger quitProduct"><span class="far fa-trash-alt"></button>
+                                                    <button type="button"  data-toggle="modal" data-target="#modelMoreInfoRow" class="btn btn-primary  btnInfo" ><span class="fa fa-fw fa-pencil-alt"></span></button>
+                                                    </div>
+                                                    <div class="col-1"> <input type="text" id="codeProduct" class="form-control codeProduct" name="codeProduct" value="$value[codeProduct]" required=""> 
+                                                    <input type="hidden" id="claveProductoSATR" class="form-control claveProductoSATR"  name="claveProductoSATR" value="$value[claveProductoSAT]" required="">
+                                                    <input type="hidden" id="claveUnidadSatR" class="form-control claveUnidadSatR"  name="claveUnidadSatR" value="$value[claveUnidadSAT]" required="">
+                                                    <input type="hidden" id="unidad" class="form-control unidad"  name="unidad" value="$value[unidad]" required="">
+                                                    <input type="hidden" id="lote" class="form-control lote"  name="lote" value="$value[lote]" required="">    
+                                                    <input type="hidden" id="idAlmacen" class="form-control idAlmacen"  name="idAlmacen" value="$value[idAlmacen]" required="">
+
+                                                    </div>
+                                                    <div class="col-7"> <input type="text" id="description" class="form-control description" idproducto="$value[idProduct]" name="description" value="$value[description]" required=""> </div>
+                                                    <div class="col-1"> <input type="number" id="cant" class="form-control cant" name="cant" value="$value[cant]" required=""> 
+
+                                                    <input type="hidden" id="porcentIVARetenido" class="form-control porcentIVARetenido" name="porcentIVARetenido" value="$value[porcentIVARetenido]" required="">
+                                                    <input type="hidden" id="porcentISRRetenido" class="form-control porcentISRRetenido" name="porcentISRRetenido" value="$value[porcentISRRetenido]" required="">
+                                                    <input type="hidden" id="porcentTax" class="form-control porcentTax" name="porcentTax" value="$value[porcentTax]" required=""></div>
+                                                    <div class="col-1"> <input type="number" id="price" class="form-control price" name="price" value="$value[price]" required="">
+
+                                                    <input type="hidden" id="IVARetenido" class="form-control IVARetenido" name="IVARetenido" value="$value[IVARetenido]" required="">
+                                                    <input type="hidden" id="ISRRetenido" class="form-control ISRRetenido" name="ISRRetenido" value="$value[ISRRetenido]" required="">
+
+                                                    <input type="hidden" id="tasaExcenta" class="form-control tasaExcenta" name="tasaExcenta" value='$value[valorTasaExenta]' required="">        
+
+                                                    <input type="hidden" id="predialR" class="form-control predialR" name="predialR" value='$value[predial]' required="">
+
+
+                                                    <input type="hidden" id="tax" class="form-control tax" name="tax" value="$value[tax]" required=""> </div>
+                                                    <div class="col-1"> <input readonly="" type="number" id="total" class="form-control total" name="total" value="$value[total]" required="">
+                                                    <input type="hidden" id="neto" class="form-control neto" name="neto" value="$value[neto]" required="">
+                                                    </div></div>
                                                     
                                                     
                                             EOF;
@@ -1634,9 +1634,6 @@
 
         function listProducts() {
 
-
-
-
             var listProducts = [];
 
             var description = $(".description");
@@ -1663,6 +1660,12 @@
 
             var predial = $(".predialR");
 
+            // Campos SAP por renglón
+            var itemCode = $(".itemCode");
+            var prjCode = $(".prjCode");
+            var ocrCode = $(".ocrCode");
+            var ocrCode2 = $(".ocrCode2");
+
             var subTotal = 0;
             var impuesto = 0;
             var netoTotal = 0;
@@ -1675,11 +1678,7 @@
             var valorTasaExenta = "";
 
 
-
-
             for (var i = 0; i < description.length; i++) {
-
-
 
                 console.log("Tasa Excenta", $(tasaExcenta[i]).val());
 
@@ -1728,6 +1727,12 @@
 
                     "predial": $(predial[i]).val(),
 
+                    // Nuevos campos SAP
+                    "itemCode": $(itemCode[i]).val(),
+                    "prjCode": $(prjCode[i]).val(),
+                    "ocrCode": $(ocrCode[i]).val(),
+                    "ocrCode2": $(ocrCode2[i]).val(),
+
                     "neto": $(neto[i]).val(),
                     "unidad": $(unidad[i]).val(),
                     "total": $(total[i]).val()
@@ -1747,22 +1752,13 @@
 
                 }
 
-
-
                 if (IVARetenido > 0) {
-
-
-
                     $(".grupoTotalRetencionIVA").removeAttr("hidden");
-
                 }
 
                 if (ISRRetenido > 0) {
-
                     $(".grupoTotalRetencionISR").removeAttr("hidden");
-
                 }
-
 
             }
 
@@ -1775,8 +1771,7 @@
 
             $("#totalExento").val(totalExcento);
 
-            //Asignamos el JSON en el input
-
+            // Asignamos el JSON en el input
             $("#listProducts").val(JSON.stringify(listProducts));
 
         }

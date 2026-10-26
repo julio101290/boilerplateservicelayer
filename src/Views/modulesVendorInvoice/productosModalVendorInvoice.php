@@ -44,8 +44,6 @@
 
 
 <?= $this->section('js') ?>
-
-
 <script>
     var tableProducts = $('#table-products').DataTable({
         processing: true,
@@ -54,7 +52,6 @@
         order: [
             [1, 'asc']
         ],
-
         ajax: {
             url: '<?= base_url('admin/products/getAllProducts') ?>/0',
             method: 'GET',
@@ -62,36 +59,20 @@
         },
         columnDefs: [{
                 orderable: false,
-                targets: [5, 6],
                 searchable: false,
                 targets: [5, 6]
-
             }],
-        columns: [{
-                'data': 'id'
-            },
-            {
-                'data': 'description'
-            },
-
-            {
-                'data': 'lote'
-            },
-
-            {
-                'data': 'almacen'
-            },
-
-            {
-                'data': 'stock'
-            },
+        columns: [
+            { 'data': 'id' },
+            { 'data': 'description' },
+            { 'data': 'lote' },
+            { 'data': 'almacen' },
+            { 'data': 'stock' },
             {
                 "data": function (data) {
-
                     if (data.routeImage == "") {
                         data.routeImage = "anonymous.png";
                     }
-
                     return `<td class="text-right py-0 align-middle">
                          <div class="btn-group btn-group-sm">
                          <img src="<?= base_URL("images/products") ?>/${data.routeImage}" data-action="zoom" width="40px" class="" style="">
@@ -99,7 +80,6 @@
                          </td>`
                 }
             },
-
             {
                 "data": function (data) {
                     return `<td class="text-right py-0 align-middle">
@@ -114,13 +94,9 @@
 
 
     /**
-     * Evento al hacer click al boton btnAgregarDiagnostico
+     * Evento al hacer click al boton btnAddProduct
      */
-
-
     $("#table-products").on("click", ".btnAddProduct", function () {
-
-
 
         var idProduct = $(this).attr("data-id");
         var description = $(this).attr("description");
@@ -137,48 +113,30 @@
         var tasaExcenta = $(this).attr("tasaExcenta");
         var predial = $(this).attr("predial");
 
-
-
-
         if (porcentTax > 0) {
-
             var tax = ((porcentTax * 0.01)) * salePrice;
-
-
-
         } else {
-
             var tax = 0;
         }
 
         if (porcentIVARetenido > 0) {
-
             var IVARetenido = ((porcentIVARetenido * 0.01)) * salePrice;
             $(".grupoTotalRetencionIVA").removeAttr("hidden");
-
         } else {
-
             var IVARetenido = 0;
-
         }
 
         if (porcentISRRetenido > 0) {
-
             var ISRRetenido = ((porcentISRRetenido * 0.01)) * salePrice;
             $(".grupoTotalRetencionISR").removeAttr("hidden");
-
         } else {
-
             var ISRRetenido = 0;
-
         }
-
 
         var neto = (((porcentTax * 0.01) + 1) * salePrice) - (IVARetenido + ISRRetenido);
 
-
         /**
-         * Agregando registros
+         * Agregando registros con los campos ocultos SAP
          */
         var renglon = "<div class=\"form-group row nuevoProduct\">";
         renglon = renglon + "<div class =\"col-1\"> <button type=\"button\" class=\"btn btn-danger quitProduct\" ><span class=\"far fa-trash-alt\"></span></button> ";
@@ -190,17 +148,20 @@
         renglon = renglon + "<input type=\"hidden\" id=\"unidad\" class=\"form-control unidad\"  name=\"unidad\" value=\"" + unidad + "\" required=\"\">";
         renglon = renglon + "<input type=\"hidden\" id=\"tasaExcenta\" class=\"form-control tasaExcenta\"  name=\"tasaExcenta\" value=\"" + tasaExcenta + "\" required=\"\">";
         renglon = renglon + "<input type=\"hidden\" id=\"predialR\" class=\"form-control predialR\"  name=\"predialR\" value=\"" + predial + "\" required=\"\">";
+        
+        // Inputs ocultos para campos SAP
+        renglon = renglon + "<input type=\"hidden\" id=\"itemCode\" class=\"form-control itemCode\"  name=\"itemCode\" value=\"\" required=\"\">";
+        renglon = renglon + "<input type=\"hidden\" id=\"prjCode\" class=\"form-control prjCode\"  name=\"prjCode\" value=\"\" required=\"\">";
+        renglon = renglon + "<input type=\"hidden\" id=\"ocrCode\" class=\"form-control ocrCode\"  name=\"ocrCode\" value=\"\" required=\"\">";
+        renglon = renglon + "<input type=\"hidden\" id=\"ocrCode2\" class=\"form-control ocrCode2\"  name=\"ocrCode2\" value=\"\" required=\"\">";
+
         renglon = renglon + "<input type=\"text\" id=\"codeProduct\" class=\"form-control codeProduct\"  name=\"codeProduct\" value=\"" + codeProduct + "\" required=\"\"> </div>";
         renglon = renglon + "<div class =\"col-7\"> <input type=\"text\" id=\"description\" class=\"form-control description\" idProducto =\"" + idProduct + "\" name=\"description\" value=\"" + description + "\" required=\"\"> </div>";
         renglon = renglon + "<div class =\"col-1\"> <input type=\"number\" id=\"cant\" class=\"form-control cant\"name=\"cant\" value=\"1\" required=\"\"><input type=\"hidden\" id=\"porcentIVARetenido\" class=\"form-control porcentIVARetenido\"name=\"porcentIVARetenido\" value=\"" + porcentIVARetenido + "\" required=\"\"><input type=\"hidden\" id=\"porcentISRRetenido\" class=\"form-control porcentISRRetenido\"name=\"porcentISRRetenido\" value=\"" + porcentISRRetenido + "\" required=\"\"> <input type=\"hidden\" id=\"porcentTax\" class=\"form-control porcentTax\"name=\"porcentTax\" value=\"" + porcentTax + "\" required=\"\"></div>";
         renglon = renglon + "<div class =\"col-1\"> <input type=\"number\" id=\"price\" class=\"form-control price\"name=\"price\" value=\"" + salePrice + "\" required=\"\"> <input type=\"hidden\" id=\"IVARetenido\" class=\"form-control IVARetenido\"name=\"IVARetenido\" value=\"" + IVARetenido + "\" required=\"\"><input type=\"hidden\" id=\"ISRRetenido\" class=\"form-control ISRRetenido\"name=\"ISRRetenido\" value=\"" + ISRRetenido + "\" required=\"\"> <input type=\"hidden\" id=\"tax\" class=\"form-control tax\"name=\"tax\" value=\"" + tax + "\" required=\"\"> </div>";
-
-
         renglon = renglon + "<div class =\"col-1\"> <input readonly type=\"number\" id=\"total\" class=\"form-control total\" name=\"total\" value=\"" + salePrice + "\" required=\"\"> <input type=\"hidden\" id=\"neto\" class=\"form-control neto\" name=\"neto\" value=\"" + neto + "\" required=\"\"></div></div>";
 
         $(".rowProducts").append(renglon);
-
-
 
         listProducts();
 
@@ -210,24 +171,9 @@
 
     var nombreDiv = "";
 
-
     /**
-     * Eliminar Renglon Diagnostico
+     * Mas datos Producto (Abrir Modal de Renglón y cargar valores)
      */
-
-    $(".rowProducts").on("click", ".quitProduct", function () {
-
-        $(this).parent().parent().remove();
-
-        listProducts();
-
-    });
-
-
-    /**
-     * Mas datos Producto
-     */
-
     $(".rowProducts").on("click", ".btnInfo", function () {
 
         nombreDiv = $(this);
@@ -238,12 +184,16 @@
         var tasaExcenta = $(this).parent().parent().find(".tasaExcenta").val();
         var predial = $(this).parent().parent().find(".predialR").val();
 
+        var itemCodeVal = $(this).parent().parent().find(".itemCode").val();
+        var prjCodeVal = $(this).parent().parent().find(".prjCode").val();
+        var ocrCodeVal = $(this).parent().parent().find(".ocrCode").val();
+        var ocrCode2Val = $(this).parent().parent().find(".ocrCode2").val();
 
         var porcIva = $(this).parent().parent().find(".porcentTax").val();
-
         var porcentIVARetenido = $(this).parent().parent().find(".porcentIVARetenido").val();
         var porcentISRRetenido = $(this).parent().parent().find(".porcentISRRetenido").val();
 
+        // Cargar SAT y Unidad
         var newOption = new Option(unidadSAT, unidadSAT, true, true);
         $('#unidadSATRow').append(newOption).trigger('change');
         $("#unidadSATRow").val(unidadSAT);
@@ -254,127 +204,132 @@
 
         $("#unidadProducto").val(unidad);
 
+        // Cargar SAP Select2 dinámicamente si tienen valor
+        if (itemCodeVal) {
+            $('#itemCodeRenglon').append(new Option(itemCodeVal, itemCodeVal, true, true)).trigger('change');
+        } else {
+            $('#itemCodeRenglon').val('0').trigger('change');
+        }
+
+        if (prjCodeVal) {
+            $('#prjCodeRenglon').append(new Option(prjCodeVal, prjCodeVal, true, true)).trigger('change');
+        } else {
+            $('#prjCodeRenglon').val('0').trigger('change');
+        }
+
+        if (ocrCodeVal) {
+            $('#ocrCodeRenglon').append(new Option(ocrCodeVal, ocrCodeVal, true, true)).trigger('change');
+        } else {
+            $('#ocrCodeRenglon').val('0').trigger('change');
+        }
+
+        if (ocrCode2Val) {
+            $('#ocrCode2Renglon').append(new Option(ocrCode2Val, ocrCode2Val, true, true)).trigger('change');
+        } else {
+            $('#ocrCode2Renglon').val('0').trigger('change');
+        }
+
         $("#porcentTaxRenglon").val(porcIva);
         $("#porcentIVARetenidoRenglon").val(porcentIVARetenido);
         $("#porcentISRRetenidoRenglon").val(porcentISRRetenido);
-
         $("#predialRenglon").val(predial);
-
         $("#tasaExcentaRenglon").bootstrapToggle(tasaExcenta);
-
-
-
-
-
     });
 
+    /**
+     * Guardar Renglon (Actualizar valores desde el modal hacia la fila)
+     */
+    $(document).on('click', '.btnGuardarRenglon', function (e) {
+        if (!nombreDiv) return;
 
+        nombreDiv.parent().parent().find(".claveUnidadSatR").val($("#unidadSATRow").val());
+        nombreDiv.parent().parent().find(".claveProductoSATR").val($("#claveProductoSATRow").val());
+        nombreDiv.parent().parent().find(".unidadProducto").val($("#unidadProducto").val());
 
+        /**
+         * Impuestos
+         */
+        nombreDiv.parent().parent().find(".porcentTax").val($("#porcentTaxRenglon").val());
+        nombreDiv.parent().parent().find(".porcentIVARetenido").val($("#porcentIVARetenidoRenglon").val());
+        nombreDiv.parent().parent().find(".porcentISRRetenido").val($("#porcentISRRetenidoRenglon").val());
+        nombreDiv.parent().parent().find(".predialR").val($("#predialRenglon").val());
+
+        /**
+         * SAP Fields
+         */
+        nombreDiv.parent().parent().find(".itemCode").val($("#itemCodeRenglon").val());
+        nombreDiv.parent().parent().find(".prjCode").val($("#prjCodeRenglon").val());
+        nombreDiv.parent().parent().find(".ocrCode").val($("#ocrCodeRenglon").val());
+        nombreDiv.parent().parent().find(".ocrCode2").val($("#ocrCode2Renglon").val());
+
+        if ($("#tasaExcentaRenglon").is(':checked')) {
+            var tasaExentaRenglon = "on";
+        } else {
+            var tasaExentaRenglon = "off";
+        }
+
+        nombreDiv.parent().parent().find(".tasaExcenta").val(tasaExentaRenglon);
+        nombreDiv.parent().parent().find(".cant").trigger("change");
+
+        listProducts();
+    });
 
     /**
-     * Eliminar Renglon Diagnostico
+     * Eliminar Renglon
      */
-
     $(".rowProducts").on("click", ".quitProduct", function () {
-
-
-
         $(this).parent().parent().remove();
-
         listProducts();
-
     });
-
-
 
     /**
      * Cambia Cantidad
      */
-
     $(".rowProducts").on("change", ".cant", function () {
-
-
         var cant = Number($(this).val());
-
-
-
         precio = $(this).parent().parent().find(".price").val();
-
         total = Number(cant) * Number(precio);
-
         porcIva = Number($(this).parent().parent().find(".porcentTax").val()) * 0.01;
-
         porcIVARetenido = Number($(this).parent().parent().find(".porcentIVARetenido").val()) * 0.01;
-
         porcISRRetenido = Number($(this).parent().parent().find(".porcentISRRetenido").val()) * 0.01;
 
         impuesto = (porcIva) * Number(total);
-
         IVARetenido = (porcIVARetenido) * Number(total);
-
         ISRRetenido = (porcISRRetenido) * Number(total);
-
         neto = ((porcIva + 1) * Number(total)) - (IVARetenido + ISRRetenido);
 
         $(this).parent().parent().find(".total").val(total);
-
         $(this).parent().parent().find(".neto").val(neto);
-
         $(this).parent().parent().find(".tax").val(impuesto);
-
         $(this).parent().parent().find(".IVARetenido").val(IVARetenido);
-
         $(this).parent().parent().find(".ISRRetenido").val(ISRRetenido);
 
         listProducts();
-
     });
 
-
     /**
-     * Cambia Cantidad
+     * Cambia Precio
      */
-
     $(".rowProducts").on("change", ".price", function () {
-
-
         var precio = Number($(this).val());
-
-
-
         cant = $(this).parent().parent().find(".cant").val();
-
         total = Number(cant) * Number(precio);
-
         porcIva = Number($(this).parent().parent().find(".porcentTax").val()) * 0.01;
-
         porcIVARetenido = Number($(this).parent().parent().find(".porcentIVARetenido").val()) * 0.01;
-
         porcISRRetenido = Number($(this).parent().parent().find(".porcentISRRetenido").val()) * 0.01;
 
-
         IVARetenido = (porcIVARetenido) * Number(total);
-
         ISRRetenido = (porcISRRetenido) * Number(total);
-
         neto = ((porcIva + 1) * Number(total)) - (IVARetenido + ISRRetenido);
-
         impuesto = (porcIva) * Number(total);
 
         $(this).parent().parent().find(".total").val(total);
-
         $(this).parent().parent().find(".neto").val(neto);
-
         $(this).parent().parent().find(".tax").val(impuesto);
-
         $(this).parent().parent().find(".IVARetenido").val(IVARetenido);
-
         $(this).parent().parent().find(".ISRRetenido").val(ISRRetenido);
 
         listProducts();
-
     });
 </script>
-
-
 <?= $this->endSection() ?>

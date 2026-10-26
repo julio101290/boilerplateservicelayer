@@ -595,4 +595,26 @@ $routes->group('admin', function ($routes) {
         'namespace' => 'julio101290\boilerplateservicelayer\Controllers',
         'filter' => 'permission:sapvouchers'
     ]);
+    
+    
+    // Buscadores AJAX SAP para renglones de Factura de Proveedor
+    $routes->post('vendorInvoice/getItemCodeAjax',
+            'VendorInvoiceController::getItemCodeAjax',
+            ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    $routes->post('vendorInvoice/getPrjCodeAjax',
+            'VendorInvoiceController::getPrjCodeAjax',
+            ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    $routes->post('vendorInvoice/getOcrCodeAjax',
+            'VendorInvoiceController::getOcrCodeAjax',
+            ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    $routes->post('vendorInvoice/getOcrCode2Ajax',
+            'VendorInvoiceController::getOcrCode2Ajax',
+            ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
 });

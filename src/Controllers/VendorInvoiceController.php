@@ -4,12 +4,15 @@ namespace julio101290\boilerplateservicelayer\Controllers;
 
 use App\Controllers\BaseController;
 use CodeIgniter\API\ResponseTrait;
+use Exception;
+use Throwable;
 use App\Models\UserModel;
 use julio101290\boilerplatelog\Models\LogModel;
 use julio101290\boilerplateproducts\Models\ProductsModel;
 use julio101290\boilerplatequotes\Models\QuotesModel;
 use julio101290\boilerplateservicelayer\Models\VendorInvoiceModel;
 use julio101290\boilerplateservicelayer\Models\VendorInvoiceDetailsModel;
+use julio101290\boilerplateservicelayer\Models\SapservicelayerModel;
 use julio101290\boilerplatestorages\Models\StoragesModel;
 use julio101290\boilerplatecompanies\Models\EmpresasModel;
 use julio101290\boilerplatecustumers\Models\CustumersModel;
@@ -33,6 +36,7 @@ class VendorInvoiceController extends BaseController {
     protected $log;
     protected $vendorInvoice;
     protected $vendorInvoiceDetail;
+    protected $serviceLayerModel;
     protected $storages;
     protected $sucursales;
     protected $empresa;
@@ -58,6 +62,7 @@ class VendorInvoiceController extends BaseController {
         $this->log = new LogModel();
         $this->vendorInvoice = new VendorInvoiceModel();
         $this->vendorInvoiceDetail = new VendorInvoiceDetailsModel();
+        $this->serviceLayerModel = new SapservicelayerModel();
         $this->empresa = new EmpresasModel();
         $this->user = new UserModel();
         $this->custumer = new CustumersModel();
@@ -637,11 +642,6 @@ class VendorInvoiceController extends BaseController {
         $authorize = service('authorization');
         $permisoAgregarArticulo = $authorize->hasPermission('capturaarticulodesdeventa', $idUser);
 
-        /*
-         * Search UUID in table if exists not continue
-         */
-
-        // 1. Validar si ya existe una factura de proveedor registrada con este UUID
         $existeFactura = $this->vendorInvoice
                 ->where('UUID', $uuid)
                 ->countAllResults();
@@ -651,56 +651,24 @@ class VendorInvoiceController extends BaseController {
                             ->with('error', 'El CFDI con UUID ' . $uuid . ' ya fue registrado previamente.');
         }
 
-
         $invoice = $this->xml->select("*")->where("uuidTimbre", $uuid)->get()->getResultArray();
-
         $invoice = $invoice[0];
 
         /*
          * EXTRACT DATA FROM CFDI XML
          */
-
         $xml = \PhpCfdi\CfdiCleaner\Cleaner::staticClean($invoice["archivoXML"]);
-
-        // create the main node structure
         $comprobante = \CfdiUtils\Nodes\XmlNodeUtils::nodeFromXmlString($xml);
-
-        // create the CfdiData object, it contains all the required information
-        $cfdiData = (new \PhpCfdi\CfdiToPdf\CfdiDataBuilder())
-                ->build($comprobante);
+        $cfdiData = (new \PhpCfdi\CfdiToPdf\CfdiDataBuilder())->build($comprobante);
 
         $emisor = $cfdiData->emisor();
         $receptor = $cfdiData->receptor();
-
-        // VALIDAMOS STATUS EN EL SAT
-
-        /*
-          try {
-
-          $client = new SoapConsumerClient();
-          $consumer = new Consumer($client);
-
-          $cfdiStatus = $consumer->execute($cfdiData->qrUrl());
-
-          if ($cfdiStatus->document()->isActive()) {
-          $datosXML["status"] = 'vigente';
-          } else {
-          $datosXML["status"] = 'cancelado';
-          }
-          } catch (Exception $ex) {
-
-          }
-
-         */
-
         $tfd = $cfdiData->timbreFiscalDigital();
 
         $totalImpuestosTrasladados = $comprobante->searchAttribute('cfdi:Impuestos', 'TotalImpuestosTrasladados');
         $totalImpuestosRetenidos = $comprobante->searchAttribute('cfdi:Impuestos', 'TotalImpuestosRetenidos');
 
-        //CHECK IF EXISTS VENDOR IN CATALOG
-        // 1. Verificar si el proveedor ya existe para esa empresa
-        // 1. Verificar existencia
+        // CHECK IF EXISTS VENDOR IN CATALOG
         $countProveedores = $this->suppliers
                 ->where('taxID', $invoice['rfcEmisor'])
                 ->where('idEmpresa', $invoice['idEmpresa'])
@@ -717,27 +685,10 @@ class VendorInvoiceController extends BaseController {
                 'usoCFDI' => $invoice['usoCFDI'] ?? null,
             ];
 
-            // Intentar insertar
             if ($this->suppliers->insert($nuevoProveedor) === false) {
-                // Opción A: Errores por reglas de validación del Modelo
                 $erroresValidacion = $this->suppliers->errors();
-
-                // Opción B: Error a nivel SQL / Driver de base de datos
                 $dbError = $this->suppliers->db->error();
-
                 $mensajeError = !empty($erroresValidacion) ? implode(', ', $erroresValidacion) : ($dbError['message'] ?? 'Error desconocido al guardar el proveedor');
-
-                // Manejo según tu flujo: lanzar excepción o retornar respuesta JSON
-                // log_message('error', 'Error al insertar proveedor: ' . $mensajeError);
-                // Si estás en un controlador API / AJAX:
-                /*
-                  return $this->response->setJSON([
-                  'status'  => 'error',
-                  'message' => 'No se pudo crear el proveedor: ' . $mensajeError
-                  ])->setStatusCode(400);
-                 */
-
-                // O lanzar excepción para detener el proceso:
                 throw new \RuntimeException('Error al crear el proveedor: ' . $mensajeError);
             }
 
@@ -751,19 +702,13 @@ class VendorInvoiceController extends BaseController {
             $idProveedor = $proveedorExistente['id'];
         }
 
-
-        // VERIFICAR QUE NO EXISTA
-        //   $listProducts = json_decode($invoice["listProducts"], true);
-
         $listProducts = [];
         $conceptos = $comprobante->searchNodes('cfdi:Conceptos', 'cfdi:Concepto');
         foreach ($conceptos as $concepto) {
-            // 1. Valores base del concepto
             $cantidad = (float) ($concepto['Cantidad'] ?? 1);
             $valorUnitario = (float) ($concepto['ValorUnitario'] ?? 0);
             $importe = (float) ($concepto['Importe'] ?? ($cantidad * $valorUnitario));
 
-            // 2. Inicialización de impuestos
             $porcentTax = 0.0;
             $tax = 0.0;
             $porcentIVARetenido = 0.0;
@@ -771,7 +716,6 @@ class VendorInvoiceController extends BaseController {
             $porcentISRRetenido = 0.0;
             $isrRetenido = 0.0;
 
-            // 3. Extraer Traslados (IVA trasladado: impuesto = '002')
             $traslados = $concepto->searchNodes('cfdi:Impuestos', 'cfdi:Traslados', 'cfdi:Traslado');
             foreach ($traslados as $traslado) {
                 if (($traslado['Impuesto'] ?? '') === '002') {
@@ -781,28 +725,25 @@ class VendorInvoiceController extends BaseController {
                 }
             }
 
-            // 4. Extraer Retenciones (IVA: '002', ISR: '001')
             $retenciones = $concepto->searchNodes('cfdi:Impuestos', 'cfdi:Retenciones', 'cfdi:Retencion');
             foreach ($retenciones as $retencion) {
                 $impuestoTipo = $retencion['Impuesto'] ?? '';
                 $tasaCuota = (float) ($retencion['TasaOCuota'] ?? 0);
                 $impRetenido = (float) ($retencion['Importe'] ?? 0);
 
-                if ($impuestoTipo === '002') { // IVA Retenido
+                if ($impuestoTipo === '002') {
                     $porcentIVARetenido = $tasaCuota * 100;
                     $ivaRetenido += $impRetenido;
-                } elseif ($impuestoTipo === '001') { // ISR Retenido
+                } elseif ($impuestoTipo === '001') {
                     $porcentISRRetenido = $tasaCuota * 100;
                     $isrRetenido += $impRetenido;
                 }
             }
 
-            // 5. Cálculo del importe neto (Subtotal + Traslados - Retenciones)
             $neto = $importe + $tax - $ivaRetenido - $isrRetenido;
 
-            // 6. Armar estructura esperada por tu base de datos
             $listProducts[] = [
-                'idProduct' => '0', // 0 o null si es compra/gasto libre sin catálogo previo
+                'idProduct' => '0',
                 'description' => (string) $concepto['Descripcion'],
                 'codeProduct' => (string) ($concepto['NoIdentificacion'] ?? ''),
                 'cant' => (string) $cantidad,
@@ -818,22 +759,22 @@ class VendorInvoiceController extends BaseController {
                 'neto' => number_format($neto, 2, '.', ''),
                 'unidad' => (string) ($concepto['Unidad'] ?? ''),
                 'total' => number_format($importe, 2, '.', ''),
+                'itemCode' => '',
+                'prjCode' => '',
+                'ocrCode' => '',
+                'ocrCode2' => '',
             ];
         }
-
 
         /*
          * Taxes
          */
-        // 1. Extraer totales directos con valor por defecto 0.00 si no existen
         $totalTraslados = (float) ($comprobante->searchAttribute('cfdi:Impuestos', 'TotalImpuestosTrasladados') ?? 0);
         $totalRetenciones = (float) ($comprobante->searchAttribute('cfdi:Impuestos', 'TotalImpuestosRetenidos') ?? 0);
 
-// 2. Desglosar retenciones entre IVA (002) e ISR (001)
         $ivaRetenido = 0.0;
         $isrRetenido = 0.0;
 
-// Buscar el nodo cfdi:Impuestos en la raíz y sus retenciones hijas
         $nodoImpuestos = $comprobante->searchNode('cfdi:Impuestos');
 
         if ($nodoImpuestos !== null) {
@@ -850,10 +791,7 @@ class VendorInvoiceController extends BaseController {
             }
         }
 
-// 3. Fallback de seguridad: si no hubo desglose pero sí un total global de retenciones
-// (o si el comprobante no traía cfdi:Impuestos global, sumarlo desde $listProducts)
         if ($totalRetenciones > 0 && ($ivaRetenido + $isrRetenido) === 0.0) {
-            // Si ya procesaste $listProducts previamente:
             if (!empty($listProducts)) {
                 $ivaRetenido = array_sum(array_column($listProducts, 'IVARetenido'));
                 $isrRetenido = array_sum(array_column($listProducts, 'ISRRetenido'));
@@ -901,7 +839,6 @@ class VendorInvoiceController extends BaseController {
         $totalExento = 0.0;
         $totalTasaCero = 0.0;
 
-// 1. Revisar los traslados en los conceptos (o en cfdi:Impuestos)
         foreach ($conceptos as $concepto) {
             $traslados = $concepto->searchNodes('cfdi:Impuestos', 'cfdi:Traslados', 'cfdi:Traslado');
 
@@ -918,7 +855,6 @@ class VendorInvoiceController extends BaseController {
             }
         }
 
-// 2. Guardar en $invoice
         $invoice['totalExento'] = $totalExento;
         $invoice['tasaCero'] = $totalTasaCero;
 
@@ -934,8 +870,6 @@ class VendorInvoiceController extends BaseController {
         $titulos['tasaCero'] = number_format((float) ($invoice['tasaCero'] ?? 0), 2, '.', '');
         $titulos["idVehiculo"] = "";
         $titulos["uuidRelacion"] = "";
-
-        //$datosVehiculo = $this->vehiculos->select("*")->where("id", $invoice["idVehiculo"])->first();
 
         if (isset($datosVehiculo["descripcion"])) {
             $titulos["vehiculoNombre"] = $invoice["tipoVehiculo"] . " " . $datosVehiculo["placas"] . " " . $datosVehiculo["descripcion"];
@@ -1096,6 +1030,10 @@ class VendorInvoiceController extends BaseController {
                     $datosDetalle["importeExento"] = $value["importeExento"] ?? 0;
                     $datosDetalle["neto"] = $value["neto"];
                     $datosDetalle["predial"] = $value["predial"] ?? '';
+                    $datosDetalle["itemCode"] = $value["itemCode"] ?? '';
+                    $datosDetalle["prjCode"] = $value["prjCode"] ?? '';
+                    $datosDetalle["ocrCode"] = $value["ocrCode"] ?? '';
+                    $datosDetalle["ocrCode2"] = $value["ocrCode2"] ?? '';
 
                     $product = $this->products->find($datosDetalle["idProduct"]);
 
@@ -1271,7 +1209,13 @@ class VendorInvoiceController extends BaseController {
                     $datosDetalle["idAlmacen"] = $value["idAlmacen"] ?? 1;
                     $datosDetalle["tax"] = $value["tax"];
                     $datosDetalle["total"] = $value["total"];
+                    $datosDetalle["importeExento"] = $value["importeExento"] ?? 0;
                     $datosDetalle["neto"] = $value["neto"];
+                    $datosDetalle["predial"] = $value["predial"] ?? '';
+                    $datosDetalle["itemCode"] = $value["itemCode"] ?? '';
+                    $datosDetalle["prjCode"] = $value["prjCode"] ?? '';
+                    $datosDetalle["ocrCode"] = $value["ocrCode"] ?? '';
+                    $datosDetalle["ocrCode2"] = $value["ocrCode2"] ?? '';
 
                     if ($this->vendorInvoiceDetail->save($datosDetalle) === false) {
                         $errores = $this->vendorInvoiceDetail->errors();
@@ -1646,5 +1590,306 @@ EOF;
         } else {
             return $pdf->Output('facturaProveedor.pdf', 'S');
         }
+    }
+
+    // =========================================================================
+    // BUSCADORES AJAX SAP VÍA ODBC PARA EL MODAL DE RENGLÓN
+    // =========================================================================
+
+    /**
+     * 1. Catálogo de Artículos en SAP (OITM donde ItmsGrpCod = 112)
+     */
+    public function getItemCodeAjax() {
+        try {
+            $search = $this->request->getPost('searchTerm') ?? $this->request->getGet('searchTerm') ?? '';
+            $conn   = $this->connectODBC();
+
+            $where = ' WHERE "ItmsGrpCod" = 112 AND "frozenFor" = \'N\' ';
+            if (!empty($search)) {
+                $searchClean = str_replace("'", "''", trim($search));
+                $where .= " AND (
+                    UPPER(\"ItemCode\") LIKE UPPER('%{$searchClean}%')
+                    OR UPPER(\"ItemName\") LIKE UPPER('%{$searchClean}%')
+                ) ";
+            }
+
+            $sql = "
+                SELECT \"ItemCode\", \"ItemName\"
+                FROM OITM
+                {$where}
+                ORDER BY \"ItemCode\" ASC
+                LIMIT 30
+            ";
+
+            $rs = odbc_exec($conn, $sql);
+            if (!$rs) {
+                throw new Exception('Error al consultar artículos en SAP: ' . odbc_errormsg($conn));
+            }
+
+            $data = [];
+            $data[] = [
+                'id'   => '0',
+                'text' => '0 - Seleccione Artículo'
+            ];
+
+            while ($row = odbc_fetch_array($rs)) {
+                $code = $this->toUtf8($row['ItemCode']);
+                $name = $this->toUtf8($row['ItemName']);
+
+                $data[] = [
+                    'id'       => $code,
+                    'text'     => "{$code} - {$name}",
+                    'itemCode' => $code,
+                    'itemName' => $name
+                ];
+            }
+
+            odbc_free_result($rs);
+            odbc_close($conn);
+
+            return $this->response->setJSON([
+                'token' => csrf_hash(),
+                'data'  => $data
+            ]);
+        } catch (Throwable $e) {
+            return $this->response->setJSON([
+                'token'   => csrf_hash(),
+                'data'    => [],
+                'error'   => true,
+                'message' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * 2. Catálogo de Proyectos en SAP (OPRJ - PrjCode)
+     */
+    public function getPrjCodeAjax() {
+        try {
+            $search = $this->request->getPost('searchTerm') ?? $this->request->getGet('searchTerm') ?? '';
+            $conn   = $this->connectODBC();
+
+            $where = " WHERE \"Active\" = 'Y' ";
+            if (!empty($search)) {
+                $searchClean = str_replace("'", "''", trim($search));
+                $where .= " AND (
+                    UPPER(\"PrjCode\") LIKE UPPER('%{$searchClean}%')
+                    OR UPPER(\"PrjName\") LIKE UPPER('%{$searchClean}%')
+                ) ";
+            }
+
+            $sql = "
+                SELECT \"PrjCode\", \"PrjName\"
+                FROM OPRJ
+                {$where}
+                ORDER BY \"PrjCode\" ASC
+                LIMIT 30
+            ";
+
+            $rs = odbc_exec($conn, $sql);
+            if (!$rs) {
+                throw new Exception('Error al consultar proyectos en SAP: ' . odbc_errormsg($conn));
+            }
+
+            $data = [];
+            $data[] = [
+                'id'   => '0',
+                'text' => '0 - Seleccione Proyecto'
+            ];
+
+            while ($row = odbc_fetch_array($rs)) {
+                $code = $this->toUtf8($row['PrjCode']);
+                $name = $this->toUtf8($row['PrjName']);
+
+                $data[] = [
+                    'id'      => $code,
+                    'text'    => "{$code} - {$name}",
+                    'prjCode' => $code,
+                    'prjName' => $name
+                ];
+            }
+
+            odbc_free_result($rs);
+            odbc_close($conn);
+
+            return $this->response->setJSON([
+                'token' => csrf_hash(),
+                'data'  => $data
+            ]);
+        } catch (Throwable $e) {
+            return $this->response->setJSON([
+                'token'   => csrf_hash(),
+                'data'    => [],
+                'error'   => true,
+                'message' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * 3. Catálogo de Activos Fijos / Centros de Costo Dimensión 1 en SAP (OPRC)
+     */
+    public function getOcrCodeAjax() {
+        try {
+            $search = $this->request->getPost('searchTerm') ?? $this->request->getGet('searchTerm') ?? '';
+            $conn   = $this->connectODBC();
+
+            $where = " WHERE \"Locked\" = 'N' AND \"DimCode\" = 1 ";
+            if (!empty($search)) {
+                $searchClean = str_replace("'", "''", trim($search));
+                $where .= " AND (
+                    UPPER(\"PrcCode\") LIKE UPPER('%{$searchClean}%')
+                    OR UPPER(\"PrcName\") LIKE UPPER('%{$searchClean}%')
+                ) ";
+            }
+
+            $sql = "
+                SELECT \"PrcCode\", \"PrcName\"
+                FROM OPRC
+                {$where}
+                ORDER BY \"PrcCode\" ASC
+                LIMIT 30
+            ";
+
+            $rs = odbc_exec($conn, $sql);
+            if (!$rs) {
+                throw new Exception('Error al consultar activos fijos en SAP: ' . odbc_errormsg($conn));
+            }
+
+            $data = [];
+            $data[] = [
+                'id'   => '0',
+                'text' => '0 - Seleccione Activo Fijo'
+            ];
+
+            while ($row = odbc_fetch_array($rs)) {
+                $code = $this->toUtf8($row['PrcCode']);
+                $name = $this->toUtf8($row['PrcName']);
+
+                $data[] = [
+                    'id'      => $code,
+                    'text'    => "{$code} - {$name}",
+                    'prcCode' => $code,
+                    'prcName' => $name
+                ];
+            }
+
+            odbc_free_result($rs);
+            odbc_close($conn);
+
+            return $this->response->setJSON([
+                'token' => csrf_hash(),
+                'data'  => $data
+            ]);
+        } catch (Throwable $e) {
+            return $this->response->setJSON([
+                'token'   => csrf_hash(),
+                'data'    => [],
+                'error'   => true,
+                'message' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * 4. Catálogo de Departamentos / Centros de Costo Dimensión 2 en SAP (OPRC donde DimCode = 2)
+     */
+    public function getOcrCode2Ajax() {
+        try {
+            $search = $this->request->getPost('searchTerm') ?? $this->request->getGet('searchTerm') ?? '';
+            $conn   = $this->connectODBC();
+
+            $where = " WHERE \"Locked\" = 'N' AND \"DimCode\" = 2 ";
+            if (!empty($search)) {
+                $searchClean = str_replace("'", "''", trim($search));
+                $where .= " AND (
+                    UPPER(\"PrcCode\") LIKE UPPER('%{$searchClean}%')
+                    OR UPPER(\"PrcName\") LIKE UPPER('%{$searchClean}%')
+                ) ";
+            }
+
+            $sql = "
+                SELECT \"PrcCode\", \"PrcName\"
+                FROM OPRC
+                {$where}
+                ORDER BY \"PrcCode\" ASC
+                LIMIT 30
+            ";
+
+            $rs = odbc_exec($conn, $sql);
+            if (!$rs) {
+                throw new Exception('Error al consultar departamentos en SAP: ' . odbc_errormsg($conn));
+            }
+
+            $data = [];
+            $data[] = [
+                'id'   => '0',
+                'text' => '0 - Seleccione Departamento'
+            ];
+
+            while ($row = odbc_fetch_array($rs)) {
+                $code = $this->toUtf8($row['PrcCode']);
+                $name = $this->toUtf8($row['PrcName']);
+
+                $data[] = [
+                    'id'      => $code,
+                    'text'    => "{$code} - {$name}",
+                    'prcCode' => $code,
+                    'prcName' => $name
+                ];
+            }
+
+            odbc_free_result($rs);
+            odbc_close($conn);
+
+            return $this->response->setJSON([
+                'token' => csrf_hash(),
+                'data'  => $data
+            ]);
+        } catch (Throwable $e) {
+            return $this->response->setJSON([
+                'token'   => csrf_hash(),
+                'data'    => [],
+                'error'   => true,
+                'message' => $e->getMessage()
+            ]);
+        }
+    }
+
+    // =========================================================================
+    // MÉTODOS AUXILIARES PRIVADOS ODBC
+    // =========================================================================
+
+    private function connectODBC() {
+        $dataConect = $this->serviceLayerModel->first();
+        if (!$dataConect) {
+            throw new Exception('No se encontró configuración de conexión SAP.');
+        }
+
+        $conn = odbc_connect(
+            $dataConect['nameODBC'],
+            $dataConect['userODBC'],
+            $dataConect['passwordODBC']
+        );
+
+        if (!$conn) {
+            throw new Exception('Error conexión ODBC: ' . odbc_errormsg());
+        }
+
+        if (!odbc_exec($conn, 'SET SCHEMA "' . $dataConect['companyDB'] . '"')) {
+            throw new Exception('Error SET SCHEMA: ' . odbc_errormsg($conn));
+        }
+
+        return $conn;
+    }
+
+    private function toUtf8($value) {
+        if (is_null($value)) {
+            return '';
+        }
+        if (mb_check_encoding($value, 'UTF-8')) {
+            return $value;
+        }
+        return mb_convert_encoding($value, 'UTF-8', 'ISO-8859-1');
     }
 }

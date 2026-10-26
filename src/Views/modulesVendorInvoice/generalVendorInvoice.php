@@ -181,4 +181,79 @@
 
 
 </div>
+
+<!-- ASIGNACIÓN GLOBAL SAP PARA TODOS LOS RENGLONES -->
+<div class="row bg-light p-3 mb-3 border rounded">
+    <div class="col-12">
+        <h5>Asignación Masiva de Datos SAP a Todos los Renglones</h5>
+    </div>
+
+    <!-- Global Item Code -->
+    <div class="col-md-3">
+        <div class="form-group">
+            <label for="globalItemCode">Item Code General</label>
+            <div class="input-group">
+                <select id="globalItemCode" class="form-control select2-global" style="width: 70%;">
+                    <option value="0" selected>Seleccione...</option>
+                </select>
+                <div class="input-group-append">
+                    <button type="button" class="btn btn-success btn-sm" id="btnApplyGlobalItemCode" title="Aplicar a todos">
+                        <i class="fas fa-check"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Global Proyecto -->
+    <div class="col-md-3">
+        <div class="form-group">
+            <label for="globalPrjCode">Proyecto General</label>
+            <div class="input-group">
+                <select id="globalPrjCode" class="form-control select2-global" style="width: 70%;">
+                    <option value="0" selected>Seleccione...</option>
+                </select>
+                <div class="input-group-append">
+                    <button type="button" class="btn btn-success btn-sm" id="btnApplyGlobalPrjCode" title="Aplicar a todos">
+                        <i class="fas fa-check"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Global Activo Fijo (OcrCode) -->
+    <div class="col-md-3">
+        <div class="form-group">
+            <label for="globalOcrCode">Activo Fijo General</label>
+            <div class="input-group">
+                <select id="globalOcrCode" class="form-control select2-global" style="width: 70%;">
+                    <option value="0" selected>Seleccione...</option>
+                </select>
+                <div class="input-group-append">
+                    <button type="button" class="btn btn-success btn-sm" id="btnApplyGlobalOcrCode" title="Aplicar a todos">
+                        <i class="fas fa-check"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Global Departamento (OcrCode2) -->
+    <div class="col-md-3">
+        <div class="form-group">
+            <label for="globalOcrCode2">Departamento General</label>
+            <div class="input-group">
+                <select id="globalOcrCode2" class="form-control select2-global" style="width: 70%;">
+                    <option value="0" selected>Seleccione...</option>
+                </select>
+                <div class="input-group-append">
+                    <button type="button" class="btn btn-success btn-sm" id="btnApplyGlobalOcrCode2" title="Aplicar a todos">
+                        <i class="fas fa-check"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 </p>

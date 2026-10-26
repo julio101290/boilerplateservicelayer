@@ -49,6 +49,8 @@ class BoilerplateServiceLayer extends Seeder {
         $this->authorize->createPermission('SAPOdometro-permission', 'Permiso para corregir el Odometro');
         $this->authorize->createPermission('vendorinvoice-permission', 'Permiso para corregir el Odometro');
         $this->authorize->createPermission('sapvouchers', 'Permiso para marcar como impresa o no impresa la impresion de vale');
+        $this->authorize->createPermission('link_sap_branchoffice-permission', 'Enlace sucursales con sucursales SAP');
+        
         
         
 
@@ -64,6 +66,7 @@ class BoilerplateServiceLayer extends Seeder {
         $this->authorize->addPermissionToUser('SAPUserWH-permission', 1);
         $this->authorize->addPermissionToUser('SAPOdometro-permission', 1);
         $this->authorize->addPermissionToUser('sapvouchers', 1);
+        $this->authorize->addPermissionToUser('link_sap_branchoffice-permission', 1);
         
     }
     public function down() {
