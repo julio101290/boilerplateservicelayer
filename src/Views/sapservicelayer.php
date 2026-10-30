@@ -40,6 +40,8 @@
                                 <th><?= lang('sapservicelayer.fields.companyDB') ?></th>
                                 <th><?= lang('sapservicelayer.fields.password') ?></th>
                                 <th><?= lang('sapservicelayer.fields.username') ?></th>
+                                <th><?= lang('sapservicelayer.fields.userFTPAnexos') ?></th>
+                                <th><?= lang('sapservicelayer.fields.passFTPAnexos') ?></th>
                                 <th><?= lang('sapservicelayer.fields.created_at') ?></th>
                                 <th><?= lang('sapservicelayer.fields.updated_at') ?></th>
                                 <th><?= lang('sapservicelayer.fields.deleted_at') ?></th>
@@ -82,9 +84,9 @@
         },
         columnDefs: [{
                 orderable: false,
-                targets: [11],
+                targets: [13],
                 searchable: false,
-                targets: [11]
+                targets: [13]
 
             }],
         columns: [{
@@ -120,6 +122,14 @@
             },
 
             {
+                'data': 'userFTPAnexos'
+            },
+
+            {
+                'data': 'passFTPAnexos'
+            },
+
+            {
                 'data': 'created_at'
             },
 
@@ -144,8 +154,17 @@
         ]
     });
 
+    /*=============================================
+     LIMPIAR CAMPOS AL AGREGAR
+     =============================================*/
+    $(document).on('click', '.btnAddSapservicelayer', function (e) {
+        $("#userFTPAnexos").val("");
+        $("#passFTPAnexos").val("");
+    });
 
-
+    /*=============================================
+     GUARDAR / ACTUALIZAR Sapservicelayer
+     =============================================*/
     $(document).on('click', '#btnSaveSapservicelayer', function (e) {
 
 
@@ -162,6 +181,9 @@
         var userODBC = $("#userODBC").val();
         var passwordODBC = $("#passwordODBC").val();
 
+        var userFTPAnexos = $("#userFTPAnexos").val();
+        var passFTPAnexos = $("#passFTPAnexos").val();
+
         $("#btnSaveSapservicelayer").attr("disabled", true);
 
         var datos = new FormData();
@@ -177,6 +199,9 @@
         datos.append("nameODBC", nameODBC);
         datos.append("userODBC", userODBC);
         datos.append("passwordODBC", passwordODBC);
+
+        datos.append("userFTPAnexos", userFTPAnexos);
+        datos.append("passFTPAnexos", passFTPAnexos);
         
         $.ajax({
 
@@ -336,6 +361,8 @@
                 $("#userODBC").val(respuesta["userODBC"]);
                 $("#passwordODBC").val(respuesta["passwordODBC"]);
 
+                $("#userFTPAnexos").val(respuesta["userFTPAnexos"]);
+                $("#passFTPAnexos").val(respuesta["passFTPAnexos"]);
 
             }
 
@@ -391,4 +418,3 @@
 
 </script>
 <?= $this->endSection() ?>
-        

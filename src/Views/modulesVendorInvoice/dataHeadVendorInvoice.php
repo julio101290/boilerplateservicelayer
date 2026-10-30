@@ -218,6 +218,19 @@
                                                     $value["valorTasaExenta"] = "";
                                                 }
 
+                                                if (!isset($value["itemCode"])) {
+                                                    $value["itemCode"] = "";
+                                                }
+                                                if (!isset($value["prjCode"])) {
+                                                    $value["prjCode"] = "";
+                                                }
+                                                if (!isset($value["ocrCode"])) {
+                                                    $value["ocrCode"] = "";
+                                                }
+                                                if (!isset($value["ocrCode2"])) {
+                                                    $value["ocrCode2"] = "";
+                                                }
+
                                                 $list .= <<<EOF
                                                     
                                                     <div class="form-group row nuevoProduct"><div class="col-1"> <button type="button" class="btn btn-danger quitProduct"><span class="far fa-trash-alt"></button>
@@ -231,6 +244,10 @@
                                                     <input type="hidden" id="idAlmacen" class="form-control idAlmacen"  name="idAlmacen" value="$value[idAlmacen]" required="">
 
                                                     </div>
+                                                    <input type="hidden" id="itemCode" class="form-control itemCode" name="itemCode" value="$value[itemCode]">
+                                                    <input type="hidden" id="prjCode" class="form-control prjCode" name="prjCode" value="$value[prjCode]">
+                                                    <input type="hidden" id="ocrCode" class="form-control ocrCode" name="ocrCode" value="$value[ocrCode]">
+                                                    <input type="hidden" id="ocrCode2" class="form-control ocrCode2" name="ocrCode2" value="$value[ocrCode2]">
                                                     <div class="col-7"> <input type="text" id="description" class="form-control description" idproducto="$value[idProduct]" name="description" value="$value[description]" required=""> </div>
                                                     <div class="col-1"> <input type="number" id="cant" class="form-control cant" name="cant" value="$value[cant]" required=""> 
 
@@ -420,6 +437,10 @@
 
                                 <button type="button" class="btn bg-maroon btnTimbrar" data-toggle="modal" required="" data-placement="top" title="Timbrar">
                                     <i class="fas fa-qrcode"> </i> <?= lang('newSell.stamp') ?>
+                                </button>
+
+                                <button type="button" class="btn bg-navy btnSendSAP" data-placement="top" title="Enviar a SAP">
+                                    <i class="fas fa-paper-plane"> </i> Enviar a SAP
                                 </button>
 
                             </div>
@@ -1838,7 +1859,138 @@
 
 
 
+        $(".btnSendSAP").on("click", function () {
+            sendToSAP();
+        });
 
+        function sendToSAP() {
+            // Actualiza el JSON de renglones antes de validar y enviar
+            listProducts();
+
+            var UUID = $("#uuid").val();
+            var folio = $("#folio").val();
+            var idEmpresa = $("#idEmpresaSells").val();
+            var custumerSell = $("#custumerSell").val();
+            var idSucursal = $("#idSucursal").val();
+            var date = $("#date").val();
+            var dateVen = $("#dateVen").val();
+            var generalObservations = $("#obsevations").val();
+            var listProductsJson = $("#listProducts").val();
+            var RFCReceptor = $("#RFCReceptor").val();
+
+            if (idEmpresa == 0 || idEmpresa == "" || idEmpresa == null) {
+                Toast.fire({
+                    icon: 'error',
+                    title: "<?= lang('newSell.selectCompanie') ?>"
+                });
+                return false;
+            }
+
+            if (custumerSell == 0 || custumerSell == "" || custumerSell == null) {
+                Toast.fire({
+                    icon: 'error',
+                    title: "Seleccione un proveedor válido"
+                });
+                return false;
+            }
+
+            if (idSucursal == 0 || idSucursal == "" || idSucursal == null) {
+                Toast.fire({
+                    icon: 'error',
+                    title: "<?= lang('newSell.selectBranchoffice') ?>"
+                });
+                return false;
+            }
+
+            if (listProductsJson == "[]" || listProductsJson == "") {
+                Toast.fire({
+                    icon: 'error',
+                    title: "Debe agregar al menos un artículo a la factura"
+                });
+                return false;
+            }
+
+            // Validar en cliente que todos los renglones tengan su artículo SAP (itemCode)
+            var parsedProducts = JSON.parse(listProductsJson);
+            for (var i = 0; i < parsedProducts.length; i++) {
+                if (!parsedProducts[i].itemCode || parsedProducts[i].itemCode === "0" || parsedProducts[i].itemCode.trim() === "") {
+                    Swal.fire({
+                        icon: "warning",
+                        title: "Faltan datos de SAP",
+                        text: "El renglón #" + (i + 1) + " (" + parsedProducts[i].description + ") no tiene asignado un Artículo de SAP (ItemCode)."
+                    });
+                    return false;
+                }
+            }
+
+            $(".btnSendSAP").attr("disabled", true);
+
+            var csrfName = $('.txt_csrfname').attr('name');
+            var csrfHash = $('.txt_csrfname').val();
+
+            var datos = new FormData();
+            datos.append("UUID", UUID);
+            datos.append("folio", folio);
+            datos.append("idEmpresa", idEmpresa);
+            datos.append("idCustumer", custumerSell);
+            datos.append("idSucursal", idSucursal);
+            datos.append("date", date);
+            datos.append("dateVen", dateVen);
+            datos.append("generalObservations", generalObservations);
+            datos.append("listProducts", listProductsJson);
+            datos.append("RFCReceptor", RFCReceptor);
+
+            if (csrfName && csrfHash) {
+                datos.append(csrfName, csrfHash);
+            }
+
+            Swal.fire({
+                title: 'Enviando a SAP...',
+                text: 'Validando proveedor, sucursal y registrando documento en Service Layer',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+
+            $.ajax({
+                url: "<?= base_url('admin/vendorInvoice/sendToSAP') ?>",
+                method: "POST",
+                data: datos,
+                cache: false,
+                contentType: false,
+                processData: false,
+                dataType: "json",
+                success: function (respuesta) {
+                    if (respuesta.token) {
+                        $('.txt_csrfname').val(respuesta.token);
+                    }
+
+                    $(".btnSendSAP").removeAttr("disabled");
+
+                    if (respuesta.error === false) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Enviado a SAP Correctamente',
+                            html: '<b>DocNum SAP:</b> ' + respuesta.docNum + '<br><b>DocEntry:</b> ' + respuesta.docEntry
+                        });
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'No se pudo enviar a SAP',
+                            text: respuesta.message
+                        });
+                    }
+                }
+            }).fail(function (jqXHR, textStatus, errorThrown) {
+                $(".btnSendSAP").removeAttr("disabled");
+                Swal.fire({
+                    icon: "error",
+                    title: "Error de comunicación",
+                    text: jqXHR.responseText || errorThrown
+                });
+            });
+        }
 
 
         function cargaProductos() {

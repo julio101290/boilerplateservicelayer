@@ -139,6 +139,30 @@
                         </div>
                     </div>
 
+                    <div class="form-group row">
+                        <label for="userFTPAnexos" class="col-sm-2 col-form-label"><?= lang('sapservicelayer.fields.userFTPAnexos') ?></label>
+                        <div class="col-sm-10">
+                            <div class="input-group">
+                                <div class="input-group-prepend">
+                                    <span class="input-group-text"><i class="fas fa-user"></i></span>
+                                </div>
+                                <input type="text" name="userFTPAnexos" id="userFTPAnexos" class="form-control <?= session('error.userFTPAnexos') ? 'is-invalid' : '' ?>" value="<?= old('userFTPAnexos') ?>" placeholder="<?= lang('sapservicelayer.fields.userFTPAnexos') ?>" autocomplete="off">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group row">
+                        <label for="passFTPAnexos" class="col-sm-2 col-form-label"><?= lang('sapservicelayer.fields.passFTPAnexos') ?></label>
+                        <div class="col-sm-10">
+                            <div class="input-group">
+                                <div class="input-group-prepend">
+                                    <span class="input-group-text"><i class="fas fa-key"></i></span>
+                                </div>
+                                <input type="password" name="passFTPAnexos" id="passFTPAnexos" class="form-control <?= session('error.passFTPAnexos') ? 'is-invalid' : '' ?>" value="<?= old('passFTPAnexos') ?>" placeholder="<?= lang('sapservicelayer.fields.passFTPAnexos') ?>" autocomplete="off">
+                            </div>
+                        </div>
+                    </div>
+
                 </form>
             </div>
             <div class="modal-footer">

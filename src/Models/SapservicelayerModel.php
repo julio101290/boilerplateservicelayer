@@ -21,6 +21,8 @@ class SapservicelayerModel extends Model {
         , 'userODBC'
         , 'companyDB'
         , 'passwordODBC'
+        , 'userFTPAnexos'
+        , 'passFTPAnexos'
         , 'updated_at'
         , 'deleted_at'
     ];
@@ -49,6 +51,8 @@ class SapservicelayerModel extends Model {
                         . ',a.companyDB'
                         . ',a.password'
                         . ',a.username'
+                        . ',a.userFTPAnexos'
+                        . ',a.passFTPAnexos'
                         . ',a.created_at'
                         . ',a.updated_at'
                         . ',a.deleted_at'

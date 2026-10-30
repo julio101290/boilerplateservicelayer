@@ -22,6 +22,9 @@ $sapservicelayer["fields"]["nameODBC"] = "Nombre ODBC";
 $sapservicelayer["fields"]["userODBC"] = "Usuario ODBC";
 $sapservicelayer["fields"]["passwordODBC"] = "Contraseña ODBC";
 
+$sapservicelayer["fields"]["userFTPAnexos"] = "usuario FTP";
+$sapservicelayer["fields"]["passFTPAnexos"] = "Contraseña FTP";
+
 $sapservicelayer["fields"]["created_at"] = "Creado el";
 $sapservicelayer["fields"]["updated_at"] = "Actualizado el";
 $sapservicelayer["fields"]["deleted_at"] = "Eliminado el";

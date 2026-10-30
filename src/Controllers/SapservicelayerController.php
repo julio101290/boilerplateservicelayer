@@ -25,23 +25,16 @@ class SapservicelayerController extends BaseController {
 
     public function index() {
 
-
-
         helper('auth');
 
         $idUser = user()->id;
         $titulos["empresas"] = $this->empresa->mdlEmpresasPorUsuario($idUser);
 
         if (count($titulos["empresas"]) == "0") {
-
             $empresasID[0] = "0";
         } else {
-
             $empresasID = array_column($titulos["empresas"], "id");
         }
-
-
-
 
         if ($this->request->isAJAX()) {
             // Parámetros de DataTables
@@ -55,12 +48,6 @@ class SapservicelayerController extends BaseController {
             // Obtén el QueryBuilder base desde tu modelo
             $builder = $this->sapservicelayer->mdlGetSapservicelayer($empresasID);
 
-            // Construir allowed columns dinámicamente desde el array columns enviado por DataTables
-            // Se espera que cada columna tenga al menos: data (nombre lógico), searchable, orderable
-            // Regla de mapeo por conveniencia:
-            //  - si columns[i]['data'] contiene un punto (ej "a.id" o "b.nombre"), se usa tal cual (tras validar)
-            //  - si es "nombreEmpresa" lo mapeamos a "b.nombre"
-            //  - si es cualquier otro nombre simple lo mapeamos a "a.{nombre}"
             $allowedColumns = [];        // mapa: nombre_logico => columna_db (ej 'description' => 'a.description')
             $searchableColumns = [];     // lista de columnas DB que permiten búsqueda
             $orderableColumns = [];      // lista de columnas DB que permiten orden
@@ -76,19 +63,17 @@ class SapservicelayerController extends BaseController {
 
                 // determinar columna real en DB
                 if (strpos($dataName, '.') !== false) {
-                    // si viene con prefijo tipo a.id o b.nombre, usar tal cual
                     $dbCol = $dataName;
                 } elseif ($dataName === 'nombreEmpresa' || strtolower($dataName) === 'nombreempresa') {
                     $dbCol = 'b.nombre';
                 } else {
-                    // por defecto mapear al alias de la tabla principal 'a'
                     $dbCol = 'a.' . $dataName;
                 }
 
                 // guardar en map
                 $allowedColumns[$dataName] = $dbCol;
 
-                // revisar flags searchable/orderable (pueden venir como 'true'/'false' o booleanos)
+                // revisar flags searchable/orderable
                 $isSearchable = false;
                 $isOrderable = false;
                 if (isset($col['searchable'])) {
@@ -114,7 +99,6 @@ class SapservicelayerController extends BaseController {
                 $b->groupStart();
                 $first = true;
                 foreach ($searchableColumns as $dbCol) {
-                    // usar like para cada columna searchable
                     if ($first) {
                         $b->like($dbCol, $term);
                         $first = false;
@@ -140,7 +124,6 @@ class SapservicelayerController extends BaseController {
                     $colIndex = (int) $o['column'];
                     $dir = strtolower($o['dir']) === 'desc' ? 'DESC' : 'ASC';
 
-                    // proteger índices fuera de rango
                     if (!isset($columns[$colIndex]))
                         continue;
 
@@ -148,7 +131,6 @@ class SapservicelayerController extends BaseController {
                     if (!$colData)
                         continue;
 
-                    // Verificar que la columna está permitida para orden
                     if (!isset($orderableColumns[$colData]))
                         continue;
 
@@ -156,7 +138,6 @@ class SapservicelayerController extends BaseController {
                     $filteredBuilder->orderBy($dbCol . ' ' . $dir);
                 }
             } else {
-                // orden por defecto si no hay órdenes: id desc (si existe)
                 if (in_array('a.id', $allowedColumns, true) || array_search('a.id', $allowedColumns, true) !== false) {
                     $filteredBuilder->orderBy('a.id DESC');
                 }
@@ -179,6 +160,7 @@ class SapservicelayerController extends BaseController {
 
             return $this->response->setJSON($response);
         }
+
         $titulos["title"] = lang('sapservicelayer.title');
         $titulos["subtitle"] = lang('sapservicelayer.subtitle');
         return view('julio101290\boilerplateservicelayer\Views\sapservicelayer', $titulos);
@@ -195,13 +177,10 @@ class SapservicelayerController extends BaseController {
         $titulos["empresas"] = $this->empresa->mdlEmpresasPorUsuario($idUser);
 
         if (count($titulos["empresas"]) == "0") {
-
             $empresasID[0] = "0";
         } else {
-
             $empresasID = array_column($titulos["empresas"], "id");
         }
-
 
         $idSapservicelayer = $this->request->getPost("idSapservicelayer");
         $datosSapservicelayer = $this->sapservicelayer->whereIn('idEmpresa', $empresasID)
@@ -272,9 +251,8 @@ class SapservicelayerController extends BaseController {
 
     public function login($url, $port, $pass, $user, $database) {
 
-
         $curl = curl_init();
-        $baseURL = $url."Login";
+        $baseURL = $url . "Login";
         curl_setopt_array($curl, [
             CURLOPT_PORT => "$port",
             CURLOPT_URL => $baseURL,
@@ -302,7 +280,6 @@ class SapservicelayerController extends BaseController {
         if ($err) {
             return "cURL Error #:" . $err;
         } else {
-
             return json_decode($response);
         }
     }

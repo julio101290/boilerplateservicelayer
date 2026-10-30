@@ -28,6 +28,7 @@ use julio101290\boilerplatesells\Models\EnlacexmlModel;
 use julio101290\boilerplateCFDI\Models\XmlModel;
 use julio101290\boilerplateCFDI\Controllers\XmlController;
 use julio101290\boilerplatesuppliers\Models\ProveedoresModel;
+use julio101290\boilerplateservicelayer\Models\Link_sap_branchofficeModel;
 
 class VendorInvoiceController extends BaseController {
 
@@ -57,6 +58,7 @@ class VendorInvoiceController extends BaseController {
     protected $xmlController;
     protected $suppliers;
     public $catalogosSAT;
+    protected $linkSapBranchOffice;
 
     public function __construct() {
         $this->log = new LogModel();
@@ -82,6 +84,7 @@ class VendorInvoiceController extends BaseController {
         $this->xml = new XmlModel();
         $this->xmlController = new XmlController();
         $this->suppliers = new ProveedoresModel();
+        $this->linkSapBranchOffice = new Link_sap_branchofficeModel();
 
         if (class_exists('\julio101290\boilerplateCFDI\Libraries\CatalogosSAT')) {
             $this->catalogosSAT = new \julio101290\boilerplateCFDI\Libraries\CatalogosSAT();
@@ -131,6 +134,679 @@ class VendorInvoiceController extends BaseController {
         $titulos["listaSubtitle"] = "Muestra la lista de facturas de proveedores / compras";
 
         return view('julio101290\boilerplateservicelayer\Views\vendorInvoice', $titulos);
+    }
+
+    // =========================================================================
+    // ENVÍO DE FACTURA DE PROVEEDOR A SAP (ODBC READ + SERVICE LAYER WRITE)
+    // =========================================================================
+
+    public function sendToSAP() {
+        $auth = service('authentication');
+        if (!$auth->check()) {
+            return $this->response->setJSON([
+                'error'   => true,
+                'message' => 'No se ha iniciado sesión.',
+                'token'   => csrf_hash()
+            ]);
+        }
+
+        $conn = null;
+
+        try {
+            $userName            = user()->username;
+            $idEmpresa           = (int) $this->request->getPost('idEmpresa');
+            $idCustumer          = (int) $this->request->getPost('idCustumer');
+            $idSucursal          = (int) $this->request->getPost('idSucursal');
+            $uuid                = trim((string) $this->request->getPost('UUID'));
+            $date                = trim((string) $this->request->getPost('date'));
+            $dateVen             = trim((string) $this->request->getPost('dateVen'));
+            $generalObservations = trim((string) $this->request->getPost('generalObservations'));
+            $listProducts        = json_decode((string) $this->request->getPost('listProducts'), true);
+
+            if ($idEmpresa <= 0 || $idCustumer <= 0 || $idSucursal <= 0) {
+                throw new Exception('Empresa, proveedor y sucursal son obligatorios.');
+            }
+
+            if (empty($listProducts) || !is_array($listProducts)) {
+                throw new Exception('La factura no contiene partidas para enviar a SAP.');
+            }
+
+            // -----------------------------------------------------------------
+            // 1. VALIDAR ENLACE DE SUCURSAL LOCAL CON SUCURSAL SAP
+            // -----------------------------------------------------------------
+            $enlaceSucursal = $this->linkSapBranchOffice
+                ->where('idEmpresa', $idEmpresa)
+                ->where('idBranchOffice', $idSucursal)
+                ->where('deleted_at', null)
+                ->first();
+
+            if (!$enlaceSucursal || $enlaceSucursal['idBranchOfficeSAP'] === null || $enlaceSucursal['idBranchOfficeSAP'] === '') {
+                throw new Exception('La sucursal seleccionada no está vinculada con SAP. Configúrela primero en el módulo de Enlace de Sucursales SAP.');
+            }
+
+            $idBranchOfficeSAP = (int) $enlaceSucursal['idBranchOfficeSAP'];
+
+            // -----------------------------------------------------------------
+            // 2. OBTENER DATOS Y FOLIO DIRECTAMENTE DEL XML CFDI
+            // -----------------------------------------------------------------
+            $datosXML = $this->xml->where('uuidTimbre', $uuid)->first();
+
+            if (!$datosXML) {
+                $facturaLocal = $this->vendorInvoice->where('UUID', $uuid)->first();
+                if ($facturaLocal) {
+                    $enlace = $this->enlaceXML
+                        ->where('idDocumento', $facturaLocal['id'])
+                        ->where('tipo', 'com')
+                        ->first();
+                    if ($enlace && !empty($enlace['uuidXML'])) {
+                        $datosXML = $this->xml->where('uuidTimbre', $enlace['uuidXML'])->first();
+                    }
+                }
+            }
+
+            if (!$datosXML || empty($datosXML['archivoXML'])) {
+                throw new Exception("No se encontró el archivo XML asociado al UUID '{$uuid}'. No se puede enviar a SAP sin el XML.");
+            }
+
+            $uuidTimbre = trim($datosXML['uuidTimbre']);
+            $xmlContent = $datosXML['archivoXML'];
+
+            // Extraer el Folio directamente del nodo cfdi:Comprobante del XML
+            $xmlLimpio   = \PhpCfdi\CfdiCleaner\Cleaner::staticClean($xmlContent);
+            $comprobante = \CfdiUtils\Nodes\XmlNodeUtils::nodeFromXmlString($xmlLimpio);
+            $folio       = trim((string) ($comprobante['Folio'] ?? ''));
+
+            if ($folio === '') {
+                $folio = trim((string) ($datosXML['folio'] ?? ''));
+            }
+            if ($folio === '' || $folio === '0') {
+                $folio = substr($uuidTimbre, -6);
+            }
+
+            // -----------------------------------------------------------------
+            // 3. CONSULTAS ODBC: DUPLICIDAD (OPCH), ANEXOS (OADP) Y PROVEEDOR (OCRD)
+            // -----------------------------------------------------------------
+            $rfcProveedor = '';
+
+            $proveedor = $this->suppliers->find($idCustumer);
+            if ($proveedor && !empty($proveedor['taxID'])) {
+                $rfcProveedor = trim($proveedor['taxID']);
+            } else {
+                $clienteProv = $this->custumer->find($idCustumer);
+                if ($clienteProv && !empty($clienteProv['taxID'])) {
+                    $rfcProveedor = trim($clienteProv['taxID']);
+                }
+            }
+
+            if (empty($rfcProveedor)) {
+                throw new Exception('El proveedor seleccionado no tiene un RFC (taxID) registrado en el sistema.');
+            }
+
+            $conn = $this->connectODBC();
+
+            // 3.0 Validar en OPCH que el UUID no haya sido registrado previamente en SAP
+            $uuidClean = str_replace("'", "''", strtoupper($uuidTimbre));
+            $sqlExisteUUID = "
+                SELECT \"DocEntry\", \"DocNum\"
+                FROM OPCH
+                WHERE \"CANCELED\" = 'N'
+                  AND (
+                      UPPER(TRIM(\"U_FolioFiscal\")) = '{$uuidClean}'
+                      OR UPPER(TRIM(\"U_UDF_UUID\")) = '{$uuidClean}'
+                  )
+                LIMIT 1
+            ";
+
+            $rsExiste = odbc_exec($conn, $sqlExisteUUID);
+            if (!$rsExiste) {
+                throw new Exception('Error al validar duplicidad de UUID en SAP (OPCH): ' . odbc_errormsg($conn));
+            }
+
+            $rowExiste = odbc_fetch_array($rsExiste);
+            odbc_free_result($rsExiste);
+
+            if ($rowExiste && !empty($rowExiste['DocEntry'])) {
+                $docNumExistente   = $this->toUtf8($rowExiste['DocNum']);
+                $docEntryExistente = $this->toUtf8($rowExiste['DocEntry']);
+                throw new Exception("El CFDI con UUID '{$uuidTimbre}' ya fue registrado previamente en SAP Business One (DocNum: {$docNumExistente}, DocEntry: {$docEntryExistente}).");
+            }
+
+            // 3.1 Obtener AttachPath desde OADP
+            $sqlOadp = 'SELECT "AttachPath" FROM OADP LIMIT 1';
+            $rsOadp  = odbc_exec($conn, $sqlOadp);
+            if (!$rsOadp) {
+                throw new Exception('Error al consultar ruta de anexos (OADP.AttachPath) en SAP: ' . odbc_errormsg($conn));
+            }
+            $rowOadp = odbc_fetch_array($rsOadp);
+            odbc_free_result($rsOadp);
+
+            $attachPath = trim($this->toUtf8($rowOadp['AttachPath'] ?? ''));
+            if (empty($attachPath)) {
+                throw new Exception('SAP Business One no tiene configurada la ruta de anexos en OADP.AttachPath.');
+            }
+
+            // 3.2 Validar Proveedor por RFC en OCRD
+            $rfcClean = str_replace("'", "''", strtoupper($rfcProveedor));
+            $sqlSocio = "
+                SELECT \"CardCode\", \"CardName\", \"LicTradNum\"
+                FROM OCRD
+                WHERE UPPER(TRIM(\"LicTradNum\")) = '{$rfcClean}'
+                  AND \"CardType\" = 'S'
+                  AND \"validFor\" = 'Y'
+                  AND \"frozenFor\" = 'N'
+                ORDER BY \"CardCode\" ASC
+                LIMIT 1
+            ";
+
+            $rsSocio = odbc_exec($conn, $sqlSocio);
+            if (!$rsSocio) {
+                throw new Exception('Error al consultar proveedor en SAP vía ODBC: ' . odbc_errormsg($conn));
+            }
+
+            $rowSocio = odbc_fetch_array($rsSocio);
+            odbc_free_result($rsSocio);
+
+            if (!$rowSocio || empty($rowSocio['CardCode'])) {
+                throw new Exception("El proveedor con RFC '{$rfcProveedor}' no existe o está inactivo como Proveedor en SAP Business One.");
+            }
+
+            $cardCodeSAP = trim($this->toUtf8($rowSocio['CardCode']));
+
+            // -----------------------------------------------------------------
+            // 4. ARMAR LÍNEAS DEL DOCUMENTO Y RESOLVER TAXCODE VÍA ODBC
+            // -----------------------------------------------------------------
+            $documentLines = [];
+            $taxCodeCache  = [];
+
+            foreach ($listProducts as $idx => $item) {
+                $numLinea = $idx + 1;
+                $itemCode = trim((string) ($item['itemCode'] ?? ''));
+
+                if (empty($itemCode) || $itemCode === '0') {
+                    throw new Exception("El renglón #{$numLinea} ({$item['description']}) no tiene un Artículo SAP (ItemCode) seleccionado.");
+                }
+
+                $porcentTax = (float) ($item['porcentTax'] ?? 0);
+                if ($porcentTax > 0 && $porcentTax < 1) {
+                    $porcentTax = round($porcentTax * 100, 2);
+                }
+
+                $cacheKey = "{$itemCode}_{$porcentTax}";
+                if (!isset($taxCodeCache[$cacheKey])) {
+                    $taxCodeCache[$cacheKey] = $this->resolveSapTaxCode($conn, $porcentTax, $itemCode, $cardCodeSAP);
+                }
+                $taxCode = $taxCodeCache[$cacheKey];
+
+                $line = [
+                    'ItemCode'        => $itemCode,
+                    'ItemDescription' => mb_substr((string) ($item['description'] ?? ''), 0, 100),
+                    'Quantity'        => (float) ($item['cant'] ?? 1),
+                    'UnitPrice'       => (float) ($item['price'] ?? 0),
+                    'TaxCode'         => $taxCode,
+                ];
+
+                if (!empty($item['prjCode']) && $item['prjCode'] !== '0') {
+                    $line['ProjectCode'] = trim((string) $item['prjCode']);
+                }
+
+                if (!empty($item['ocrCode']) && $item['ocrCode'] !== '0') {
+                    $line['CostingCode'] = trim((string) $item['ocrCode']);
+                }
+
+                if (!empty($item['ocrCode2']) && $item['ocrCode2'] !== '0') {
+                    $line['CostingCode2'] = trim((string) $item['ocrCode2']);
+                }
+
+                $documentLines[] = $line;
+            }
+
+            odbc_close($conn);
+            $conn = null;
+
+            // -----------------------------------------------------------------
+            // 5. GENERAR PDF Y SUBIR ANEXOS XML / PDF POR FTP
+            // -----------------------------------------------------------------
+            $pdfContent = $this->xmlController->generarPDF($uuidTimbre, true);
+            if (empty($pdfContent)) {
+                throw new Exception("No fue posible generar el PDF para el XML con UUID '{$uuidTimbre}'.");
+            }
+
+            $rutasAnexos = $this->subirAnexosSAP($attachPath, $uuidTimbre, $xmlContent, $pdfContent);
+
+            // -----------------------------------------------------------------
+            // 6. CONSTRUIR PAYLOAD CON UDFs Y ENVIAR A SAP SERVICE LAYER
+            // -----------------------------------------------------------------
+            $docDate      = !empty($date) ? date('Y-m-d', strtotime($date)) : date('Y-m-d');
+            $docDueDate   = !empty($dateVen) ? date('Y-m-d', strtotime($dateVen)) : $docDate;
+            $ultimos6UUID = substr($uuidTimbre, -6);
+
+            $comentarios = !empty($generalObservations)
+                ? "{$generalObservations} | Usuario: {$userName}"
+                : "Factura Proveedor Web | Usuario: {$userName}";
+
+            $payload = [
+                'CardCode'       => $cardCodeSAP,
+                'DocDate'        => $docDate,
+                'DocDueDate'     => $docDueDate,
+                'TaxDate'        => $docDate,
+                'NumAtCard'      => $folio,
+                'Comments'       => mb_substr($comentarios, 0, 254),
+                'U_Refund'       => 'Y',
+                'U_FolioAsigXML' => $ultimos6UUID,
+                'U_FolioFiscal'  => $uuidTimbre,
+                'U_UDF_UUID'     => $uuidTimbre,
+                'U_ArchivoXML'   => $rutasAnexos['rutaXML'],
+                'U_ArchivoPDF'   => $rutasAnexos['rutaPDF'],
+                'DocumentLines'  => $documentLines
+            ];
+
+            if ($idBranchOfficeSAP > 0) {
+                $payload['BPL_IDAssignedToInvoice'] = $idBranchOfficeSAP;
+            }
+
+            $sapResponse = $this->postToServiceLayer('PurchaseInvoices', $payload);
+
+            $this->log->save([
+                'description' => "Factura enviada a SAP correctamente. UUID: {$uuidTimbre}, Folio XML: {$folio}, CardCode: {$cardCodeSAP}, DocEntry: " . ($sapResponse['DocEntry'] ?? '') . ", DocNum: " . ($sapResponse['DocNum'] ?? '') . ", Usuario: {$userName}",
+                'user'        => $userName,
+                'module'      => 'VENDOR_INVOICE_SAP',
+                'idMovModule' => $sapResponse['DocEntry'] ?? 0
+            ]);
+
+            return $this->response->setJSON([
+                'error'    => false,
+                'message'  => 'Factura y anexos (XML/PDF) enviados correctamente a SAP Business One.',
+                'docEntry' => $sapResponse['DocEntry'] ?? '',
+                'docNum'   => $sapResponse['DocNum'] ?? '',
+                'cardCode' => $cardCodeSAP,
+                'rutaXML'  => $rutasAnexos['rutaXML'],
+                'rutaPDF'  => $rutasAnexos['rutaPDF'],
+                'token'    => csrf_hash()
+            ]);
+
+        } catch (Throwable $e) {
+            if ($conn) {
+                @odbc_close($conn);
+            }
+
+            return $this->response->setJSON([
+                'error'   => true,
+                'message' => $e->getMessage(),
+                'token'   => csrf_hash()
+            ]);
+        }
+    }
+
+    /**
+     * Sube un archivo local a una carpeta compartida Windows/Samba vía SMB2/SMB3
+     */
+    public function subirAnexoSMB(
+            string $host,
+            string $recursoCompartido,
+            string $subDirectorio,
+            string $usuario,
+            string $password,
+            string $archivoLocal,
+            string $nombreArchivoRemoto
+    ): array {
+        $unc = escapeshellarg("//{$host}/{$recursoCompartido}");
+        $userPass = escapeshellarg("{$usuario}%{$password}");
+
+        $comandos = [];
+        if ($subDirectorio !== '') {
+            $subDirClean = str_replace('/', '\\', trim($subDirectorio, '/\\'));
+            $comandos[] = "cd \"{$subDirClean}\"";
+        }
+        $comandos[] = "put \"{$archivoLocal}\" \"{$nombreArchivoRemoto}\"";
+
+        $comandoSMB = escapeshellarg(implode('; ', $comandos));
+
+        // Ejecutar subida por protocolo SMB2/SMB3
+        $cmd = "smbclient {$unc} -U {$userPass} -m SMB3 -c {$comandoSMB} 2>&1";
+        $output = [];
+        $returnVar = 0;
+        exec($cmd, $output, $returnVar);
+
+        if ($returnVar !== 0) {
+            $detalleError = implode(" | ", $output);
+            if ($returnVar === 127 || stripos($detalleError, 'not found') !== false) {
+                $detalleError .= " (El paquete 'smbclient' no está instalado en el servidor Linux)";
+            }
+            return [
+                'ok' => false,
+                'error' => "No se pudo subir a la carpeta compartida (//{$host}/{$recursoCompartido}): {$detalleError}"
+            ];
+        }
+
+        return ['ok' => true];
+    }
+
+    /**
+     * Elimina un archivo en la carpeta compartida en caso de rollback (ej. si sube el XML pero falla el PDF)
+     */
+    private function eliminarAnexoSMB(
+            string $host,
+            string $recursoCompartido,
+            string $subDirectorio,
+            string $usuario,
+            string $password,
+            string $nombreArchivoRemoto
+    ): void {
+        $unc = escapeshellarg("//{$host}/{$recursoCompartido}");
+        $userPass = escapeshellarg("{$usuario}%{$password}");
+
+        $comandos = [];
+        if ($subDirectorio !== '') {
+            $subDirClean = str_replace('/', '\\', trim($subDirectorio, '/\\'));
+            $comandos[] = "cd \"{$subDirClean}\"";
+        }
+        $comandos[] = "del \"{$nombreArchivoRemoto}\"";
+
+        $comandoSMB = escapeshellarg(implode('; ', $comandos));
+        $cmd = "smbclient {$unc} -U {$userPass} -m SMB3 -c {$comandoSMB} 2>&1";
+        @exec($cmd);
+    }
+
+    /**
+     * Sube el XML y PDF a la ruta OADP.AttachPath por carpeta compartida (SMB)
+     * usando userFTPAnexos y passFTPAnexos.
+     * Retorna las rutas completas para U_ArchivoXML y U_ArchivoPDF.
+     */
+    private function subirAnexosSAP(string $attachPath, string $uuidTimbre, string $xmlContent, string $pdfContent): array {
+        $dataConect = $this->serviceLayerModel->first();
+        if (!$dataConect) {
+            throw new Exception('No se encontró configuración en SapservicelayerModel.');
+        }
+
+        $userSMB = trim((string) ($dataConect['userFTPAnexos'] ?? ''));
+        $passSMB = (string) ($dataConect['passFTPAnexos'] ?? '');
+
+        if (empty($userSMB)) {
+            throw new Exception('No está configurado el usuario de anexos (userFTPAnexos) en los parámetros de SAP Service Layer.');
+        }
+
+        $nombreXML = "{$uuidTimbre}.xml";
+        $nombrePDF = "{$uuidTimbre}.pdf";
+
+        // Conservar el separador original de OADP.AttachPath (\ para rutas UNC de Windows)
+        $separator = (strpos($attachPath, '\\') !== false) ? '\\' : '/';
+        $attachPathClean = rtrim($attachPath, "\\/ ") . $separator;
+
+        $rutaCompletaXML = $attachPathClean . $nombreXML;
+        $rutaCompletaPDF = $attachPathClean . $nombrePDF;
+
+        // Extraer Host, Recurso Compartido y subdirectorios desde OADP.AttachPath
+        // Ejemplo: \\192.168.0.191\AnexosSAP\Compras\
+        $normalizedPath = trim(str_replace('\\', '/', $attachPath), '/');
+        $partes = array_values(array_filter(explode('/', $normalizedPath), 'strlen'));
+
+        $smbHost = '';
+        $recursoCompartido = '';
+        $subDirs = [];
+
+        if (!empty($partes)) {
+            // Si el primer segmento no tiene ":" (no es C:), es la IP/Host de red
+            if (strpos($partes[0], ':') === false) {
+                $smbHost = $partes[0];
+                $recursoCompartido = $partes[1] ?? '';
+                $subDirs = array_slice($partes, 2);
+            } else {
+                // Si empieza con unidad local (ej. C:\AnexosSAP), tomamos el nombre de carpeta como recurso compartido
+                $recursoCompartido = $partes[1] ?? '';
+                $subDirs = array_slice($partes, 2);
+            }
+        }
+
+        // Si OADP.AttachPath no traía IP (ej. C:\Anexos), tomar el host de la URL de Service Layer
+        if (empty($smbHost)) {
+            $slUrl = $dataConect['urlServiceLayer'] ?? $dataConect['url'] ?? '';
+            $smbHost = parse_url($slUrl, PHP_URL_HOST) ?: $slUrl;
+        }
+
+        if (empty($smbHost) || empty($recursoCompartido)) {
+            throw new Exception("No se pudo determinar el servidor o la carpeta compartida a partir de OADP.AttachPath ({$attachPath}). Verifique que en SAP tenga formato \\\\IP\\CarpetaCompartida\\");
+        }
+
+        $subDirectorio = !empty($subDirs) ? implode('/', $subDirs) : '';
+
+        // Crear archivos temporales físicos en /tmp para que smbclient los envíe
+        $tmpXML = tempnam(sys_get_temp_dir(), 'sap_xml_');
+        $tmpPDF = tempnam(sys_get_temp_dir(), 'sap_pdf_');
+
+        if ($tmpXML === false || $tmpPDF === false) {
+            throw new Exception('No se pudieron crear los archivos temporales para los anexos en el servidor local.');
+        }
+
+        try {
+            file_put_contents($tmpXML, $xmlContent);
+            file_put_contents($tmpPDF, $pdfContent);
+
+            // 1. Subir archivo XML a la carpeta compartida
+            $resXML = $this->subirAnexoSMB($smbHost, $recursoCompartido, $subDirectorio, $userSMB, $passSMB, $tmpXML, $nombreXML);
+            if (!$resXML['ok']) {
+                throw new Exception("Error al subir el archivo XML ({$nombreXML}): " . $resXML['error']);
+            }
+
+            // 2. Subir archivo PDF a la carpeta compartida
+            $resPDF = $this->subirAnexoSMB($smbHost, $recursoCompartido, $subDirectorio, $userSMB, $passSMB, $tmpPDF, $nombrePDF);
+            if (!$resPDF['ok']) {
+                // Si falló el PDF, eliminamos el XML recién subido para no dejar archivos huérfanos
+                $this->eliminarAnexoSMB($smbHost, $recursoCompartido, $subDirectorio, $userSMB, $passSMB, $nombreXML);
+                throw new Exception("Error al subir el archivo PDF ({$nombrePDF}): " . $resPDF['error']);
+            }
+        } finally {
+            // Eliminar siempre los archivos temporales de /tmp
+            if (file_exists($tmpXML)) {
+                @unlink($tmpXML);
+            }
+            if (file_exists($tmpPDF)) {
+                @unlink($tmpPDF);
+            }
+        }
+
+        return [
+            'rutaXML' => $rutaCompletaXML,
+            'rutaPDF' => $rutaCompletaPDF
+        ];
+    }
+
+    /**
+     * Obtiene vía ODBC el código de impuesto (OSTC.Code) válido para Compras (ValidForAP = 'Y')
+     */
+    private function resolveSapTaxCode($conn, float $porcentTax, string $itemCode, string $cardCode): string {
+        $rateFormatted = number_format($porcentTax, 2, '.', '');
+        $itemClean = str_replace("'", "''", $itemCode);
+        $cardClean = str_replace("'", "''", $cardCode);
+
+        // 1. Verificar si el Artículo en OITM ya tiene un TaxCodeAP predeterminado con esa misma tasa
+        $sqlItemTax = "
+            SELECT T0.\"TaxCodeAP\" AS \"Code\"
+            FROM OITM T0
+            INNER JOIN OSTC T1 ON T0.\"TaxCodeAP\" = T1.\"Code\"
+            WHERE T0.\"ItemCode\" = '{$itemClean}'
+              AND T1.\"ValidForAP\" = 'Y'
+              AND T1.\"Lock\" = 'N'
+              AND ROUND(T1.\"Rate\", 2) = {$rateFormatted}
+            LIMIT 1
+        ";
+        $rsItem = @odbc_exec($conn, $sqlItemTax);
+        if ($rsItem) {
+            $rowItem = odbc_fetch_array($rsItem);
+            odbc_free_result($rsItem);
+            if ($rowItem && !empty($rowItem['Code'])) {
+                return trim($this->toUtf8($rowItem['Code']));
+            }
+        }
+
+        // 2. Verificar si el Proveedor (CRD1) tiene un TaxCode asignado con esa tasa
+        $sqlBpTax = "
+            SELECT T0.\"TaxCode\" AS \"Code\"
+            FROM CRD1 T0
+            INNER JOIN OSTC T1 ON T0.\"TaxCode\" = T1.\"Code\"
+            WHERE T0.\"CardCode\" = '{$cardClean}'
+              AND T1.\"ValidForAP\" = 'Y'
+              AND T1.\"Lock\" = 'N'
+              AND ROUND(T1.\"Rate\", 2) = {$rateFormatted}
+            LIMIT 1
+        ";
+        $rsBp = @odbc_exec($conn, $sqlBpTax);
+        if ($rsBp) {
+            $rowBp = odbc_fetch_array($rsBp);
+            odbc_free_result($rsBp);
+            if ($rowBp && !empty($rowBp['Code'])) {
+                return trim($this->toUtf8($rowBp['Code']));
+            }
+        }
+
+        // 3. Buscar en el catálogo de indicadores de impuestos de SAP (OSTC) para Compras
+        $sqlOstc = "
+            SELECT \"Code\"
+            FROM OSTC
+            WHERE \"ValidForAP\" = 'Y'
+              AND \"Lock\" = 'N'
+              AND ROUND(\"Rate\", 2) = {$rateFormatted}
+            ORDER BY \"Code\" ASC
+            LIMIT 1
+        ";
+        $rsOstc = odbc_exec($conn, $sqlOstc);
+        if ($rsOstc) {
+            $rowOstc = odbc_fetch_array($rsOstc);
+            odbc_free_result($rsOstc);
+            if ($rowOstc && !empty($rowOstc['Code'])) {
+                return trim($this->toUtf8($rowOstc['Code']));
+            }
+        }
+
+        // 4. Si no existe ninguno para esa tasa, listar los códigos disponibles en SAP para facilitar el diagnóstico
+        $disponibles = [];
+        $rsAll = @odbc_exec($conn, 'SELECT "Code", "Rate" FROM OSTC WHERE "ValidForAP" = \'Y\' AND "Lock" = \'N\' ORDER BY "Code"');
+        if ($rsAll) {
+            while ($r = odbc_fetch_array($rsAll)) {
+                $disponibles[] = trim($this->toUtf8($r['Code'])) . ' (' . (float) $r['Rate'] . '%)';
+            }
+            odbc_free_result($rsAll);
+        }
+
+        $listaDisponibles = !empty($disponibles) ? implode(', ', $disponibles) : 'Ninguno activo';
+        throw new Exception("No se encontró un código de impuesto de compras en SAP (OSTC) para la tasa {$rateFormatted}%. Códigos activos en SAP: {$listaDisponibles}");
+    }
+
+    /**
+     * Inicia sesión en SAP Service Layer y envía el payload vía POST
+     */
+    private function postToServiceLayer(string $endpoint, array $payload): array {
+        $dataConect = $this->serviceLayerModel->first();
+        if (!$dataConect) {
+            throw new Exception('No se encontró configuración de Service Layer.');
+        }
+
+        // Ajusta las llaves si en tu tabla sapservicelayer tienen otro nombre de columna
+        $baseUrl = rtrim($dataConect['urlServiceLayer'] ?? $dataConect['url'] ?? '', '/');
+        $companyDB = $dataConect['companyDB'] ?? '';
+        $userSAP = $dataConect['userSAP'] ?? $dataConect['user'] ?? $dataConect['username'] ?? '';
+        $passwordSAP = $dataConect['passwordSAP'] ?? $dataConect['password'] ?? '';
+        $port = $dataConect['portServiceLayer'] ?? $dataConect['port'] ?? '';
+
+        if (empty($baseUrl)) {
+            throw new Exception('La URL de SAP Service Layer no está configurada.');
+        }
+
+        if (!empty($port) && strpos($baseUrl, ':' . $port) === false && strpos($baseUrl, '/b1s/') === false) {
+            $baseUrl .= ':' . $port;
+        }
+
+        if (strpos($baseUrl, '/b1s/v') === false) {
+            $baseUrl .= '/b1s/v1';
+        }
+
+        // 1. Login en Service Layer
+        $loginPayload = json_encode([
+            'CompanyDB' => $companyDB,
+            'UserName' => $userSAP,
+            'Password' => $passwordSAP
+        ]);
+
+        $chLogin = curl_init("{$baseUrl}/Login");
+        curl_setopt_array($chLogin, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => $loginPayload,
+            CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_HEADER => true,
+            CURLOPT_TIMEOUT => 30
+        ]);
+
+        $loginResult = curl_exec($chLogin);
+        if ($loginResult === false) {
+            $err = curl_error($chLogin);
+            curl_close($chLogin);
+            throw new Exception("Error de conexión con Service Layer (Login): {$err}");
+        }
+
+        $httpCodeLogin = curl_getinfo($chLogin, CURLINFO_HTTP_CODE);
+        $headerSize = curl_getinfo($chLogin, CURLINFO_HEADER_SIZE);
+        $headersLogin = substr($loginResult, 0, $headerSize);
+        $bodyLogin = substr($loginResult, $headerSize);
+        curl_close($chLogin);
+
+        if ($httpCodeLogin < 200 || $httpCodeLogin >= 300) {
+            $decodedLoginErr = json_decode($bodyLogin, true);
+            $msg = $decodedLoginErr['error']['message']['value'] ?? $bodyLogin;
+            throw new Exception("Error de autenticación en Service Layer ({$httpCodeLogin}): {$msg}");
+        }
+
+        // Extraer cookies B1SESSION y ROUTEID
+        preg_match_all('/^Set-Cookie:\s*([^;]*)/mi', $headersLogin, $matches);
+        $cookies = implode('; ', $matches[1] ?? []);
+
+        // 2. Enviar documento al endpoint indicado
+        $chDoc = curl_init("{$baseUrl}/" . ltrim($endpoint, '/'));
+        curl_setopt_array($chDoc, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE),
+            CURLOPT_HTTPHEADER => [
+                'Content-Type: application/json',
+                "Cookie: {$cookies}"
+            ],
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_TIMEOUT => 60
+        ]);
+
+        $docResult = curl_exec($chDoc);
+        $httpCodeDoc = curl_getinfo($chDoc, CURLINFO_HTTP_CODE);
+
+        if ($docResult === false) {
+            $err = curl_error($chDoc);
+            curl_close($chDoc);
+            throw new Exception("Error al enviar documento a Service Layer: {$err}");
+        }
+        curl_close($chDoc);
+
+        // 3. Cerrar sesión en Service Layer
+        $chLogout = curl_init("{$baseUrl}/Logout");
+        curl_setopt_array($chLogout, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST => true,
+            CURLOPT_HTTPHEADER => ["Cookie: {$cookies}"],
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_TIMEOUT => 10
+        ]);
+        curl_exec($chLogout);
+        curl_close($chLogout);
+
+        $decodedDoc = json_decode($docResult, true);
+
+        if ($httpCodeDoc < 200 || $httpCodeDoc >= 300) {
+            $sapErrorMsg = $decodedDoc['error']['message']['value'] ?? $docResult;
+            throw new Exception("SAP Service Layer rechazó el documento ({$httpCodeDoc}): {$sapErrorMsg}");
+        }
+
+        return is_array($decodedDoc) ? $decodedDoc : [];
     }
 
     public function vendorInvoiceFilters($desdeFecha, $hastaFecha, $todas, $empresa, $sucursal, $cliente) {
@@ -1602,7 +2278,7 @@ EOF;
     public function getItemCodeAjax() {
         try {
             $search = $this->request->getPost('searchTerm') ?? $this->request->getGet('searchTerm') ?? '';
-            $conn   = $this->connectODBC();
+            $conn = $this->connectODBC();
 
             $where = ' WHERE "ItmsGrpCod" = 112 AND "frozenFor" = \'N\' ';
             if (!empty($search)) {
@@ -1628,7 +2304,7 @@ EOF;
 
             $data = [];
             $data[] = [
-                'id'   => '0',
+                'id' => '0',
                 'text' => '0 - Seleccione Artículo'
             ];
 
@@ -1637,8 +2313,8 @@ EOF;
                 $name = $this->toUtf8($row['ItemName']);
 
                 $data[] = [
-                    'id'       => $code,
-                    'text'     => "{$code} - {$name}",
+                    'id' => $code,
+                    'text' => "{$code} - {$name}",
                     'itemCode' => $code,
                     'itemName' => $name
                 ];
@@ -1648,15 +2324,15 @@ EOF;
             odbc_close($conn);
 
             return $this->response->setJSON([
-                'token' => csrf_hash(),
-                'data'  => $data
+                        'token' => csrf_hash(),
+                        'data' => $data
             ]);
         } catch (Throwable $e) {
             return $this->response->setJSON([
-                'token'   => csrf_hash(),
-                'data'    => [],
-                'error'   => true,
-                'message' => $e->getMessage()
+                        'token' => csrf_hash(),
+                        'data' => [],
+                        'error' => true,
+                        'message' => $e->getMessage()
             ]);
         }
     }
@@ -1667,7 +2343,7 @@ EOF;
     public function getPrjCodeAjax() {
         try {
             $search = $this->request->getPost('searchTerm') ?? $this->request->getGet('searchTerm') ?? '';
-            $conn   = $this->connectODBC();
+            $conn = $this->connectODBC();
 
             $where = " WHERE \"Active\" = 'Y' ";
             if (!empty($search)) {
@@ -1693,7 +2369,7 @@ EOF;
 
             $data = [];
             $data[] = [
-                'id'   => '0',
+                'id' => '0',
                 'text' => '0 - Seleccione Proyecto'
             ];
 
@@ -1702,8 +2378,8 @@ EOF;
                 $name = $this->toUtf8($row['PrjName']);
 
                 $data[] = [
-                    'id'      => $code,
-                    'text'    => "{$code} - {$name}",
+                    'id' => $code,
+                    'text' => "{$code} - {$name}",
                     'prjCode' => $code,
                     'prjName' => $name
                 ];
@@ -1713,15 +2389,15 @@ EOF;
             odbc_close($conn);
 
             return $this->response->setJSON([
-                'token' => csrf_hash(),
-                'data'  => $data
+                        'token' => csrf_hash(),
+                        'data' => $data
             ]);
         } catch (Throwable $e) {
             return $this->response->setJSON([
-                'token'   => csrf_hash(),
-                'data'    => [],
-                'error'   => true,
-                'message' => $e->getMessage()
+                        'token' => csrf_hash(),
+                        'data' => [],
+                        'error' => true,
+                        'message' => $e->getMessage()
             ]);
         }
     }
@@ -1732,7 +2408,7 @@ EOF;
     public function getOcrCodeAjax() {
         try {
             $search = $this->request->getPost('searchTerm') ?? $this->request->getGet('searchTerm') ?? '';
-            $conn   = $this->connectODBC();
+            $conn = $this->connectODBC();
 
             $where = " WHERE \"Locked\" = 'N' AND \"DimCode\" = 1 ";
             if (!empty($search)) {
@@ -1758,7 +2434,7 @@ EOF;
 
             $data = [];
             $data[] = [
-                'id'   => '0',
+                'id' => '0',
                 'text' => '0 - Seleccione Activo Fijo'
             ];
 
@@ -1767,8 +2443,8 @@ EOF;
                 $name = $this->toUtf8($row['PrcName']);
 
                 $data[] = [
-                    'id'      => $code,
-                    'text'    => "{$code} - {$name}",
+                    'id' => $code,
+                    'text' => "{$code} - {$name}",
                     'prcCode' => $code,
                     'prcName' => $name
                 ];
@@ -1778,15 +2454,15 @@ EOF;
             odbc_close($conn);
 
             return $this->response->setJSON([
-                'token' => csrf_hash(),
-                'data'  => $data
+                        'token' => csrf_hash(),
+                        'data' => $data
             ]);
         } catch (Throwable $e) {
             return $this->response->setJSON([
-                'token'   => csrf_hash(),
-                'data'    => [],
-                'error'   => true,
-                'message' => $e->getMessage()
+                        'token' => csrf_hash(),
+                        'data' => [],
+                        'error' => true,
+                        'message' => $e->getMessage()
             ]);
         }
     }
@@ -1797,7 +2473,7 @@ EOF;
     public function getOcrCode2Ajax() {
         try {
             $search = $this->request->getPost('searchTerm') ?? $this->request->getGet('searchTerm') ?? '';
-            $conn   = $this->connectODBC();
+            $conn = $this->connectODBC();
 
             $where = " WHERE \"Locked\" = 'N' AND \"DimCode\" = 2 ";
             if (!empty($search)) {
@@ -1823,7 +2499,7 @@ EOF;
 
             $data = [];
             $data[] = [
-                'id'   => '0',
+                'id' => '0',
                 'text' => '0 - Seleccione Departamento'
             ];
 
@@ -1832,8 +2508,8 @@ EOF;
                 $name = $this->toUtf8($row['PrcName']);
 
                 $data[] = [
-                    'id'      => $code,
-                    'text'    => "{$code} - {$name}",
+                    'id' => $code,
+                    'text' => "{$code} - {$name}",
                     'prcCode' => $code,
                     'prcName' => $name
                 ];
@@ -1843,15 +2519,15 @@ EOF;
             odbc_close($conn);
 
             return $this->response->setJSON([
-                'token' => csrf_hash(),
-                'data'  => $data
+                        'token' => csrf_hash(),
+                        'data' => $data
             ]);
         } catch (Throwable $e) {
             return $this->response->setJSON([
-                'token'   => csrf_hash(),
-                'data'    => [],
-                'error'   => true,
-                'message' => $e->getMessage()
+                        'token' => csrf_hash(),
+                        'data' => [],
+                        'error' => true,
+                        'message' => $e->getMessage()
             ]);
         }
     }
@@ -1867,9 +2543,9 @@ EOF;
         }
 
         $conn = odbc_connect(
-            $dataConect['nameODBC'],
-            $dataConect['userODBC'],
-            $dataConect['passwordODBC']
+                $dataConect['nameODBC'],
+                $dataConect['userODBC'],
+                $dataConect['passwordODBC']
         );
 
         if (!$conn) {

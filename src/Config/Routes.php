@@ -595,8 +595,7 @@ $routes->group('admin', function ($routes) {
         'namespace' => 'julio101290\boilerplateservicelayer\Controllers',
         'filter' => 'permission:sapvouchers'
     ]);
-    
-    
+
     // Buscadores AJAX SAP para renglones de Factura de Proveedor
     $routes->post('vendorInvoice/getItemCodeAjax',
             'VendorInvoiceController::getItemCodeAjax',
@@ -617,4 +616,83 @@ $routes->group('admin', function ($routes) {
             'VendorInvoiceController::getOcrCode2Ajax',
             ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
     );
+
+    $routes->post(
+            'vendorInvoice/sendToSAP',
+            'VendorInvoiceController::sendToSAP',
+            ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+// =====================================================================
+    // RUTAS DEL MÓDULO DE REEMBOLSOS Y COMPROBACIÓN DE GASTOS SAP
+    // =====================================================================
+    $routes->get('refunds', 'RefundsController::index', [
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+    ]);
+    $routes->get('refunds/newRefund', 'RefundsController::newRefund', [
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+    ]);
+    $routes->get('refunds/edit/(:any)', 'RefundsController::editRefund/$1', [
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+    ]);
+    $routes->post('refunds/save', 'RefundsController::save', [
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+    ]);
+    $routes->delete('refunds/delete/(:num)', 'RefundsController::delete/$1', [
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+    ]);
+
+    // Bóveda de XML sin asignar y Subida de PDF opcional de Notas a writable/
+    $routes->match(['get', 'post'], 'refunds/xmlSinAsignar/(:any)', 'RefundsController::xmlSinAsignar/$1', [
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+    ]);
+    $routes->post('refunds/uploadNoteFileAjax', 'RefundsController::uploadNoteFileAjax', [
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+    ]);
+
+    // Sincronización y Operaciones de Escritura vía SAP Service Layer
+    $routes->post('refunds/sendToSAP', 'RefundsController::sendToSAP', [
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+    ]);
+    $routes->post('refunds/notifyVoucher', 'RefundsController::notifyVoucher', [
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+    ]);
+    $routes->post('refunds/authorizeVoucher', 'RefundsController::authorizeVoucher', [
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+    ]);
+    $routes->post('refunds/rejectVoucher', 'RefundsController::rejectVoucher', [
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+    ]);
+    $routes->post('refunds/payRefundInvoicesSAP', 'RefundsController::payRefundInvoicesSAP', [
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+    ]);
+    $routes->post('refunds/payRefundToEmployeeSAP', 'RefundsController::payRefundToEmployeeSAP', [
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+    ]);
+
+    // Consultas y Buscadores Select2 / DataTables vía ODBC (Solo Lectura)
+    $routes->post('refunds/showVoucherDetails', 'RefundsController::showVoucherDetails', [
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+    ]);
+    $routes->post('refunds/getXmlDataAjax', 'RefundsController::getXmlDataAjax', [
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+    ]);
+    $routes->post('refunds/getEmployeesAjax', 'RefundsController::getEmployeesAjax', [
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+    ]);
+    $routes->post('refunds/getAccountsAjax', 'RefundsController::getAccountsAjax', [
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+    ]);
+    $routes->post('refunds/getDimensionAjax/(:num)', 'RefundsController::getDimensionAjax/$1', [
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+    ]);
+    $routes->post('refunds/getItemCodeAjax', 'RefundsController::getItemCodeAjax', [
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+    ]);
+    $routes->post('refunds/getPrjCodeAjax', 'RefundsController::getPrjCodeAjax', [
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+    ]);
+    $routes->post('refunds/getWarehousesAjax', 'RefundsController::getWarehousesAjax', [
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+    ]);
 });
