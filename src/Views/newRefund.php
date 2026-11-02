@@ -103,13 +103,14 @@
                     </div>
 
                     <div class="row">
+                        <!-- Área / Centro de Costo OPCIONAL -->
                         <div class="col-md-3 form-group">
-                            <label for="U_Area">Área / Centro de Costo (SAP) <span class="text-danger">*</span></label>
+                            <label for="U_Area">Área / Centro de Costo (Opcional)</label>
                             <select id="U_Area" name="U_Area" class="form-control select2" style="width: 100%;" <?= (!empty($sapSynced) && $sapSynced == 1) ? 'disabled' : '' ?>>
-                                <?php if (!empty($U_Area)): ?>
+                                <?php if (!empty($U_Area) && $U_Area !== '0'): ?>
                                     <option value="<?= esc($U_Area) ?>" selected><?= esc($U_Area) ?></option>
                                 <?php else: ?>
-                                    <option value="0">Seleccione Área / C. Costo</option>
+                                    <option value="">Sin Área / Opcional</option>
                                 <?php endif; ?>
                             </select>
                         </div>
@@ -448,9 +449,9 @@
                                 <th style="width: 100px;">Dim 3</th>
                                 <th style="width: 85px;">Cant.</th>
                                 <th style="width: 100px;">Precio U.</th>
-                                <th style="width: 75px;">% IVA</th>
-                                <th style="width: 90px;">IVA</th>
-                                <th style="width: 100px;">Total Línea</th>
+                                <th style="width: 85px;">% IVA</th>
+                                <th style="width: 95px;">IVA</th>
+                                <th style="width: 115px;">Total Línea (Editable)</th>
                                 <th style="width: 75px;">Acción</th>
                             </tr>
                         </thead>
@@ -463,11 +464,11 @@
                 <div class="row mt-2 bg-light p-2 border rounded">
                     <div class="col-md-2">
                         <small class="text-muted d-block">Subtotal</small>
-                        <input type="number" step="0.01" id="xmlSubtotal" class="form-control form-control-sm font-weight-bold" value="0.00" readonly>
+                        <input type="number" step="0.01" id="xmlSubtotal" class="form-control form-control-sm font-weight-bold" value="0.00">
                     </div>
                     <div class="col-md-2">
                         <small class="text-muted d-block">IVA Trasladado</small>
-                        <input type="number" step="0.01" id="xmlIVA" class="form-control form-control-sm" value="0.00" readonly>
+                        <input type="number" step="0.01" id="xmlIVA" class="form-control form-control-sm" value="0.00">
                     </div>
                     <div class="col-md-2">
                         <small class="text-muted d-block">IEPS</small>
@@ -482,8 +483,8 @@
                         <input type="number" step="0.01" id="xmlRetISR" class="form-control form-control-sm" value="0.00">
                     </div>
                     <div class="col-md-2">
-                        <small class="font-weight-bold d-block text-success">TOTAL FACTURA XML</small>
-                        <input type="number" step="0.01" id="xmlTotal" class="form-control form-control-sm font-weight-bold bg-white" value="0.00" readonly>
+                        <small class="font-weight-bold d-block text-success">TOTAL FACTURA XML (Editable / ISH)</small>
+                        <input type="number" step="0.01" id="xmlTotal" class="form-control form-control-sm font-weight-bold bg-white border-success" value="0.00">
                     </div>
                 </div>
             </div>
@@ -591,7 +592,7 @@
 
                     <div class="row">
                         <div class="col-md-3 form-group mb-2">
-                            <label class="small mb-0">Cuenta Acreedora (`txtCredit`) *</label>
+                            <label class="small mb-0">Cuenta Acreedora (`txtCredit`)</label>
                             <select id="notaAffectable" class="form-control form-control-sm select2" style="width: 100%;"></select>
                         </div>
 
@@ -601,7 +602,7 @@
                         </div>
 
                         <div class="col-md-4 form-group mb-2">
-                            <label class="small mb-0">Anexo PDF Opcional (`U_Archivo` en renglón póliza)</label>
+                            <label class="small mb-0">Anexo PDF Opcional (`U_GLO_File` en renglón póliza)</label>
                             <div class="input-group input-group-sm">
                                 <input type="file" id="notaFileInput" class="form-control form-control-sm" accept=".pdf,.xml,.jpg,.jpeg,.png">
                             </div>
@@ -885,18 +886,27 @@
                 $('#xmlIEPS').val(parseFloat(res.ieps || 0).toFixed(2));
                 $('#xmlRetIVA').val(parseFloat(res.retIVA || 0).toFixed(2));
                 $('#xmlRetISR').val(parseFloat(res.retISR || 0).toFixed(2));
+                $('#xmlTotal').val(parseFloat(res.total || 0).toFixed(2));
 
                 if (!$('#xmlComments').val()) {
                     $('#xmlComments').val(res.descripcionConceptos || '');
                 }
 
-                var areaDefault = $('#U_Area').val() || '';
+                var rawArea = $('#U_Area').val();
+                var areaDefault = (rawArea && rawArea !== '0') ? rawArea : '';
+
                 currentXmlConcepts = (res.conceptLines || []).map(function (c) {
                     c.dim1 = c.dim1 || areaDefault;
                     return c;
                 });
 
-                renderXmlMatrix();
+                // Si el Total del XML trae Impuesto Sobre Hospedaje (ISH) y es distinto a la suma simple,
+                // ajustamos el total de la primera línea o preservamos el Total real de la factura
+                if (currentXmlConcepts.length === 1 && parseFloat(res.total || 0) > 0) {
+                    currentXmlConcepts[0].total = parseFloat(res.total);
+                }
+
+                renderXmlMatrix(true);
             }, 'json');
         });
 
@@ -906,7 +916,8 @@
             var defWhs   = $('#xmlDefaultWhs').val() || '';
             var defAcc   = $('#xmlDefaultAccount').val() || '';
             var defProj  = $('#xmlDefaultProject').val() || '';
-            var defDim1  = $('#xmlDefaultDim1').val() || $('#U_Area').val() || '';
+            var rawArea  = $('#U_Area').val();
+            var defDim1  = $('#xmlDefaultDim1').val() || ((rawArea && rawArea !== '0') ? rawArea : '');
             var defDim2  = $('#xmlDefaultDim2').val() || '';
             var defDim3  = $('#xmlDefaultDim3').val() || '';
             var defDim4  = $('#xmlDefaultDim4').val() || '';
@@ -925,12 +936,12 @@
                 if (defDim5 && defDim5 !== '0') c.dim5 = defDim5;
             });
 
-            renderXmlMatrix();
+            renderXmlMatrix(true);
             Toast.fire({ icon: 'success', title: 'Valores aplicados a las líneas del XML.' });
         });
 
         $('#xmlIEPS, #xmlRetIVA, #xmlRetISR').on('input change', function () {
-            recalcularTotalesMatrizXML();
+            recalcularTotalesMatrizXML(false);
         });
 
         $('#btnConfirmAddXML').on('click', function () {
@@ -950,6 +961,8 @@
 
             var editIdx = parseInt($('#xmlEditIndex').val());
             var total   = parseFloat($('#xmlTotal').val()) || 0;
+            var rawArea = $('#U_Area').val();
+            var areaVal = (rawArea && rawArea !== '0') ? rawArea : '';
 
             var lineObj = {
                 U_NA: 'N',
@@ -963,7 +976,7 @@
                 itemCode: currentXmlConcepts[0].itemCode,
                 description: $('#xmlComments').val(),
                 U_Coments: $('#xmlComments').val(),
-                dim1: currentXmlConcepts[0].dim1 || $('#U_Area').val(),
+                dim1: currentXmlConcepts[0].dim1 || areaVal,
                 project: currentXmlConcepts[0].project || '',
                 U_Subtotal: parseFloat($('#xmlSubtotal').val()) || 0,
                 U_IVA: parseFloat($('#xmlIVA').val()) || 0,
@@ -1000,11 +1013,11 @@
             var folio      = $('#notaFolio').val().trim();
             var provider   = $('#notaProvider').val().trim();
             var account    = $('#notaAccount').val();
-            var affectable = $('#notaAffectable').val() || $('#accountCredit').val();
+            var affectable = $('#notaAffectable').val() || $('#accountCredit').val() || '';
             var amount     = parseFloat($('#notaAmount').val()) || 0;
 
-            if (!folio || !provider || !account || account === '0' || !affectable || affectable === '0' || amount <= 0) {
-                Toast.fire({ icon: 'error', title: 'Complete Folio, Proveedor, Cuenta Cargo, Cuenta Acreedora e Importe > 0.' });
+            if (!folio || !provider || !account || account === '0' || amount <= 0) {
+                Toast.fire({ icon: 'error', title: 'Complete Folio, Proveedor, Cuenta Cargo e Importe > 0.' });
                 return;
             }
 
@@ -1237,7 +1250,7 @@
     // FUNCIONES DE MATRIZ MULTILÍNEA XML Y MATRIZ MULTILÍNEA NOTAS
     // =========================================================================
 
-    function renderXmlMatrix() {
+    function renderXmlMatrix(preserveHeaderTotal = false) {
         var html = '';
         currentXmlConcepts.forEach(function (c, i) {
             html += `<tr>
@@ -1259,9 +1272,9 @@
                 <td><input type="text" class="form-control form-control-sm" value="${c.dim3 || ''}" onchange="updateXmlConcept(${i}, 'dim3', this.value)"></td>
                 <td><input type="number" step="0.01" class="form-control form-control-sm text-right" value="${c.cant}" onchange="updateXmlConceptQtyPrice(${i}, 'cant', this.value)"></td>
                 <td><input type="number" step="0.01" class="form-control form-control-sm text-right" value="${c.price}" onchange="updateXmlConceptQtyPrice(${i}, 'price', this.value)"></td>
-                <td class="text-right">${c.porcentTax}%</td>
-                <td class="text-right">${parseFloat(c.iva || 0).toFixed(2)}</td>
-                <td class="text-right font-weight-bold">${parseFloat(c.total || 0).toFixed(2)}</td>
+                <td><input type="number" step="0.01" class="form-control form-control-sm text-right" value="${c.porcentTax}" onchange="updateXmlConceptTaxRate(${i}, this.value)"></td>
+                <td><input type="number" step="0.01" class="form-control form-control-sm text-right" value="${parseFloat(c.iva || 0).toFixed(2)}" onchange="updateXmlConceptIva(${i}, this.value)"></td>
+                <td><input type="number" step="0.01" class="form-control form-control-sm text-right font-weight-bold border-success" value="${parseFloat(c.total || 0).toFixed(2)}" onchange="updateXmlConceptTotal(${i}, this.value)"></td>
                 <td class="text-center">
                     <button type="button" class="btn btn-info btn-xs" onclick="duplicateXmlConcept(${i})" title="Duplicar línea"><i class="fas fa-copy"></i></button>
                     <button type="button" class="btn btn-danger btn-xs" onclick="removeXmlConcept(${i})" title="Eliminar línea"><i class="fas fa-trash"></i></button>
@@ -1270,7 +1283,7 @@
         });
 
         $('#tbodyXmlMatrix').html(html);
-        recalcularTotalesMatrizXML();
+        recalcularTotalesMatrizXML(preserveHeaderTotal);
     }
 
     function updateXmlConcept(idx, field, val) {
@@ -1289,39 +1302,73 @@
         currentXmlConcepts[idx].subTotal = sub;
         currentXmlConcepts[idx].iva      = iva;
         currentXmlConcepts[idx].total    = sub + iva;
-        renderXmlMatrix();
+        renderXmlMatrix(false);
+    }
+
+    function updateXmlConceptTaxRate(idx, val) {
+        currentXmlConcepts[idx].porcentTax = parseFloat(val) || 0;
+        var sub  = parseFloat(currentXmlConcepts[idx].subTotal) || 0;
+        var rate = currentXmlConcepts[idx].porcentTax / 100.0;
+        var iva  = sub * rate;
+        currentXmlConcepts[idx].iva   = iva;
+        currentXmlConcepts[idx].total = sub + iva;
+        renderXmlMatrix(false);
+    }
+
+    function updateXmlConceptIva(idx, val) {
+        var iva = parseFloat(val) || 0;
+        var sub = parseFloat(currentXmlConcepts[idx].subTotal) || 0;
+        currentXmlConcepts[idx].iva   = iva;
+        currentXmlConcepts[idx].total = sub + iva;
+        renderXmlMatrix(false);
+    }
+
+    // Permite modificar directamente el Total de la línea (ej. por Impuesto Sobre Hospedaje ISH)
+    function updateXmlConceptTotal(idx, val) {
+        currentXmlConcepts[idx].total = parseFloat(val) || 0;
+        recalcularTotalesMatrizXML(false);
     }
 
     function duplicateXmlConcept(idx) {
         var copy = JSON.parse(JSON.stringify(currentXmlConcepts[idx]));
         currentXmlConcepts.splice(idx + 1, 0, copy);
-        renderXmlMatrix();
+        renderXmlMatrix(false);
     }
 
     function removeXmlConcept(idx) {
         currentXmlConcepts.splice(idx, 1);
-        renderXmlMatrix();
+        renderXmlMatrix(false);
     }
 
-    function recalcularTotalesMatrizXML() {
-        var sub = 0;
-        var iva = 0;
+    function recalcularTotalesMatrizXML(preserveHeaderTotal = false) {
+        var sub      = 0;
+        var iva      = 0;
+        var sumLines = 0;
+
         currentXmlConcepts.forEach(function (c) {
-            sub += parseFloat(c.subTotal || 0);
-            iva += parseFloat(c.iva || 0);
+            sub      += parseFloat(c.subTotal || 0);
+            iva      += parseFloat(c.iva || 0);
+            sumLines += parseFloat(c.total || 0);
         });
+
         var ieps   = parseFloat($('#xmlIEPS').val()) || 0;
         var retIva = parseFloat($('#xmlRetIVA').val()) || 0;
         var retIsr = parseFloat($('#xmlRetISR').val()) || 0;
-        var total  = sub + iva + ieps - retIva - retIsr;
 
         $('#xmlSubtotal').val(sub.toFixed(2));
         $('#xmlIVA').val(iva.toFixed(2));
-        $('#xmlTotal').val(total.toFixed(2));
+
+        if (!preserveHeaderTotal) {
+            var total = sumLines + ieps - retIva - retIsr;
+            $('#xmlTotal').val(total.toFixed(2));
+        }
     }
 
     function pushRowToNotaMatrix(savedRelativePath, originalFileName) {
-        var amount = parseFloat($('#notaAmount').val()) || 0;
+        var amount  = parseFloat($('#notaAmount').val()) || 0;
+        var rawArea = $('#U_Area').val();
+        var areaVal = (rawArea && rawArea !== '0') ? rawArea : '';
+
         currentNotaRows.push({
             accountType: $('#notaAccountType').val(),
             docFolio: $('#notaFolio').val().trim(),
@@ -1330,7 +1377,7 @@
             affectable: $('#notaAffectable').val() || $('#accountCredit').val(),
             U_Date: $('#notaDate').val(),
             project: ($('#notaProject').val() && $('#notaProject').val() !== '0') ? $('#notaProject').val() : '',
-            dim1: ($('#notaDim1').val() && $('#notaDim1').val() !== '0') ? $('#notaDim1').val() : $('#U_Area').val(),
+            dim1: ($('#notaDim1').val() && $('#notaDim1').val() !== '0') ? $('#notaDim1').val() : areaVal,
             dim2: ($('#notaDim2').val() && $('#notaDim2').val() !== '0') ? $('#notaDim2').val() : '',
             dim3: ($('#notaDim3').val() && $('#notaDim3').val() !== '0') ? $('#notaDim3').val() : '',
             dim4: ($('#notaDim4').val() && $('#notaDim4').val() !== '0') ? $('#notaDim4').val() : '',
@@ -1474,11 +1521,14 @@
             $('#xmlCardCode').val(ln.U_Provider || '');
             $('#xmlNombreEmisor').val(ln.providerName || '');
             $('#xmlComments').val(ln.U_Coments || '');
+            $('#xmlSubtotal').val(parseFloat(ln.U_Subtotal || 0).toFixed(2));
+            $('#xmlIVA').val(parseFloat(ln.U_IVA || 0).toFixed(2));
             $('#xmlIEPS').val(parseFloat(ln.U_IEPS || 0).toFixed(2));
             $('#xmlRetIVA').val(parseFloat(ln.U_RetIVA || 0).toFixed(2));
             $('#xmlRetISR').val(parseFloat(ln.U_ISR || 0).toFixed(2));
+            $('#xmlTotal').val(parseFloat(ln.U_Total || 0).toFixed(2));
             currentXmlConcepts = ln.conceptLines ? JSON.parse(JSON.stringify(ln.conceptLines)) : [];
-            renderXmlMatrix();
+            renderXmlMatrix(true);
             $('#modalAddXML').modal('show');
         } else {
             resetModalNota();
@@ -1539,6 +1589,7 @@
         $(selector).select2(cfg);
     }
 
+    // Validación de encabezado: U_Area ya NO es obligatorio
     function validarEncabezadoBasico() {
         if (!$('#idEmpresaRefunds').val() || $('#idEmpresaRefunds').val() === '0') {
             Toast.fire({ icon: 'error', title: 'Seleccione la Empresa.' });
@@ -1546,10 +1597,6 @@
         }
         if (!$('#idSucursal').val() || $('#idSucursal').val() === '0') {
             Toast.fire({ icon: 'error', title: 'Seleccione la Sucursal.' });
-            return false;
-        }
-        if (!$('#U_Area').val() || $('#U_Area').val() === '0') {
-            Toast.fire({ icon: 'error', title: 'Seleccione el Área / Centro de Costo.' });
             return false;
         }
         if (!$('#employeeRefund').val() || $('#employeeRefund').val() === '0') {

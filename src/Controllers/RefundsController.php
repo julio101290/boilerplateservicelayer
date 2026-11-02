@@ -93,6 +93,33 @@ class RefundsController extends BaseController
         return is_array($vars) ? $vars : [];
     }
 
+    /**
+     * Guarda en bitácora verificando las columnas reales de la tabla 'log'
+     * y evitando que un fallo de bitácora dispare un Rollback en SAP.
+     */
+    private function registrarBitacora(string $description, string $userName, string $module = '', int $idMovModule = 0): void
+    {
+        try {
+            $logData = [
+                'description' => $description,
+                'user'        => $userName,
+                'module'      => $module,
+                'idMovModule' => $idMovModule,
+            ];
+
+            $columnasLog = $this->log->db->getFieldNames('log');
+            if (!empty($columnasLog)) {
+                $logData = array_intersect_key($logData, array_flip($columnasLog));
+            } else {
+                unset($logData['module'], $logData['idMovModule']);
+            }
+
+            $this->log->save($logData);
+        } catch (Throwable $ignoreLogError) {
+            log_message('error', 'No se pudo guardar en tabla log: ' . $ignoreLogError->getMessage());
+        }
+    }
+
     // =========================================================================
     // 1. VISTAS PRINCIPALES Y LISTADO DATATABLE (MARIADB)
     // =========================================================================
@@ -323,19 +350,22 @@ class RefundsController extends BaseController
         $this->refundsModel->db->transBegin();
 
         try {
-            $uuid        = trim((string) ($datos['UUID'] ?? generaUUID()));
-            $listItems   = json_decode((string) ($datos['listProducts'] ?? $datos['list'] ?? '[]'), true);
-            $idEmpresa   = (int) ($datos['idEmpresa'] ?? 0);
-            $idSucursal  = (int) ($datos['idSucursal'] ?? 0);
-            $area        = trim((string) ($datos['U_Area'] ?? ''));
+            $uuid       = trim((string) ($datos['UUID'] ?? generaUUID()));
+            $listItems  = json_decode((string) ($datos['listProducts'] ?? $datos['list'] ?? '[]'), true);
+            $idEmpresa  = (int) ($datos['idEmpresa'] ?? 0);
+            $idSucursal = (int) ($datos['idSucursal'] ?? 0);
+
+            // U_Area es opcional
+            $area = trim((string) ($datos['U_Area'] ?? ''));
+            if ($area === '0') {
+                $area = '';
+            }
+
             $codeMov     = trim((string) ($datos['U_CodeMov'] ?? ''));
             $typeVoucher = (int) ($datos['U_TypeVoucher'] ?? 1);
 
             if ($idEmpresa <= 0 || $idSucursal <= 0) {
                 throw new Exception('La empresa y la sucursal son obligatorias.');
-            }
-            if (empty($area) || $area === '0') {
-                throw new Exception('Favor de seleccionar el Área / Centro de Costo.');
             }
             if (empty($datos['U_Employee']) || $datos['U_Employee'] === '0') {
                 throw new Exception('Favor de seleccionar el Empleado.');
@@ -417,6 +447,11 @@ class RefundsController extends BaseController
                 $lineNum  = $idx + 1;
                 $tipoItem = strtoupper(trim((string) ($item['U_Type'] ?? 'XML'))) === 'NOTA' ? 'Nota' : 'XML';
 
+                $dim1Item = trim((string) ($item['ocrCode'] ?? $item['dim1'] ?? $area));
+                if ($dim1Item === '0') {
+                    $dim1Item = '';
+                }
+
                 $detailData = [
                     'idRefund'           => $idRefund,
                     'U_NA'               => !empty($item['U_NA']) && $item['U_NA'] === 'Y' ? 'Y' : 'N',
@@ -445,7 +480,7 @@ class RefundsController extends BaseController
                     'project'            => trim((string) ($item['prjCode'] ?? $item['project'] ?? '')),
                     'adminOper'          => trim((string) ($item['adminOper'] ?? 'A')),
                     'whsCode'            => trim((string) ($item['whsCode'] ?? '')),
-                    'dim1'               => trim((string) ($item['ocrCode'] ?? $item['dim1'] ?? $area)),
+                    'dim1'               => $dim1Item,
                     'dim2'               => trim((string) ($item['ocrCode2'] ?? $item['dim2'] ?? '')),
                     'dim3'               => trim((string) ($item['ocrCode3'] ?? $item['dim3'] ?? '')),
                     'dim4'               => trim((string) ($item['ocrCode4'] ?? $item['dim4'] ?? '')),
@@ -472,14 +507,14 @@ class RefundsController extends BaseController
                 }
             }
 
-            $this->log->save([
-                'description' => "Se guardó reembolso local Folio: {$folio}, UUID: {$uuid}",
-                'user'        => $userName,
-                'module'      => 'REFUNDS',
-                'idMovModule' => $idRefund
-            ]);
-
             $this->refundsModel->db->transCommit();
+
+            $this->registrarBitacora(
+                "Se guardó reembolso local Folio: {$folio}, UUID: {$uuid}",
+                $userName,
+                'REFUNDS',
+                (int) $idRefund
+            );
 
             return $this->response->setJSON([
                 'error'    => false,
@@ -531,14 +566,14 @@ class RefundsController extends BaseController
         $this->refundsModel->delete($id);
         $this->refundsModel->purgeDeleted();
 
-        $this->log->save([
-            "description" => "Se eliminó reembolso local: " . json_encode($registro),
-            "user"        => $userName,
-            "module"      => "REFUNDS",
-            "idMovModule" => $id
-        ]);
-
         $this->refundsModel->db->transCommit();
+
+        $this->registrarBitacora(
+            "Se eliminó reembolso local: " . json_encode($registro),
+            $userName,
+            'REFUNDS',
+            (int) $id
+        );
 
         return $this->respondDeleted($registro, 'Reembolso eliminado correctamente.');
     }
@@ -600,6 +635,10 @@ class RefundsController extends BaseController
                 throw new Exception('No se encontró el reembolso en la base de datos local.');
             }
             $idRefund = (int) $refund['id'];
+
+            if (trim((string) ($refund['U_Area'] ?? '')) === '0') {
+                $refund['U_Area'] = '';
+            }
 
             if ((int) ($refund['sapSynced'] ?? 0) === 1 && !empty($refund['code'])) {
                 throw new Exception("Este reembolso (Folio: {$refund['U_Folio']}) ya fue sincronizado completamente con SAP (Code: {$refund['code']}).");
@@ -764,7 +803,7 @@ class RefundsController extends BaseController
                 ];
             }
 
-            // 2C. Enviar Póliza de Notas a JournalEntries (con estructura exacta de PolicyDI.cs) y registrar en @QSYS_GLO_VODE
+            // 2C. Enviar Póliza de Notas a JournalEntries y registrar en @QSYS_GLO_VODE
             if ($preparedNotaPoliza !== null) {
                 $refPoliza = ((int) ($refund['U_TypeVoucher'] ?? 1) === 2 && !empty($refund['U_CodeMov']))
                     ? $refund['U_CodeMov']
@@ -870,12 +909,12 @@ class RefundsController extends BaseController
 
             $this->refundsModel->db->transCommit();
 
-            $this->log->save([
-                'description' => "Reembolso sincronizado con SAP exitosamente. Folio: {$folioFinal}, Code SAP: {$nextVoucherCode}, Total: {$totalCalculado}",
-                'user'        => $userName,
-                'module'      => 'REFUNDS_SAP',
-                'idMovModule' => $idRefund
-            ]);
+            $this->registrarBitacora(
+                "Reembolso sincronizado con SAP exitosamente. Folio: {$folioFinal}, Code SAP: {$nextVoucherCode}, Total: {$totalCalculado}",
+                $userName,
+                'REFUNDS_SAP',
+                (int) $idRefund
+            );
 
             return $this->response->setJSON([
                 'error'       => false,
@@ -902,8 +941,11 @@ class RefundsController extends BaseController
 
     private function resolverEncabezadoVoucherSAP($conn, array $refund, int $bplIdSAP, string $userName): array
     {
-        $folioActual    = trim((string) $refund['U_Folio']);
-        $area           = trim((string) $refund['U_Area']);
+        $folioActual = trim((string) $refund['U_Folio']);
+        $area        = trim((string) ($refund['U_Area'] ?? ''));
+        if ($area === '0') {
+            $area = '';
+        }
         $sapTypeVoucher = ((int) ($refund['U_TypeVoucher'] ?? 1) === 2) ? 1 : 0;
 
         $folioClean = str_replace("'", "''", $folioActual);
@@ -1129,11 +1171,11 @@ class RefundsController extends BaseController
                 ->set(['U_Status' => $newStatus])
                 ->update();
 
-            $this->log->save([
-                'description' => "Usuario {$userName} cambió a {$actionLabel} (Status {$newStatus}) el comprobante {$folioActual} (Code: {$code})",
-                'user'        => $userName,
-                'module'      => 'REFUNDS_AUTH'
-            ]);
+            $this->registrarBitacora(
+                "Usuario {$userName} cambió a {$actionLabel} (Status {$newStatus}) el comprobante {$folioActual} (Code: {$code})",
+                $userName,
+                'REFUNDS_AUTH'
+            );
 
             return $this->response->setJSON([
                 'success' => true,
@@ -1216,7 +1258,7 @@ class RefundsController extends BaseController
                     'BPLID'             => $bplId,
                     'U_GLO_PaymentType' => 'GLREM',
                     'U_GLO_CodeMov'     => $refund['U_Folio'],
-                    'U_GLO_CostCenter'  => $refund['U_Area'],
+                    'U_GLO_CostCenter'  => (string) ($refund['U_Area'] ?? ''),
                     'U_FZ_AuxiliarType' => '1',
                     'U_FZ_Auxiliar'     => (string) $refund['U_Employee'],
                     'PaymentInvoices'   => [
@@ -1247,12 +1289,12 @@ class RefundsController extends BaseController
 
             odbc_close($conn);
 
-            $this->log->save([
-                'description' => "Se generaron {$pagosCreados} pagos de facturas para el reembolso {$refund['U_Folio']}",
-                'user'        => $userName,
-                'module'      => 'REFUNDS_PAYMENTS',
-                'idMovModule' => $idRefund
-            ]);
+            $this->registrarBitacora(
+                "Se generaron {$pagosCreados} pagos de facturas para el reembolso {$refund['U_Folio']}",
+                $userName,
+                'REFUNDS_PAYMENTS',
+                (int) $idRefund
+            );
 
             return $this->response->setJSON([
                 'error'   => false,
@@ -1322,7 +1364,7 @@ class RefundsController extends BaseController
                 'BPLID'             => (int) $refund['U_Branch'],
                 'U_GLO_PaymentType' => $paymentType,
                 'U_GLO_CodeMov'     => $refund['U_Folio'],
-                'U_GLO_CostCenter'  => $refund['U_Area'],
+                'U_GLO_CostCenter'  => (string) ($refund['U_Area'] ?? ''),
                 'U_FZ_AuxiliarType' => '1',
                 'U_FZ_Auxiliar'     => (string) $refund['U_Employee'],
                 'PaymentAccounts'   => [
@@ -1392,7 +1434,6 @@ class RefundsController extends BaseController
             $folioXML = substr($uuid, -6);
         }
 
-        // 1. Validar duplicidad de UUID en OPCH vía ODBC
         $uuidClean     = str_replace("'", "''", strtoupper($uuid));
         $sqlExisteUUID = "
             SELECT \"DocEntry\", \"DocNum\"
@@ -1410,7 +1451,6 @@ class RefundsController extends BaseController
             odbc_free_result($rsExiste);
         }
 
-        // 2. Buscar CardCode del proveedor por RFC en OCRD
         $rfcClean = str_replace("'", "''", strtoupper($rfcEmisor));
         $sqlSocio = "
             SELECT \"CardCode\"
@@ -1430,7 +1470,6 @@ class RefundsController extends BaseController
         }
         $cardCodeSAP = trim($this->toUtf8($rowSocio['CardCode']));
 
-        // 3. Obtener los conceptos multilínea del XML
         $rawOriginalList = !empty($refund['list']) ? json_decode($refund['list'], true) : [];
         $conceptLines    = $rawOriginalList[$lineNum - 1]['conceptLines'] ?? [];
 
@@ -1446,7 +1485,7 @@ class RefundsController extends BaseController
                 'project'     => $line['project'] ?? '',
                 'whsCode'     => $line['whsCode'] ?? '',
                 'account'     => $line['account'] ?? '',
-                'dim1'        => $line['dim1'] ?? $refund['U_Area'],
+                'dim1'        => $line['dim1'] ?? $refund['U_Area'] ?? '',
                 'dim2'        => $line['dim2'] ?? '',
                 'dim3'        => $line['dim3'] ?? '',
                 'dim4'        => $line['dim4'] ?? '',
@@ -1456,6 +1495,7 @@ class RefundsController extends BaseController
 
         $documentLines    = [];
         $iepsTotalFactura = 0.0;
+        $sumaCalculadaSAP = 0.0;
 
         foreach ($conceptLines as $cIdx => $cLine) {
             $numCon   = $cIdx + 1;
@@ -1470,23 +1510,31 @@ class RefundsController extends BaseController
             }
             $taxCode = $this->resolveSapTaxCode($conn, $porcentTax, $itemCode, $cardCodeSAP);
 
-            $dim1 = !empty($cLine['dim1']) && $cLine['dim1'] !== '0' ? $cLine['dim1'] : $refund['U_Area'];
+            $dim1 = trim((string) ($cLine['dim1'] ?? ''));
+            if ($dim1 === '0' || $dim1 === '') {
+                $dim1 = trim((string) ($refund['U_Area'] ?? ''));
+                if ($dim1 === '0') {
+                    $dim1 = '';
+                }
+            }
 
             $whsCodeValido = $this->resolveSapWarehouse(
                 $conn,
                 trim((string) ($cLine['whsCode'] ?? '')),
-                (string) $dim1,
+                $dim1,
                 $itemCode,
                 $bplIdSAP
             );
 
             $adminOper = !empty($cLine['adminOper']) ? strtoupper(trim((string) $cLine['adminOper'])) : 'A';
+            $qtyLine   = (float) ($cLine['cant'] ?? 1);
+            $prcLine   = (float) ($cLine['price'] ?? 0);
 
             $docLine = [
                 'ItemCode'        => $itemCode,
                 'ItemDescription' => mb_substr((string) ($cLine['description'] ?? ''), 0, 100),
-                'Quantity'        => (float) ($cLine['cant'] ?? 1),
-                'UnitPrice'       => (float) ($cLine['price'] ?? 0),
+                'Quantity'        => $qtyLine,
+                'UnitPrice'       => $prcLine,
                 'TaxCode'         => $taxCode,
                 'WarehouseCode'   => $whsCodeValido,
                 'U_CO_AdmOper'    => $adminOper,
@@ -1498,7 +1546,7 @@ class RefundsController extends BaseController
             if (!empty($cLine['account']) && $cLine['account'] !== '0') {
                 $docLine['AccountCode'] = $this->resolveSapAccountCode($conn, (string) $cLine['account'], "Cuenta del concepto #{$numCon}");
             }
-            if (!empty($dim1)) {
+            if ($dim1 !== '') {
                 $docLine['CostingCode'] = $dim1;
             }
             if (!empty($cLine['dim2']) && $cLine['dim2'] !== '0') {
@@ -1516,25 +1564,68 @@ class RefundsController extends BaseController
 
             $documentLines[]   = $docLine;
             $iepsTotalFactura += (float) ($cLine['ieps'] ?? 0);
+            $sumaCalculadaSAP += ($qtyLine * $prcLine) * (1 + ($porcentTax / 100.0));
+        }
+
+        $areaHeader = trim((string) ($refund['U_Area'] ?? ''));
+        if ($areaHeader === '0') {
+            $areaHeader = '';
         }
 
         if ($iepsTotalFactura > 0) {
             $itemIeps = $this->getConfigValueODBC($conn, 'GLO_ITEM_IEPS');
             if (!empty($itemIeps)) {
                 $taxCodeZero = $this->resolveSapTaxCode($conn, 0.0, $itemIeps, $cardCodeSAP);
-                $whsIeps     = $this->resolveSapWarehouse($conn, '', (string) $refund['U_Area'], $itemIeps, $bplIdSAP);
+                $whsIeps     = $this->resolveSapWarehouse($conn, '', $areaHeader, $itemIeps, $bplIdSAP);
 
-                $documentLines[] = [
+                $iepsLine = [
                     'ItemCode'        => $itemIeps,
                     'ItemDescription' => 'IEPS',
                     'Quantity'        => 1,
                     'UnitPrice'       => round($iepsTotalFactura, 2),
                     'TaxCode'         => $taxCodeZero,
                     'WarehouseCode'   => $whsIeps,
-                    'CostingCode'     => $refund['U_Area'],
                     'U_CO_AdmOper'    => 'A'
                 ];
+                if ($areaHeader !== '') {
+                    $iepsLine['CostingCode'] = $areaHeader;
+                }
+                $documentLines[]   = $iepsLine;
+                $sumaCalculadaSAP += $iepsTotalFactura;
             }
+        }
+
+        // Si el usuario ajustó el Total de la factura XML (ej. por Impuesto Sobre Hospedaje ISH),
+        // verificar si existe una diferencia positiva para agregarla con el artículo de impuesto local o tasa 0%
+        $retencionesXml = (float) ($line['U_RetIVA'] ?? 0) + (float) ($line['U_ISR'] ?? 0);
+        $totalEsperado  = round((float) ($line['U_Total'] ?? 0), 2);
+        $diferenciaISH  = round($totalEsperado - ($sumaCalculadaSAP - $retencionesXml), 2);
+
+        if ($diferenciaISH > 0.01) {
+            $itemLocalTax = $this->getConfigValueODBC($conn, 'GLO_ITEM_LOCAL');
+            if (empty($itemLocalTax)) {
+                $itemLocalTax = $this->getConfigValueODBC($conn, 'GLO_LOCAL_TAX');
+            }
+            if (empty($itemLocalTax)) {
+                $itemLocalTax = $documentLines[0]['ItemCode'];
+            }
+
+            $taxCodeZero = $this->resolveSapTaxCode($conn, 0.0, $itemLocalTax, $cardCodeSAP);
+            $whsIsh      = $this->resolveSapWarehouse($conn, '', $areaHeader, $itemLocalTax, $bplIdSAP);
+
+            $ishLine = [
+                'ItemCode'        => $itemLocalTax,
+                'ItemDescription' => 'ISH / Impuesto Local / Ajuste',
+                'Quantity'        => 1,
+                'UnitPrice'       => $diferenciaISH,
+                'TaxCode'         => $taxCodeZero,
+                'WarehouseCode'   => $whsIsh,
+                'U_CO_AdmOper'    => $documentLines[0]['U_CO_AdmOper'] ?? 'A'
+            ];
+            if (!empty($documentLines[0]['CostingCode'])) {
+                $ishLine['CostingCode'] = $documentLines[0]['CostingCode'];
+            }
+            $documentLines[] = $ishLine;
         }
 
         $pdfContent = $this->xmlController->generarPDF($uuid, true);
@@ -1691,6 +1782,11 @@ class RefundsController extends BaseController
             $totalNotas    += $importe;
         }
 
+        $areaMemo = trim((string) ($refund['U_Area'] ?? ''));
+        if ($areaMemo === '0') {
+            $areaMemo = '';
+        }
+
         return [
             'totalNotas' => $totalNotas,
             'payload'    => [
@@ -1699,7 +1795,7 @@ class RefundsController extends BaseController
                 'TaxDate'           => $docDate,
                 'VatDate'           => $docDate,
                 'DueDate'           => $docDate,
-                'Memo'              => mb_substr('CND ' . $refund['U_Area'], 0, 50),
+                'Memo'              => mb_substr(trim('CND ' . $areaMemo), 0, 50),
                 'Reference'         => $refHeader,
                 'JournalEntryLines' => $journalLines
             ]
@@ -1942,8 +2038,15 @@ class RefundsController extends BaseController
             $iepsGlobal    = 0.0;
             $retIVAGlobal  = 0.0;
             $retISRGlobal  = 0.0;
+            $ishGlobal     = 0.0;
             $conceptLines  = [];
             $descripciones = [];
+
+            // Detectar Impuestos Locales (ej. Impuesto Sobre Hospedaje ISH) en el complemento si existe
+            $impLocalesNode = $comprobante->searchNode('cfdi:Complemento', 'implocal:ImpuestosLocales');
+            if ($impLocalesNode !== null) {
+                $ishGlobal = (float) ($impLocalesNode['TotaldeTraslados'] ?? 0);
+            }
 
             $conceptos = $comprobante->searchNodes('cfdi:Conceptos', 'cfdi:Concepto');
             foreach ($conceptos as $idx => $concepto) {
@@ -2023,6 +2126,11 @@ class RefundsController extends BaseController
                 ];
             }
 
+            // Si el CFDI tiene Impuesto Sobre Hospedaje (ISH) en su Total, sumarlo al total de la primera línea para que cuadre por defecto
+            if ($ishGlobal > 0 && !empty($conceptLines)) {
+                $conceptLines[0]['total'] = round($conceptLines[0]['total'] + $ishGlobal, 2);
+            }
+
             $cardCode = '';
             try {
                 $conn     = $this->connectODBC();
@@ -2050,6 +2158,7 @@ class RefundsController extends BaseController
                 'subTotal'             => round($subTotal - $descuento, 2),
                 'iva'                  => round($ivaGlobal, 2),
                 'ieps'                 => round($iepsGlobal, 2),
+                'ish'                  => round($ishGlobal, 2),
                 'retIVA'               => round($retIVAGlobal, 2),
                 'retISR'               => round($retISRGlobal, 2),
                 'total'                => round($total, 2),
@@ -2445,7 +2554,7 @@ class RefundsController extends BaseController
             ";
 
             $rs   = odbc_exec($conn, $sql);
-            $data = [['id' => '0', 'text' => "0 - Seleccione Dimensión {$dimCode}"]];
+            $data = [['id' => '', 'text' => "Sin Dimensión {$dimCode} / Opcional"]];
 
             if ($rs) {
                 while ($row = odbc_fetch_array($rs)) {
@@ -2708,6 +2817,10 @@ class RefundsController extends BaseController
 
     private function getNextFolioByArea(int $idEmpresa, string $area, int $typeVoucher): int
     {
+        if ($area === '0') {
+            $area = '';
+        }
+
         $maxLocal  = 0;
         $localRows = $this->refundsModel
             ->select('U_Folio')
@@ -2729,8 +2842,12 @@ class RefundsController extends BaseController
         try {
             $conn      = $this->connectODBC();
             $areaClean = str_replace("'", "''", $area);
-            $sql       = "SELECT \"U_Folio\" FROM \"@QSYS_GLO_VOUC\" WHERE \"U_Area\" = '{$areaClean}'";
-            $rs        = @odbc_exec($conn, $sql);
+            $whereArea = ($areaClean === '')
+                ? "(\"U_Area\" = '' OR \"U_Area\" IS NULL)"
+                : "\"U_Area\" = '{$areaClean}'";
+
+            $sql = "SELECT \"U_Folio\" FROM \"@QSYS_GLO_VOUC\" WHERE {$whereArea}";
+            $rs  = @odbc_exec($conn, $sql);
             if ($rs) {
                 while ($row = odbc_fetch_array($rs)) {
                     $f = trim($this->toUtf8($row['U_Folio'] ?? ''));
