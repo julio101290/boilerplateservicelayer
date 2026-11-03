@@ -111,12 +111,14 @@ class SapMaterialController extends BaseController {
                     odbc_free_result($rsFiltered);
                 }
 
-                // Consulta paginada
+                // Consulta paginada incluyendo OUOM real (PUoMEntry)
                 $sql = "
                     SELECT
                         T0.\"ItemCode\",
                         T0.\"ItemName\",
                         T0.\"BuyUnitMsr\",
+                        T2.\"UomCode\" AS \"PurUomCode\",
+                        T2.\"UomName\" AS \"PurUomName\",
                         T0.\"PriceUnit\",
                         T0.\"ItmsGrpCod\",
                         T1.\"ItmsGrpNam\",
@@ -124,6 +126,7 @@ class SapMaterialController extends BaseController {
                         T0.\"validFor\"
                     FROM OITM T0
                     LEFT JOIN OITB T1 ON T0.\"ItmsGrpCod\" = T1.\"ItmsGrpCod\"
+                    LEFT JOIN OUOM T2 ON T0.\"PUoMEntry\" = T2.\"UomEntry\"
                     WHERE T0.\"PrchseItem\" = 'Y'
                       {$whereExtra}
                     ORDER BY {$orderBy} {$orderDir}
@@ -137,15 +140,22 @@ class SapMaterialController extends BaseController {
 
                 $data = [];
                 while ($row = odbc_fetch_array($rs)) {
+                    $buyUnit = $this->toUtf8($row['BuyUnitMsr'] ?? '');
+                    $uomCode = $this->toUtf8($row['PurUomCode'] ?? '');
+
+                    $unitDisplay = (!empty($uomCode) && strtoupper($uomCode) !== 'GENERAL')
+                        ? $uomCode
+                        : (!empty($buyUnit) ? $buyUnit : $uomCode);
+
                     $data[] = [
-                        'ItemCode' => $this->toUtf8($row['ItemCode']),
-                        'ItemName' => $this->toUtf8($row['ItemName']),
-                        'BuyUnitMsr' => $this->toUtf8($row['BuyUnitMsr'] ?? ''),
-                        'PriceUnit' => $this->toUtf8($row['PriceUnit'] ?? '1'),
+                        'ItemCode'   => $this->toUtf8($row['ItemCode']),
+                        'ItemName'   => $this->toUtf8($row['ItemName']),
+                        'BuyUnitMsr' => $unitDisplay,
+                        'PriceUnit'  => $this->toUtf8($row['PriceUnit'] ?? '1'),
                         'ItmsGrpCod' => $this->toUtf8($row['ItmsGrpCod'] ?? ''),
                         'ItmsGrpNam' => $this->toUtf8($row['ItmsGrpNam'] ?? ''),
-                        'VATLiable' => $this->toUtf8($row['VATLiable'] ?? 'Y'),
-                        'validFor' => $this->toUtf8($row['validFor'] ?? 'Y')
+                        'VATLiable'  => $this->toUtf8($row['VATLiable'] ?? 'Y'),
+                        'validFor'   => $this->toUtf8($row['validFor'] ?? 'Y')
                     ];
                 }
 
@@ -153,26 +163,26 @@ class SapMaterialController extends BaseController {
                 odbc_close($conn);
 
                 return $this->response->setJSON([
-                            'draw' => $draw,
-                            'recordsTotal' => $totalRecords,
-                            'recordsFiltered' => $filteredRecords,
-                            'data' => $data
+                    'draw'            => $draw,
+                    'recordsTotal'    => $totalRecords,
+                    'recordsFiltered' => $filteredRecords,
+                    'data'            => $data
                 ]);
             } catch (\Throwable $e) {
                 return $this->response->setJSON([
-                            'draw' => (int) ($this->request->getGet('draw') ?? 1),
-                            'recordsTotal' => 0,
-                            'recordsFiltered' => 0,
-                            'data' => [],
-                            'error' => true,
-                            'message' => $e->getMessage()
+                    'draw'            => (int) ($this->request->getGet('draw') ?? 1),
+                    'recordsTotal'    => 0,
+                    'recordsFiltered' => 0,
+                    'data'            => [],
+                    'error'           => true,
+                    'message'         => $e->getMessage()
                 ]);
             }
         }
 
         $data = [
-            'title' => 'Artículos SAP',
-            'subtitle' => 'Catálogo de Artículos de Compra',
+            'title'     => 'Artículos SAP',
+            'subtitle'  => 'Catálogo de Artículos de Compra',
             'box_title' => 'Listado de Artículos'
         ];
 
@@ -189,8 +199,8 @@ class SapMaterialController extends BaseController {
 
             if (empty($cleanPrefix)) {
                 return $this->response->setJSON([
-                            'status' => 400,
-                            'nextCode' => ''
+                    'status'   => 400,
+                    'nextCode' => ''
                 ]);
             }
 
@@ -227,15 +237,15 @@ class SapMaterialController extends BaseController {
             $nextCode = $cleanPrefix . str_pad($nextNumber, 5, '0', STR_PAD_LEFT);
 
             return $this->response->setJSON([
-                        'status' => 200,
-                        'prefix' => $cleanPrefix,
-                        'nextCode' => $nextCode
+                'status'   => 200,
+                'prefix'   => $cleanPrefix,
+                'nextCode' => $nextCode
             ]);
         } catch (\Throwable $e) {
             return $this->response->setJSON([
-                        'status' => 500,
-                        'nextCode' => '',
-                        'message' => $e->getMessage()
+                'status'   => 500,
+                'nextCode' => '',
+                'message'  => $e->getMessage()
             ]);
         }
     }
@@ -269,7 +279,7 @@ class SapMaterialController extends BaseController {
             $data = [];
             while ($row = odbc_fetch_array($rs)) {
                 $data[] = [
-                    'id' => (int) $row['ItmsGrpCod'],
+                    'id'   => (int) $row['ItmsGrpCod'],
                     'text' => $this->toUtf8($row['ItmsGrpCod']) . ' - ' . $this->toUtf8($row['ItmsGrpNam'])
                 ];
             }
@@ -280,9 +290,9 @@ class SapMaterialController extends BaseController {
             return $this->response->setJSON(['data' => $data]);
         } catch (\Throwable $e) {
             return $this->response->setJSON([
-                        'data' => [],
-                        'error' => true,
-                        'message' => $e->getMessage()
+                'data'    => [],
+                'error'   => true,
+                'message' => $e->getMessage()
             ]);
         }
     }
@@ -307,6 +317,8 @@ class SapMaterialController extends BaseController {
                     T0.\"ItmsGrpCod\",
                     T1.\"ItmsGrpNam\",
                     T0.\"BuyUnitMsr\",
+                    T2.\"UomCode\" AS \"PurUomCode\",
+                    T2.\"UomName\" AS \"PurUomName\",
                     T0.\"PriceUnit\",
                     T0.\"VATLiable\",
                     T0.\"PrchseItem\",
@@ -315,6 +327,7 @@ class SapMaterialController extends BaseController {
                     T0.\"validFor\"
                 FROM OITM T0
                 LEFT JOIN OITB T1 ON T0.\"ItmsGrpCod\" = T1.\"ItmsGrpCod\"
+                LEFT JOIN OUOM T2 ON T0.\"PUoMEntry\" = T2.\"UomEntry\"
                 WHERE T0.\"ItemCode\" = '{$itemCodeClean}'
             ";
 
@@ -332,35 +345,46 @@ class SapMaterialController extends BaseController {
             }
 
             $itemType = $this->toUtf8($row['ItemType'] ?? 'itItems');
-            if ($itemType === 'I')
-                $itemType = 'itItems';
-            if ($itemType === 'L')
-                $itemType = 'itLabor';
-            if ($itemType === 'T')
-                $itemType = 'itTravel';
+            if ($itemType === 'I') $itemType = 'itItems';
+            if ($itemType === 'L') $itemType = 'itLabor';
+            if ($itemType === 'T') $itemType = 'itTravel';
+
+            $rawBuyUnit = $this->toUtf8($row['BuyUnitMsr'] ?? '');
+            $purUomCode = $this->toUtf8($row['PurUomCode'] ?? '');
+            $purUomName = $this->toUtf8($row['PurUomName'] ?? '');
+
+            $unitCode = (!empty($purUomCode) && strtoupper($purUomCode) !== 'GENERAL')
+                ? $purUomCode
+                : (!empty($rawBuyUnit) ? $rawBuyUnit : $purUomCode);
+
+            $unitText = $unitCode;
+            if (!empty($purUomName) && strtoupper($purUomCode) === strtoupper($unitCode)) {
+                $unitText = $unitCode . ' - ' . $purUomName;
+            }
 
             return $this->response->setJSON([
-                        'ItemCode' => $this->toUtf8($row['ItemCode']),
-                        'ItemName' => $this->toUtf8($row['ItemName']),
-                        'ItemType' => $itemType,
-                        'ItmsGrpCod' => (int) $row['ItmsGrpCod'],
-                        'ItmsGrpNam' => $this->toUtf8($row['ItmsGrpNam'] ?? ''),
-                        'BuyUnitMsr' => $this->toUtf8($row['BuyUnitMsr'] ?? ''),
-                        'PriceUnit' => $row['PriceUnit'] ?? 1,
-                        'VATLiable' => $this->toUtf8($row['VATLiable'] ?? 'Y'),
-                        'PrchseItem' => $this->toUtf8($row['PrchseItem'] ?? 'Y'),
-                        'InvntItem' => $this->toUtf8($row['InvntItem'] ?? 'Y'),
-                        'SellItem' => $this->toUtf8($row['SellItem'] ?? 'N'),
-                        'validFor' => $this->toUtf8($row['validFor'] ?? 'Y')
+                'ItemCode'    => $this->toUtf8($row['ItemCode']),
+                'ItemName'    => $this->toUtf8($row['ItemName']),
+                'ItemType'    => $itemType,
+                'ItmsGrpCod'  => (int) $row['ItmsGrpCod'],
+                'ItmsGrpNam'  => $this->toUtf8($row['ItmsGrpNam'] ?? ''),
+                'BuyUnitMsr'  => $unitCode,
+                'BuyUnitText' => $unitText,
+                'PriceUnit'   => $row['PriceUnit'] ?? 1,
+                'VATLiable'   => $this->toUtf8($row['VATLiable'] ?? 'Y'),
+                'PrchseItem'  => $this->toUtf8($row['PrchseItem'] ?? 'Y'),
+                'InvntItem'   => $this->toUtf8($row['InvntItem'] ?? 'Y'),
+                'SellItem'    => $this->toUtf8($row['SellItem'] ?? 'N'),
+                'validFor'    => $this->toUtf8($row['validFor'] ?? 'Y')
             ]);
         } catch (\Throwable $e) {
             return $this->response->setJSON([
-                        'error' => true,
-                        'message' => $e->getMessage()
+                'error'   => true,
+                'message' => $e->getMessage()
             ]);
         }
     }
-    
+
     /**
      * Catálogo de Unidades de Medida (OUOM) para Select2
      */
@@ -405,7 +429,6 @@ class SapMaterialController extends BaseController {
             odbc_close($conn);
 
             return $this->response->setJSON(['data' => $data]);
-
         } catch (\Throwable $e) {
             return $this->response->setJSON([
                 'data'    => [],
@@ -459,7 +482,7 @@ class SapMaterialController extends BaseController {
                 $itemName = $this->toUtf8($row['ItemName']);
 
                 $data[] = [
-                    'id' => $itemCode,
+                    'id'   => $itemCode,
                     'text' => $itemCode . ' - ' . $itemName
                 ];
             }
@@ -471,10 +494,10 @@ class SapMaterialController extends BaseController {
             return $this->response->setJSON($response);
         } catch (\Throwable $e) {
             return $this->response->setJSON([
-                        'token' => csrf_hash(),
-                        'data' => [],
-                        'error' => true,
-                        'message' => $e->getMessage()
+                'token'   => csrf_hash(),
+                'data'    => [],
+                'error'   => true,
+                'message' => $e->getMessage()
             ]);
         }
     }
@@ -488,35 +511,35 @@ class SapMaterialController extends BaseController {
 
         $post = $this->request->getPost();
 
-        $isNew = (int) ($post['isNew'] ?? 1);
-        $itemCode = strtoupper(trim($post['ItemCode'] ?? ''));
-        $itemName = trim($post['ItemName'] ?? '');
-        $itemType = $post['ItemType'] ?? 'itItems';
+        $isNew      = (int) ($post['isNew'] ?? 1);
+        $itemCode   = strtoupper(trim($post['ItemCode'] ?? ''));
+        $itemName   = trim($post['ItemName'] ?? '');
+        $itemType   = $post['ItemType'] ?? 'itItems';
         $itmsGrpCod = (int) ($post['ItmsGrpCod'] ?? 0);
         $buyUnitMsr = strtoupper(trim($post['BuyUnitMsr'] ?? ''));
-        $vatLiable = ($post['VATLiable'] ?? 'Y') === 'Y' ? 'tYES' : 'tNO';
-        $validFor = ($post['validFor'] ?? 'Y') === 'Y' ? 'tYES' : 'tNO';
+        $vatLiable  = ($post['VATLiable'] ?? 'Y') === 'Y' ? 'tYES' : 'tNO';
+        $validFor   = ($post['validFor'] ?? 'Y') === 'Y' ? 'tYES' : 'tNO';
 
         // Validaciones obligatorias de campos
         if (empty($itemCode) || empty($itemName)) {
             return $this->respond([
-                        'status' => 400,
-                        'message' => lang('material.messages.code_required')
-                            ], 400);
+                'status'  => 400,
+                'message' => lang('material.messages.code_required')
+            ], 400);
         }
 
         if ($itmsGrpCod <= 0) {
             return $this->respond([
-                        'status' => 400,
-                        'message' => lang('material.messages.group_required')
-                            ], 400);
+                'status'  => 400,
+                'message' => lang('material.messages.group_required')
+            ], 400);
         }
 
         if (empty($buyUnitMsr)) {
             return $this->respond([
-                        'status' => 400,
-                        'message' => lang('material.messages.unit_required')
-                            ], 400);
+                'status'  => 400,
+                'message' => lang('material.messages.unit_required')
+            ], 400);
         }
 
         $dataSL = $this->serviceLayerModel->first();
@@ -524,10 +547,19 @@ class SapMaterialController extends BaseController {
             return $this->respond(['status' => 500, 'message' => 'No hay configuración Service Layer'], 500);
         }
 
-        // Validación de unicidad: ODBC en modo SOLO LECTURA (SELECT)
-        if ($isNew === 1) {
-            try {
-                $conn = $this->connectODBC();
+        // =====================================================================
+        // CONSULTAS ODBC (ESTRICTAMENTE SOLO LECTURA - SELECT)
+        // Validación de unicidad y resolución de UoMEntry / UoMGroupEntry
+        // =====================================================================
+        $uomEntry = null;
+        $uomName  = $buyUnitMsr;
+        $ugpEntry = null;
+
+        try {
+            $conn = $this->connectODBC();
+
+            // 1. Validar que el ItemCode no exista si es nuevo
+            if ($isNew === 1) {
                 $itemCodeClean = str_replace("'", "''", $itemCode);
                 $rsCheck = odbc_exec($conn, "SELECT COUNT(1) AS \"cnt\" FROM OITM WHERE \"ItemCode\" = '{$itemCodeClean}'");
                 $exists = 0;
@@ -535,27 +567,94 @@ class SapMaterialController extends BaseController {
                     $exists = (int) ($row['cnt'] ?? $row['CNT'] ?? 0);
                     odbc_free_result($rsCheck);
                 }
-                odbc_close($conn);
 
                 if ($exists > 0) {
+                    odbc_close($conn);
                     return $this->respond([
-                                'status' => 400,
-                                'message' => lang('material.messages.code_exists')
-                                    ], 400);
+                        'status'  => 400,
+                        'message' => lang('material.messages.code_exists')
+                    ], 400);
                 }
-            } catch (\Throwable $e) {
-                return $this->respond(['status' => 500, 'message' => 'Error al validar código: ' . $e->getMessage()], 500);
             }
+
+            // 2. Obtener UomEntry y UomName desde OUOM
+            $unitClean = str_replace("'", "''", $buyUnitMsr);
+            $sqlUom = "
+                SELECT \"UomEntry\", \"UomCode\", \"UomName\"
+                FROM OUOM
+                WHERE UPPER(\"UomCode\") = '{$unitClean}'
+                   OR UPPER(\"UomName\") = '{$unitClean}'
+                ORDER BY CASE WHEN UPPER(\"UomCode\") = '{$unitClean}' THEN 0 ELSE 1 END
+                LIMIT 1
+            ";
+            $rsUom = odbc_exec($conn, $sqlUom);
+            if ($rsUom && ($rowUom = odbc_fetch_array($rsUom))) {
+                $uomEntry   = (int) $rowUom['UomEntry'];
+                $buyUnitMsr = $this->toUtf8($rowUom['UomCode']);
+                $uomName    = $this->toUtf8($rowUom['UomName'] ?: $rowUom['UomCode']);
+                odbc_free_result($rsUom);
+            }
+
+            // 3. Resolver el Grupo de Unidades de Medida (OUGP / UGP1)
+            if ($uomEntry !== null) {
+                // 3a. Buscar si existe un Grupo de UoM en OUGP específico para esta unidad
+                $uomNameClean = str_replace("'", "''", strtoupper($uomName));
+                $sqlUgpOwn = "
+                    SELECT \"UgpEntry\"
+                    FROM OUGP
+                    WHERE \"Locked\" = 'N'
+                      AND (
+                          \"BaseUom\" = {$uomEntry}
+                          OR UPPER(\"UgpCode\") = '{$unitClean}'
+                          OR UPPER(\"UgpName\") = '{$unitClean}'
+                          OR UPPER(\"UgpName\") = '{$uomNameClean}'
+                      )
+                    ORDER BY CASE
+                        WHEN UPPER(\"UgpCode\") = '{$unitClean}' THEN 0
+                        WHEN \"BaseUom\" = {$uomEntry} THEN 1
+                        ELSE 2
+                    END
+                    LIMIT 1
+                ";
+                $rsUgpOwn = odbc_exec($conn, $sqlUgpOwn);
+                if ($rsUgpOwn && ($rowUgpOwn = odbc_fetch_array($rsUgpOwn))) {
+                    $ugpEntry = (int) $rowUgpOwn['UgpEntry'];
+                    odbc_free_result($rsUgpOwn);
+                }
+
+                // 3b. Si no tiene grupo propio en OUGP, buscar en UGP1 a qué grupo pertenece
+                if ($ugpEntry === null) {
+                    $sqlUgpRel = "
+                        SELECT T0.\"UgpEntry\"
+                        FROM UGP1 T0
+                        INNER JOIN OUGP T1 ON T0.\"UgpEntry\" = T1.\"UgpEntry\"
+                        LEFT JOIN OITB T2 ON T2.\"UgpEntry\" = T0.\"UgpEntry\" AND T2.\"ItmsGrpCod\" = {$itmsGrpCod}
+                        WHERE T0.\"UomEntry\" = {$uomEntry}
+                          AND T1.\"Locked\" = 'N'
+                        ORDER BY CASE WHEN T2.\"ItmsGrpCod\" IS NOT NULL THEN 0 ELSE 1 END, T0.\"UgpEntry\" ASC
+                        LIMIT 1
+                    ";
+                    $rsUgpRel = odbc_exec($conn, $sqlUgpRel);
+                    if ($rsUgpRel && ($rowUgpRel = odbc_fetch_array($rsUgpRel))) {
+                        $ugpEntry = (int) $rowUgpRel['UgpEntry'];
+                        odbc_free_result($rsUgpRel);
+                    }
+                }
+            }
+
+            odbc_close($conn);
+        } catch (\Throwable $e) {
+            return $this->respond(['status' => 500, 'message' => 'Error al validar datos en SAP: ' . $e->getMessage()], 500);
         }
 
         // Login a Service Layer
         try {
             $conexionSap = $this->serviceLayerController->login(
-                    $dataSL['url'],
-                    $dataSL['port'],
-                    $dataSL['password'],
-                    $dataSL['username'],
-                    $dataSL['companyDB']
+                $dataSL['url'],
+                $dataSL['port'],
+                $dataSL['password'],
+                $dataSL['username'],
+                $dataSL['companyDB']
             );
         } catch (\Exception $e) {
             return $this->respond(['status' => 500, 'message' => 'Error login SL: ' . $e->getMessage()], 500);
@@ -581,18 +680,29 @@ class SapMaterialController extends BaseController {
             "B1S-CaseInsensitive: true"
         ];
 
-        // Payload de Service Layer: propiedades válidas y nativas de 'Item'
+        // Payload de Service Layer con propiedades nativas exactas de 'Item'
         $payload = [
-            'ItemName' => $itemName,
-            'ItemType' => $itemType,
+            'ItemName'       => $itemName,
+            'ItemType'       => $itemType,
             'ItemsGroupCode' => $itmsGrpCod,
-            'PurchaseUnit' => $buyUnitMsr,
-            'VatLiable' => $vatLiable,
-            'Valid' => $validFor,
-            'PurchaseItem' => 'tYES',
-            'InventoryItem' => 'tYES',
-            'SalesItem' => 'tNO'
+            'PurchaseUnit'   => $buyUnitMsr,
+            'InventoryUOM'   => $buyUnitMsr,
+            'VatLiable'      => $vatLiable,
+            'Valid'          => $validFor,
+            'PurchaseItem'   => 'tYES',
+            'InventoryItem'  => 'tYES',
+            'SalesItem'      => 'tNO'
         ];
+
+        if ($uomEntry !== null && $ugpEntry !== null && $ugpEntry > 0) {
+            // Unidad vinculada a un Grupo de UoM en OUGP / UGP1
+            $payload['UoMGroupEntry']             = $ugpEntry;
+            $payload['DefaultPurchasingUoMEntry'] = $uomEntry;
+            $payload['InventoryUoMEntry']         = $uomEntry;
+        } else {
+            // Si la unidad no está asignada a ningún grupo OUGP, usar Manual (-1)
+            $payload['UoMGroupEntry'] = -1;
+        }
 
         if ($isNew === 1) {
             $payload['ItemCode'] = $itemCode;
@@ -603,26 +713,20 @@ class SapMaterialController extends BaseController {
             $method = 'PATCH';
         }
 
-        $jsonPayload = json_encode($payload);
+        // Ejecutar petición a Service Layer
+        [$httpCode, $resp, $err] = $this->sendServiceLayerRequest($url, $dataSL['port'], $method, $payload, $cookie, $baseHeaders);
 
-        $ch = curl_init();
-        curl_setopt_array($ch, [
-            CURLOPT_URL => $url,
-            CURLOPT_PORT => $dataSL['port'],
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_CUSTOMREQUEST => $method,
-            CURLOPT_POSTFIELDS => $jsonPayload,
-            CURLOPT_COOKIE => $cookie,
-            CURLOPT_SSL_VERIFYHOST => false,
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_HTTPHEADER => $baseHeaders,
-            CURLOPT_TIMEOUT => 60
-        ]);
+        // Si es actualización (PATCH) y SAP bloquea el cambio de UoMGroupEntry/InventoryUoMEntry por movimientos previos:
+        if (!$err && $isNew === 0 && ($httpCode < 200 || $httpCode >= 300)) {
+            unset($payload['UoMGroupEntry'], $payload['InventoryUoMEntry']);
+            [$httpCode, $resp, $err] = $this->sendServiceLayerRequest($url, $dataSL['port'], $method, $payload, $cookie, $baseHeaders);
 
-        $resp = curl_exec($ch);
-        $err = curl_error($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+            // Si el artículo ya tenía otro grupo de UoM fijo incompatible con DefaultPurchasingUoMEntry, actualizar vía texto
+            if (!$err && ($httpCode < 200 || $httpCode >= 300)) {
+                unset($payload['DefaultPurchasingUoMEntry']);
+                [$httpCode, $resp, $err] = $this->sendServiceLayerRequest($url, $dataSL['port'], $method, $payload, $cookie, $baseHeaders);
+            }
+        }
 
         if ($err) {
             return $this->respond(['status' => 500, 'message' => 'cURL Error: ' . $err], 500);
@@ -642,19 +746,45 @@ class SapMaterialController extends BaseController {
         // Bitácora de operaciones
         $this->log->save([
             "description" => ($isNew === 1 ? "Creación" : "Actualización") . " de artículo de compra '{$itemCode}'",
-            "user" => $userName
+            "user"        => $userName
         ]);
 
         return $this->respond([
-                    'status' => 200,
-                    'message' => ($isNew === 1 ? lang('material.messages.saved') : 'Artículo actualizado correctamente'),
-                    'data' => $dataResp
-                        ], 200);
+            'status'  => 200,
+            'message' => ($isNew === 1 ? lang('material.messages.saved') : 'Artículo actualizado correctamente'),
+            'data'    => $dataResp
+        ], 200);
     }
 
     // =========================================================================
     // MÉTODOS AUXILIARES PRIVADOS
     // =========================================================================
+
+    /**
+     * Envía petición cURL a SAP Service Layer
+     */
+    private function sendServiceLayerRequest(string $url, $port, string $method, array $payload, string $cookie, array $headers): array {
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL            => $url,
+            CURLOPT_PORT           => $port,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CUSTOMREQUEST  => $method,
+            CURLOPT_POSTFIELDS     => json_encode($payload),
+            CURLOPT_COOKIE         => $cookie,
+            CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_HTTPHEADER     => $headers,
+            CURLOPT_TIMEOUT        => 60
+        ]);
+
+        $resp     = curl_exec($ch);
+        $err      = curl_error($ch);
+        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        return [$httpCode, $resp, $err];
+    }
 
     /**
      * Conexión ODBC usando la configuración de la BD
@@ -666,9 +796,9 @@ class SapMaterialController extends BaseController {
         }
 
         $conn = odbc_connect(
-                $dataConect['nameODBC'],
-                $dataConect['userODBC'],
-                $dataConect['passwordODBC']
+            $dataConect['nameODBC'],
+            $dataConect['userODBC'],
+            $dataConect['passwordODBC']
         );
 
         if (!$conn) {

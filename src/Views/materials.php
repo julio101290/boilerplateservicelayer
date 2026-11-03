@@ -279,7 +279,8 @@
         $('#ItemCode').on('blur', function () {
             if ($('#isNew').val() !== '1') return;
 
-            var rawVal = $(this).val().trim().toUpperCase();$(this).val(rawVal);
+            var rawVal = $(this).val().trim().toUpperCase();
+            $(this).val(rawVal);
             if (!rawVal) return;
 
             var cleanPrefix = rawVal.replace(/[0-9]+$/, '');
@@ -335,7 +336,10 @@
 
                         // Asignar Grupo en Select2
                         if (resp.ItmsGrpCod) {
-                            var optGroup = new Option(resp.ItmsGrpNam || ('Grupo ' + resp.ItmsGrpCod), resp.ItmsGrpCod, true, true);
+                            var groupLabel = resp.ItmsGrpNam
+                                ? (resp.ItmsGrpCod + ' - ' + resp.ItmsGrpNam)
+                                : ('Grupo ' + resp.ItmsGrpCod);
+                            var optGroup = new Option(groupLabel, resp.ItmsGrpCod, true, true);
                             $('#ItmsGrpCod').empty().append(optGroup).trigger('change');
                         } else {
                             $('#ItmsGrpCod').val(null).trigger('change');
@@ -343,7 +347,8 @@
 
                         // Asignar Unidad de Medida en Select2
                         if (resp.BuyUnitMsr) {
-                            var optUnit = new Option(resp.BuyUnitMsr, resp.BuyUnitMsr, true, true);
+                            var unitLabel = resp.BuyUnitText || resp.BuyUnitMsr;
+                            var optUnit = new Option(unitLabel, resp.BuyUnitMsr, true, true);
                             $('#BuyUnitMsr').empty().append(optUnit).trigger('change');
                         } else {
                             $('#BuyUnitMsr').val(null).trigger('change');
@@ -382,15 +387,21 @@
                         $('#VATLiable').val(resp.VATLiable || 'Y');
                         $('#validFor').val('Y');
 
+                        // Asignar Grupo en Select2
                         if (resp.ItmsGrpCod) {
-                            var optGroup = new Option(resp.ItmsGrpNam || ('Grupo ' + resp.ItmsGrpCod), resp.ItmsGrpCod, true, true);
+                            var groupLabel = resp.ItmsGrpNam
+                                ? (resp.ItmsGrpCod + ' - ' + resp.ItmsGrpNam)
+                                : ('Grupo ' + resp.ItmsGrpCod);
+                            var optGroup = new Option(groupLabel, resp.ItmsGrpCod, true, true);
                             $('#ItmsGrpCod').empty().append(optGroup).trigger('change');
                         } else {
                             $('#ItmsGrpCod').val(null).trigger('change');
                         }
 
+                        // Asignar Unidad de Medida en Select2
                         if (resp.BuyUnitMsr) {
-                            var optUnit = new Option(resp.BuyUnitMsr, resp.BuyUnitMsr, true, true);
+                            var unitLabel = resp.BuyUnitText || resp.BuyUnitMsr;
+                            var optUnit = new Option(unitLabel, resp.BuyUnitMsr, true, true);
                             $('#BuyUnitMsr').empty().append(optUnit).trigger('change');
                         } else {
                             $('#BuyUnitMsr').val(null).trigger('change');
@@ -450,7 +461,8 @@
                 return;
             }
 
-            var $btn = $(this);$btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-1"></i> Guardando...');
+            var $btn = $(this);
+            $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-1"></i> Guardando...');
 
             $.ajax({
                 url: '<?= base_url('admin/servicelayer/materials/save') ?>',
