@@ -695,4 +695,170 @@ $routes->group('admin', function ($routes) {
     $routes->post('refunds/getWarehousesAjax', 'RefundsController::getWarehousesAjax', [
         'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
     ]);
+
+    $routes->resource('user_pricelist', [
+        'filter' => 'permission:user_pricelist-permission',
+        'controller' => 'User_pricelistController',
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers',
+        'except' => 'show'
+    ]);
+
+    $routes->post('user_pricelist/save',
+            'User_pricelistController::save',
+            ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    $routes->post('user_pricelist/getUser_pricelist',
+            'User_pricelistController::getUser_pricelist',
+            ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    $routes->post('user_pricelist/getUsersAjax',
+            'User_pricelistController::getUsersAjaxSelect2',
+            ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    $routes->post('user_pricelist/getPriceListsAjax',
+            'User_pricelistController::getPriceListsAjaxSelect2',
+            ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    /*
+     * COTIZACIONES
+     */
+
+    // =========================================================================
+    // RUTAS: LISTA DE PRECIOS POR USUARIO (MARIADB + SAP OPLN)
+    // =========================================================================
+    $routes->resource('user_pricelist', [
+        'filter' => 'permission:user_pricelist-permission',
+        'controller' => 'User_pricelistController',
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers',
+        'except' => 'show'
+    ]);
+
+    $routes->post(
+            'user_pricelist/save',
+            'User_pricelistController::save',
+            ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    $routes->post(
+            'user_pricelist/getUser_pricelist',
+            'User_pricelistController::getUser_pricelist',
+            ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    $routes->post(
+            'user_pricelist/getUsersAjax',
+            'User_pricelistController::getUsersAjaxSelect2',
+            ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    $routes->post(
+            'user_pricelist/getPriceListsAjax',
+            'User_pricelistController::getPriceListsAjaxSelect2',
+            ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    // =========================================================================
+    // RUTAS: COTIZACIONES SAP (QuotesSAPController)
+    // =========================================================================
+    $routes->get(
+            'quotesSAP',
+            'QuotesSAPController::index',
+            [
+                'filter' => 'permission:quotesSAP-permission',
+                'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+            ]
+    );
+
+    $routes->get(
+            'quotesSAP/newQuote',
+            'QuotesSAPController::newQuote',
+            [
+                'filter' => 'permission:quotesSAP-permission',
+                'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+            ]
+    );
+
+    $routes->get(
+            'quotesSAP/edit/(:any)',
+            'QuotesSAPController::editQuote/$1',
+            [
+                'filter' => 'permission:quotesSAP-permission',
+                'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+            ]
+    );
+
+    $routes->get(
+            'quotesSAP/report/(:any)',
+            'QuotesSAPController::report/$1',
+            [
+                'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+            ]
+    );
+
+    // Operaciones CRUD y Sincronización con SAP Service Layer (OQUT)
+    $routes->post(
+            'quotesSAP/save',
+            'QuotesSAPController::save',
+            ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    $routes->delete(
+            'quotesSAP/delete/(:num)',
+            'QuotesSAPController::delete/$1',
+            ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    $routes->post(
+            'quotesSAP/changeStatus',
+            'QuotesSAPController::changeStatus',
+            ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    $routes->post(
+            'quotesSAP/sendToSAP',
+            'QuotesSAPController::sendToSAP',
+            ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    $routes->post(
+            'quotesSAP/showQuoteDetails',
+            'QuotesSAPController::showQuoteDetails',
+            ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    // Endpoints AJAX (Contexto de Usuario, Clientes SAP, Productos SAP y Plantillas en Writable)
+    $routes->post(
+            'quotesSAP/getUserContextAjax',
+            'QuotesSAPController::getUserContextAjax',
+            ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    $routes->post(
+            'quotesSAP/getClientsSAPAjax',
+            'QuotesSAPController::getClientsSAPAjax',
+            ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    $routes->post(
+            'quotesSAP/getClientDataSAPAjax',
+            'QuotesSAPController::getClientDataSAPAjax',
+            ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    $routes->post(
+            'quotesSAP/getProductsSAPAjax',
+            'QuotesSAPController::getProductsSAPAjax',
+            ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
+
+    $routes->match(
+            ['get', 'post'],
+            'quotesSAP/getTemplatesListAjax',
+            'QuotesSAPController::getTemplatesListAjax',
+            ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
+    );
 });

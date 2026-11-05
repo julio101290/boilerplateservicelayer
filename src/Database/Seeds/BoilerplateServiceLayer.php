@@ -50,10 +50,11 @@ class BoilerplateServiceLayer extends Seeder {
         $this->authorize->createPermission('vendorinvoice-permission', 'Permiso para corregir el Odometro');
         $this->authorize->createPermission('sapvouchers', 'Permiso para marcar como impresa o no impresa la impresion de vale');
         $this->authorize->createPermission('link_sap_branchoffice-permission', 'Enlace sucursales con sucursales SAP');
+        $this->authorize->createPermission('user_pricelist-permission', 'Precio de listas por usuario');
+        $this->authorize->createPermission('quotesSAP-permission', 'Cotizaciones Sap');
+        $this->authorize->createPermission('quotesSAP-authorize', 'Autorizar Cotizaciones Sap');
+        $this->authorize->createPermission('quotesSAP-view-all', 'Ver todas las autorizaciones Cotizaciones Sap');
         
-        
-        
-
         // Assign Permission to user
         $this->authorize->addPermissionToUser('servicelayer-permission', 1);
         $this->authorize->addPermissionToUser('user_sap_link-permission', 1);
@@ -67,6 +68,10 @@ class BoilerplateServiceLayer extends Seeder {
         $this->authorize->addPermissionToUser('SAPOdometro-permission', 1);
         $this->authorize->addPermissionToUser('sapvouchers', 1);
         $this->authorize->addPermissionToUser('link_sap_branchoffice-permission', 1);
+        $this->authorize->addPermissionToUser('user_pricelist-permission', 1);
+        $this->authorize->addPermissionToUser('quotesSAP-permission', 1);
+        $this->authorize->addPermissionToUser('quotesSAP-authorize', 1);
+        $this->authorize->addPermissionToUser('quotesSAP-view-all', 1);
         
     }
     public function down() {
