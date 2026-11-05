@@ -861,4 +861,16 @@ $routes->group('admin', function ($routes) {
             'QuotesSAPController::getTemplatesListAjax',
             ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']
     );
+
+    $routes->resource('employee_sap_link', [
+        'filter' => 'permission:employee_sap_link-permission',
+        'controller' => 'Employee_sap_linkController',
+        'except' => 'show',
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers',
+    ]);
+
+    $routes->post('employee_sap_link/save', 'Employee_sap_linkController::save', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
+    $routes->post('employee_sap_link/getEmployee_sap_link', 'Employee_sap_linkController::getEmployee_sap_link', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
+    $routes->post('employee_sap_link/employeesSAPSelect2', 'Employee_sap_linkController::employeesSAPSelect2', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
+    $routes->post('employee_sap_link/getUsersAjaxSelect2', 'Employee_sap_linkController::getUsersAjaxSelect2', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
 });

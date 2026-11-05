@@ -12,6 +12,7 @@ use julio101290\boilerplatecompanies\Models\EmpresasModel;
 use julio101290\boilerplatebranchoffice\Models\BranchofficesModel;
 use julio101290\boilerplateservicelayer\Models\SapservicelayerModel;
 use julio101290\boilerplateservicelayer\Models\User_sap_linkModel;
+use julio101290\boilerplateservicelayer\Models\Employee_sap_linkModel;
 use julio101290\boilerplateservicelayer\Models\Link_sap_branchofficeModel;
 use julio101290\boilerplateservicelayer\Models\User_pricelistModel;
 use julio101290\boilerplateservicelayer\Models\QuotesSAPModel;
@@ -27,6 +28,7 @@ class QuotesSAPController extends BaseController
     protected $serviceLayerModel;
     protected $users;
     protected $userSapLink;
+    protected $employeeSapLink;
     protected $linkSapBranchOffice;
     protected $userPricelistModel;
     protected $quotesSAPModel;
@@ -40,6 +42,7 @@ class QuotesSAPController extends BaseController
         $this->serviceLayerModel   = new SapservicelayerModel();
         $this->users               = new UserModel();
         $this->userSapLink         = new User_sap_linkModel();
+        $this->employeeSapLink     = new Employee_sap_linkModel();
         $this->linkSapBranchOffice = new Link_sap_branchofficeModel();
         $this->userPricelistModel  = new User_pricelistModel();
         $this->quotesSAPModel      = new QuotesSAPModel();
@@ -1125,6 +1128,72 @@ class QuotesSAPController extends BaseController
         return $this->respondDeleted($quote, 'Cotización eliminada correctamente.');
     }
 
+    /**
+     * Obtiene el SlpCode (SalesPersonCode) de SAP enlazado al vendedor de la cotización.
+     * Busca en `employee_sap_link` y resuelve si el código guardado es un empID (OHEM)
+     * o directamente un SlpCode (OSLP).
+     */
+    private function resolveLinkedSlpCode(int $idEmpresa, int $idVendedor): ?int
+    {
+        $db = \Config\Database::connect();
+        $rawSapEmp = null;
+
+        if ($db->tableExists('employee_sap_link')) {
+            $builder = $this->employeeSapLink->builder();
+            $this->applyCompanyFilter($builder, 'employee_sap_link', $idEmpresa);
+            $linkRow = $builder
+                ->where('iduser', $idVendedor)
+                ->where('deleted_at', null)
+                ->get()
+                ->getRowArray();
+
+            if ($linkRow && isset($linkRow['sapemployee']) && trim((string) $linkRow['sapemployee']) !== '' && (int) $linkRow['sapemployee'] > 0) {
+                $rawSapEmp = (int) $linkRow['sapemployee'];
+            }
+        }
+
+        if ($rawSapEmp === null || $rawSapEmp <= 0) {
+            return null;
+        }
+
+        // Verificar en SAP HANA si ese ID corresponde a OHEM.empID (y extraer su salesPrson = SlpCode)
+        // o si ya es directamente un SlpCode en OSLP
+        try {
+            $conn = $this->connectODBC($idEmpresa);
+
+            // 1. Intentar obtener el SlpCode desde OHEM ("salesPrson") cuando se enlazó con OHEM."empID"
+            $sqlOhem = "SELECT \"salesPrson\" FROM \"OHEM\" WHERE \"empID\" = {$rawSapEmp} LIMIT 1";
+            $rsOhem  = @odbc_exec($conn, $sqlOhem);
+            if ($rsOhem && ($rowOhem = odbc_fetch_array($rsOhem))) {
+                $salesPrson = (int) ($rowOhem['salesPrson'] ?? -1);
+                odbc_free_result($rsOhem);
+                if ($salesPrson > 0) {
+                    odbc_close($conn);
+                    return $salesPrson;
+                }
+            }
+
+            // 2. Si no tiene salesPrson en OHEM o se enlazó directo a OSLP, verificar si existe como SlpCode en OSLP
+            $sqlOslp = "SELECT \"SlpCode\" FROM \"OSLP\" WHERE \"SlpCode\" = {$rawSapEmp} AND \"SlpCode\" > 0 LIMIT 1";
+            $rsOslp  = @odbc_exec($conn, $sqlOslp);
+            if ($rsOslp && ($rowOslp = odbc_fetch_array($rsOslp))) {
+                $slpCode = (int) ($rowOslp['SlpCode'] ?? -1);
+                odbc_free_result($rsOslp);
+                if ($slpCode > 0) {
+                    odbc_close($conn);
+                    return $slpCode;
+                }
+            }
+
+            odbc_close($conn);
+        } catch (Throwable $ignoreOdbc) {
+            // Si falla la consulta auxiliar ODBC pero hay enlace numérico válido en la tabla local, usar el valor enlazado
+            return $rawSapEmp;
+        }
+
+        return $rawSapEmp;
+    }
+
     public function sendToSAP()
     {
         try {
@@ -1151,10 +1220,17 @@ class QuotesSAPController extends BaseController
 
             $idEmpresa  = (int) ($quote['idEmpresa'] ?? 1);
             $idSucursal = (int) ($quote['idSucursal'] ?? 1);
+            $idVendedor = (int) ($quote['idVendedor'] ?? user()->id);
             $bplIdSAP   = (int) ($quote['bplIdSAP'] ?: $idSucursal);
             $whsCode    = trim((string) ($quote['whsCode'] ?? ''));
             $porcIva    = (float) ($quote['porcIva'] ?? 16);
             $taxCode    = $porcIva == 8 ? 'IVA8' : ($porcIva == 0 ? 'IVA0' : 'IVA16');
+
+            // Validar que el usuario/vendedor tenga su empleado de ventas enlazado
+            $slpCode = $this->resolveLinkedSlpCode($idEmpresa, $idVendedor);
+            if ($slpCode === null || $slpCode <= 0) {
+                throw new Exception('No hay empleado ventas del SAP enlazado.');
+            }
 
             try {
                 $conn = $this->connectODBC($idEmpresa);
@@ -1190,6 +1266,7 @@ class QuotesSAPController extends BaseController
                     'Quantity'        => (float) $prod['cantidad'],
                     'UnitPrice'       => (float) $prod['precio'],
                     'TaxCode'         => $taxCode,
+                    'SalesPersonCode' => $slpCode, // SlpCode a nivel partida
                 ];
                 if ($whsCode !== '') {
                     $line['WarehouseCode'] = $whsCode;
@@ -1203,6 +1280,7 @@ class QuotesSAPController extends BaseController
                 'DocDueDate'              => substr((string) $quote['fechaVencimiento'], 0, 10),
                 'TaxDate'                 => substr((string) $quote['fecha'], 0, 10),
                 'BPL_IDAssignedToInvoice' => $bplIdSAP,
+                'SalesPersonCode'         => $slpCode, // En Service Layer SalesPersonCode equivale a OQUT.SlpCode
                 'Comments'                => mb_substr("Cotización Web #{$quote['codigo']} | {$quote['observaciones']}", 0, 254),
                 'DocumentLines'           => $docLines
             ];
