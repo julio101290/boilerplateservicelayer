@@ -55,7 +55,7 @@ class BoilerplateServiceLayer extends Seeder {
         $this->authorize->createPermission('quotesSAP-authorize', 'Autorizar Cotizaciones Sap');
         $this->authorize->createPermission('quotesSAP-view-all', 'Ver todas las autorizaciones Cotizaciones Sap');
         $this->authorize->createPermission('employee_sap_link-permission', 'Enlace Empleados SAP');
-        
+        $this->authorize->createPermission('sihistorial_eq-permission', 'Historico Saldo Iniciakl');
         
         
         // Assign Permission to user
@@ -75,6 +75,7 @@ class BoilerplateServiceLayer extends Seeder {
         $this->authorize->addPermissionToUser('quotesSAP-permission', 1);
         $this->authorize->addPermissionToUser('quotesSAP-authorize', 1);
         $this->authorize->addPermissionToUser('employee_sap_link-permission', 1);
+        $this->authorize->addPermissionToUser('sihistorial_eq-permission', 1);
         
     }
     public function down() {

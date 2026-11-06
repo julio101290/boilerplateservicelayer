@@ -873,4 +873,40 @@ $routes->group('admin', function ($routes) {
     $routes->post('employee_sap_link/getEmployee_sap_link', 'Employee_sap_linkController::getEmployee_sap_link', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
     $routes->post('employee_sap_link/employeesSAPSelect2', 'Employee_sap_linkController::employeesSAPSelect2', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
     $routes->post('employee_sap_link/getUsersAjaxSelect2', 'Employee_sap_linkController::getUsersAjaxSelect2', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
+
+    $routes->get(
+            'sihistorial_eq',
+            'Sihistorial_eqController::index',
+            [
+                'namespace' => 'julio101290\boilerplateservicelayer\Controllers',
+                'filter' => 'permission:sihistorial_eq-permission'
+            ]
+    );
+
+    $routes->post(
+            'sihistorial_eq/getSihistorial_eq',
+            'Sihistorial_eqController::getSihistorial_eq',
+            [
+                'namespace' => 'julio101290\boilerplateservicelayer\Controllers',
+                'filter' => 'permission:sihistorial_eq-permission'
+            ]
+    );
+
+    $routes->post(
+            'sihistorial_eq/save',
+            'Sihistorial_eqController::save',
+            [
+                'namespace' => 'julio101290\boilerplateservicelayer\Controllers',
+                'filter' => 'permission:sihistorial_eq-permission'
+            ]
+    );
+
+    $routes->delete(
+            'sihistorial_eq/(:any)',
+            'Sihistorial_eqController::delete/$1',
+            [
+                'namespace' => 'julio101290\boilerplateservicelayer\Controllers',
+                'filter' => 'permission:sihistorial_eq-permission'
+            ]
+    );
 });
