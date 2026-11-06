@@ -909,4 +909,30 @@ $routes->group('admin', function ($routes) {
                 'filter' => 'permission:sihistorial_eq-permission'
             ]
     );
+    
+    
+    $routes->resource('mttoconfig', [
+        'filter'     => 'permission:mttoconfig-permission',
+        'controller' => 'MttoconfigController',
+        'except'     => 'show',
+        'namespace'  => 'julio101290\boilerplateservicelayer\Controllers',
+    ]);
+
+    $routes->post('mttoconfig/save', 'MttoconfigController::save', [
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+    ]);
+
+    $routes->post('mttoconfig/getMttoconfig', 'MttoconfigController::getMttoconfig', [
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+    ]);
+
+    $routes->post('mttoconfig/getCodigosDisponibles', 'MttoconfigController::getCodigosDisponibles', [
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+    ]);
+
+    $routes->get('mttoconfig/getTiposMtto', 'MttoconfigController::getTiposMtto', [
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
+    ]);
+    
+    
 });
