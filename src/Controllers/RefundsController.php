@@ -203,8 +203,9 @@ class RefundsController extends BaseController
             ]);
         }
 
-        $titulos["title"]    = 'Reembolsos y Comprobación de Gastos';
-        $titulos["subtitle"] = 'Administración de reembolsos y comprobantes SAP';
+        $titulos["title"]        = 'Reembolsos y Comprobación de Gastos';
+        $titulos["subtitle"]     = 'Administración de reembolsos y comprobantes SAP';
+        $titulos["canAuthorize"] = has_permission('refundsauth-permission');
 
         return view('julio101290\boilerplateservicelayer\Views\refunds', $titulos);
     }
@@ -247,6 +248,7 @@ class RefundsController extends BaseController
         $titulos["listProducts"]  = [];
         $titulos["sapSynced"]     = 0;
         $titulos["uuid"]          = generaUUID();
+        $titulos["canAuthorize"]  = has_permission('refundsauth-permission');
         $titulos["title"]         = "Nuevo Reembolso / Comprobación";
         $titulos["subtitle"]      = "Captura de Comprobantes (XML y Notas)";
 
@@ -326,6 +328,7 @@ class RefundsController extends BaseController
         $titulos["totalExento"]    = number_format((float) ($refund["tasaCero"] ?? 0), 2, ".", "");
         $titulos["uuid"]           = $refund["UUID"];
         $titulos["sapSynced"]      = $refund["sapSynced"] ?? 0;
+        $titulos["canAuthorize"]   = has_permission('refundsauth-permission');
         $titulos["title"]          = "Editar Reembolso / Comprobación";
         $titulos["subtitle"]       = "Folio: " . $refund["U_Folio"];
 
@@ -361,8 +364,13 @@ class RefundsController extends BaseController
                 $area = '';
             }
 
-            $codeMov     = trim((string) ($datos['U_CodeMov'] ?? ''));
-            $typeVoucher = (int) ($datos['U_TypeVoucher'] ?? 1);
+            $codeMov         = trim((string) ($datos['U_CodeMov'] ?? ''));
+            $typeVoucher     = (int) ($datos['U_TypeVoucher'] ?? 1);
+            $requestedStatus = (int) ($datos['U_Status'] ?? 1);
+
+            if ($requestedStatus === 4 && !has_permission('refundsauth-permission')) {
+                throw new Exception('No tiene permiso para autorizar reembolsos (refundsauth-permission).');
+            }
 
             if ($idEmpresa <= 0 || $idSucursal <= 0) {
                 throw new Exception('La empresa y la sucursal son obligatorias.');
@@ -403,7 +411,7 @@ class RefundsController extends BaseController
                 'U_Coments'           => mb_substr(trim((string) ($datos['generalObservations'] ?? $datos['U_Coments'] ?? '')), 0, 254),
                 'U_Date'              => $docDate,
                 'U_Total'             => (float) ($datos['total'] ?? 0),
-                'U_Status'            => (int) ($datos['U_Status'] ?? 1),
+                'U_Status'            => $requestedStatus,
                 'U_UserCode'          => $userName,
                 'U_CodeMov'           => $codeMov,
                 'U_TypeVoucher'       => $typeVoucher,
@@ -1108,6 +1116,14 @@ class RefundsController extends BaseController
 
     public function authorizeVoucher()
     {
+        if (!has_permission('refundsauth-permission')) {
+            return $this->response->setStatusCode(403)->setJSON([
+                'success' => false,
+                'error'   => 'No tiene permiso para autorizar reembolsos (refundsauth-permission).',
+                'token'   => csrf_hash()
+            ]);
+        }
+
         return $this->changeVoucherStatusSAP(4, [2], 'autorizado');
     }
 
@@ -1595,8 +1611,6 @@ class RefundsController extends BaseController
             }
         }
 
-        // Si el usuario ajustó el Total de la factura XML (ej. por Impuesto Sobre Hospedaje ISH),
-        // verificar si existe una diferencia positiva para agregarla con el artículo de impuesto local o tasa 0%
         $retencionesXml = (float) ($line['U_RetIVA'] ?? 0) + (float) ($line['U_ISR'] ?? 0);
         $totalEsperado  = round((float) ($line['U_Total'] ?? 0), 2);
         $diferenciaISH  = round($totalEsperado - ($sumaCalculadaSAP - $retencionesXml), 2);
@@ -2042,7 +2056,6 @@ class RefundsController extends BaseController
             $conceptLines  = [];
             $descripciones = [];
 
-            // Detectar Impuestos Locales (ej. Impuesto Sobre Hospedaje ISH) en el complemento si existe
             $impLocalesNode = $comprobante->searchNode('cfdi:Complemento', 'implocal:ImpuestosLocales');
             if ($impLocalesNode !== null) {
                 $ishGlobal = (float) ($impLocalesNode['TotaldeTraslados'] ?? 0);
@@ -2126,7 +2139,6 @@ class RefundsController extends BaseController
                 ];
             }
 
-            // Si el CFDI tiene Impuesto Sobre Hospedaje (ISH) en su Total, sumarlo al total de la primera línea para que cuadre por defecto
             if ($ishGlobal > 0 && !empty($conceptLines)) {
                 $conceptLines[0]['total'] = round($conceptLines[0]['total'] + $ishGlobal, 2);
             }

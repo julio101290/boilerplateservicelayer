@@ -148,6 +148,7 @@
 <script>
     var tableRefunds      = null;
     var tableModalDetails = null;
+    var canAuthorize      = <?= has_permission('refundsauth-permission') ? 'true' : 'false' ?>;
 
     $(document).ready(function () {
 
@@ -282,9 +283,11 @@
                                          </button>`;
                             }
                             if (status === 2) {
-                                btns += `<button type="button" class="btn btn-success btn-xs btnAuthRow" data-code="${code}" data-folio="${folio}" title="Autorizar Comprobante (Pasar a Estatus 4)">
-                                            <i class="fas fa-check"></i>
-                                         </button>`;
+                                if (canAuthorize) {
+                                    btns += `<button type="button" class="btn btn-success btn-xs btnAuthRow" data-code="${code}" data-folio="${folio}" title="Autorizar Comprobante (Pasar a Estatus 4)">
+                                                <i class="fas fa-check"></i>
+                                             </button>`;
+                                }
                                 btns += `<button type="button" class="btn btn-danger btn-xs btnRejectRow" data-code="${code}" data-folio="${folio}" title="Rechazar Comprobante">
                                             <i class="fas fa-times"></i>
                                          </button>`;
@@ -422,6 +425,10 @@
         });
 
         $(document).on('click', '.btnAuthRow', function () {
+            if (!canAuthorize) {
+                Swal.fire('Acceso denegado', 'No tiene permiso para autorizar reembolsos (refundsauth-permission).', 'warning');
+                return;
+            }
             cambiarEstatusFila("<?= base_url('admin/refunds/authorizeVoucher') ?>", $(this).attr('data-code'), $(this).attr('data-folio'), '¿Autorizar comprobante en SAP (Estatus 4)?');
         });
 
@@ -540,7 +547,11 @@
                         }
                     },
                     error: function (jqXHR) {
-                        Swal.fire('Error', jqXHR.responseText || 'Error de red', 'error');
+                        if (jqXHR.responseJSON && jqXHR.responseJSON.token) {
+                            $('.txt_csrfname').val(jqXHR.responseJSON.token);
+                        }
+                        var errorMsg = jqXHR.responseJSON?.error || jqXHR.responseText || 'Error de red';
+                        Swal.fire('Atención', errorMsg, 'warning');
                     }
                 });
             }
