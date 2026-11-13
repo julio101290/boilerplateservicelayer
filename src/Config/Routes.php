@@ -289,7 +289,8 @@ $routes->group('admin', function ($routes) {
     $routes->get('servicelayer/employees/getEmployee/(:num)', 'EmployeeSAPController::getEmployee/$1', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
     $routes->post('servicelayer/employees/save', 'EmployeeSAPController::save', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
     $routes->post('servicelayer/employees/getEmployeesAjaxSelect2', 'EmployeeSAPController::getEmployeesAjaxSelect2', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
-
+    $routes->get('servicelayer/employees/getDepartmentsAjax', 'EmployeeSAPController::getDepartmentsAjax', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
+    $routes->get('servicelayer/employees/getPositionsAjax', 'EmployeeSAPController::getPositionsAjax', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
     // Roles de empleados
     $routes->get('servicelayer/employees/getEmployeeRoles/(:num)', 'EmployeeSAPController::getEmployeeRoles/$1', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
     $routes->post('servicelayer/employees/getRolesAjaxSelect2', 'EmployeeSAPController::getRolesAjaxSelect2', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
@@ -301,6 +302,9 @@ $routes->group('admin', function ($routes) {
     $routes->get('servicelayer/employees/getEmployeeBranches/(:num)', 'EmployeeSAPController::getEmployeeBranches/$1', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
     $routes->post('servicelayer/employees/addEmployeeBranch', 'EmployeeSAPController::addEmployeeBranch', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
     $routes->delete('servicelayer/employees/removeEmployeeBranch/(:num)/(:num)', 'EmployeeSAPController::removeEmployeeBranch/$1/$2', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
+
+    $routes->get('servicelayer/employees/getDepartmentsAjax', 'EmployeeSAPController::getDepartmentsAjax', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
+    $routes->get('servicelayer/employees/getPositionsAjax', 'EmployeeSAPController::getPositionsAjax', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
 
 // ==========================================
     // RUTAS PARA ARTÍCULOS SAP (OITM)
@@ -909,13 +913,12 @@ $routes->group('admin', function ($routes) {
                 'filter' => 'permission:sihistorial_eq-permission'
             ]
     );
-    
-    
+
     $routes->resource('mttoconfig', [
-        'filter'     => 'permission:mttoconfig-permission',
+        'filter' => 'permission:mttoconfig-permission',
         'controller' => 'MttoconfigController',
-        'except'     => 'show',
-        'namespace'  => 'julio101290\boilerplateservicelayer\Controllers',
+        'except' => 'show',
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers',
     ]);
 
     $routes->post('mttoconfig/save', 'MttoconfigController::save', [
@@ -933,6 +936,4 @@ $routes->group('admin', function ($routes) {
     $routes->get('mttoconfig/getTiposMtto', 'MttoconfigController::getTiposMtto', [
         'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
     ]);
-    
-    
 });

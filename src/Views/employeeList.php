@@ -69,6 +69,26 @@
                         </div>
                     </div>
 
+                    <!-- Fila para Departamento y Posición -->
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="dept"><?= lang('employee.fields.dept') ?></label>
+                                <select class="form-control" name="dept" id="dept" style="width: 100%;">
+                                    <option value="">Cargando departamentos...</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="position"><?= lang('employee.fields.position') ?></label>
+                                <select class="form-control" name="position" id="position" style="width: 100%;">
+                                    <option value="">Cargando posiciones...</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Gestión de Sucursales Asignadas -->
                     <div class="row mt-2">
                         <div class="col-md-12">
@@ -175,6 +195,7 @@
                         <th><?= lang('employee.fields.lastName') ?></th>
                         <th><?= lang('employee.fields.middleName') ?></th>
                         <th><?= lang('employee.fields.dept') ?></th>
+                        <th><?= lang('employee.fields.position') ?></th>
                         <th><?= lang('employee.fields.active') ?></th>
                     </tr>
                 </thead>
@@ -190,8 +211,10 @@
 <script>
     $(function () {
         var branchesCache = [];
+        var departmentsCache = [];
+        var positionsCache = [];
 
-        // Carga de catálogo de sucursales con promesa para sincronizar la edición
+        // Carga de catálogo de sucursales
         function loadBranchesCatalog() {
             return $.ajax({
                 url: '<?= base_url('admin/servicelayer/employees/getBranchesAjax') ?>',
@@ -199,13 +222,15 @@
                 dataType: 'json',
                 success: function (data) {
                     branchesCache = data || [];
-                    var $select =$('#BPLId');
-                    var $selectAssign =$('#selectBranchAssign');
+                    var $select = $('#BPLId');
+                    var $selectAssign = $('#selectBranchAssign');
 
-                    $select.empty().append(new Option('Seleccione sucursal...', ''));$selectAssign.empty().append(new Option('Seleccione sucursal para asignar...', ''));
+                    $select.empty().append(new Option('Seleccione sucursal...', ''));
+                    $selectAssign.empty().append(new Option('Seleccione sucursal para asignar...', ''));
 
                     $.each(branchesCache, function (i, item) {
-                        $select.append(new Option(item.BPLName, item.BPLId));$selectAssign.append(new Option(item.BPLId + ' - ' + item.BPLName, item.BPLId));
+                        $select.append(new Option(item.BPLName, item.BPLId));
+                        $selectAssign.append(new Option(item.BPLId + ' - ' + item.BPLName, item.BPLId));
                     });
                 },
                 error: function () {
@@ -214,8 +239,54 @@
             });
         }
 
-        // Cargar catálogo al inicio
+        // Carga de catálogo de departamentos (OUDP)
+        function loadDepartmentsCatalog() {
+            return $.ajax({
+                url: '<?= base_url('admin/servicelayer/employees/getDepartmentsAjax') ?>',
+                method: 'GET',
+                dataType: 'json',
+                success: function (data) {
+                    departmentsCache = data || [];
+                    var $select = $('#dept');
+                    $select.empty().append(new Option('Seleccione departamento...', ''));
+
+                    $.each(departmentsCache, function (i, item) {
+                        var label = item.Name + (item.Remarks ? ' (' + item.Remarks + ')' : '');
+                        $select.append(new Option(label, item.Code));
+                    });
+                },
+                error: function () {
+                    $('#dept').empty().append(new Option('Error cargando departamentos', ''));
+                }
+            });
+        }
+
+        // Carga de catálogo de posiciones (OHPS)
+        function loadPositionsCatalog() {
+            return $.ajax({
+                url: '<?= base_url('admin/servicelayer/employees/getPositionsAjax') ?>',
+                method: 'GET',
+                dataType: 'json',
+                success: function (data) {
+                    positionsCache = data || [];
+                    var $select = $('#position');
+                    $select.empty().append(new Option('Seleccione posición...', ''));
+
+                    $.each(positionsCache, function (i, item) {
+                        var label = item.name + (item.descriptio ? ' (' + item.descriptio + ')' : '');
+                        $select.append(new Option(label, item.posID));
+                    });
+                },
+                error: function () {
+                    $('#position').empty().append(new Option('Error cargando posiciones', ''));
+                }
+            });
+        }
+
+        // Cargar catálogos al inicio
         loadBranchesCatalog();
+        loadDepartmentsCatalog();
+        loadPositionsCatalog();
 
         // Datatable de Empleados
         var tableEmployees = $('#tableEmployees').DataTable({
@@ -255,7 +326,8 @@
                 {data: 'firstName'},
                 {data: 'lastName'},
                 {data: 'middleName'},
-                {data: 'Dept'},
+                {data: 'Dept', defaultContent: ''},
+                {data: 'Position', defaultContent: ''},
                 {
                     data: 'Active',
                     render: function (data) {
@@ -275,6 +347,8 @@
             $('#ExtEmpNo').val('');
             $('#Code').val('');
             $('#BPLId').val('').trigger('change');
+            $('#dept').val('').trigger('change');
+            $('#position').val('').trigger('change');
             $('#Active').val('Y');
             $('#tbodyRoles').html('<tr><td colspan="4" class="text-center"><?= lang('employee.save_first') ?></td></tr>');
             $('#tbodyBranchesAssign').html('<tr><td colspan="3" class="text-center">Guarde el empleado primero</td></tr>');
@@ -287,11 +361,15 @@
             var empID = $(this).attr('data-empid');
             if (!empID) {
                 Swal.fire('Error', 'ID de empleado no válido', 'error');
-                return;
+                 return;
             }
 
-            // Asegurar que las sucursales estén cargadas antes de asignar el valor
-            $.when(branchesCache.length === 0 ? loadBranchesCatalog() : true).done(function () {
+            // Asegurar que sucursales, departamentos y posiciones estén cargados antes de asignar valores
+            $.when(
+                branchesCache.length === 0 ? loadBranchesCatalog() : true,
+                departmentsCache.length === 0 ? loadDepartmentsCatalog() : true,
+                positionsCache.length === 0 ? loadPositionsCatalog() : true
+            ).done(function () {
                 $.ajax({
                     url: '<?= base_url('admin/servicelayer/employees/getEmployee') ?>/' + empID,
                     method: 'GET',
@@ -306,9 +384,15 @@
                             $('#middleName').val(resp.middleName || '');
                             $('#Active').val(resp.Active || 'Y');
 
-                            // Asignar sucursal seleccionada
+                            // Asignar sucursal, departamento y posición seleccionados
                             var currentBranch = resp.BPLId !== null && resp.BPLId !== undefined && resp.BPLId !== '' ? resp.BPLId : '';
                             $('#BPLId').val(currentBranch).trigger('change');
+
+                            var currentDept = resp.dept !== null && resp.dept !== undefined && resp.dept !== '' ? resp.dept : '';
+                            $('#dept').val(currentDept).trigger('change');
+
+                            var currentPosition = resp.position !== null && resp.position !== undefined && resp.position !== '' ? resp.position : '';
+                            $('#position').val(currentPosition).trigger('change');
 
                             loadEmployeeRoles(resp.empID);
                             loadEmployeeBranches(resp.empID);
