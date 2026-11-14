@@ -936,4 +936,13 @@ $routes->group('admin', function ($routes) {
     $routes->get('mttoconfig/getTiposMtto', 'MttoconfigController::getTiposMtto', [
         'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
     ]);
+    
+    /**
+     * Reporte de mantenimientos vencidos
+     */
+    
+    $routes->get('reportMttoSAP', '\julio101290\boilerplateservicelayer\Controllers\ReportMttoSAPController::index');
+    $routes->post('reportMttoSAP/getFiltersAjax', '\julio101290\boilerplateservicelayer\Controllers\ReportMttoSAPController::getFiltersAjax');
+    $routes->post('reportMttoSAP/getReportDataAjax', '\julio101290\boilerplateservicelayer\Controllers\ReportMttoSAPController::getReportDataAjax');
+    
 });
