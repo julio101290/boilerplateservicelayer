@@ -142,8 +142,27 @@ class Sihistorial_eqController extends BaseController
             }
         }
 
+        // Cargar catálogo de tipos de mantenimiento (@TYPEMTTO)
+        $tiposMantenimiento = [];
+        try {
+            [$conn, $schema] = $this->getOdbcConnection();
+            $sqlTipos = 'SELECT "Code", "Name" FROM "' . $schema . '"."@TYPEMTTO" ORDER BY "Name" ASC';
+            $rsTipos = odbc_exec($conn, $sqlTipos);
+
+            if ($rsTipos) {
+                while ($row = odbc_fetch_array($rsTipos)) {
+                    $tiposMantenimiento[] = $this->utf8ize($row);
+                }
+                odbc_free_result($rsTipos);
+            }
+            odbc_close($conn);
+        } catch (\Throwable $e) {
+            $tiposMantenimiento = [];
+        }
+
         $titulos["title"] = "Historial de Equipos SAP";
         $titulos["subtitle"] = "Administración de @SIHISTORIAL_EQ";
+        $titulos["tiposMantenimiento"] = $tiposMantenimiento;
 
         return view('julio101290\boilerplateservicelayer\Views\sihistorial_eq', $titulos);
     }

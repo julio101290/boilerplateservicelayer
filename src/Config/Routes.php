@@ -950,4 +950,9 @@ $routes->group('admin', function ($routes) {
     $routes->get('servicelayer/fixedassets/getTipoEquipoAjax', 'FixedAssetsSAPController::getTipoEquipoAjax', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
     $routes->post('servicelayer/fixedassets/getAsset', 'FixedAssetsSAPController::getAsset', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
     $routes->post('servicelayer/fixedassets/save', 'FixedAssetsSAPController::save', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
+
+    $routes->get('typemtto', 'TypemttoController::index', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
+    $routes->post('typemtto/getTypemtto', 'TypemttoController::getTypemtto', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
+    $routes->post('typemtto/save', 'TypemttoController::save', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
+    $routes->post('typemtto/delete', 'TypemttoController::delete', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
 });

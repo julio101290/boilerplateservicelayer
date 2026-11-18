@@ -73,12 +73,15 @@
                     <div class="form-group row">
                         <label for="Name" class="col-sm-3 col-form-label">Name (Servicio) <span class="text-danger">*</span></label>
                         <div class="col-sm-9">
-                            <div class="input-group">
-                                <div class="input-group-prepend">
-                                    <span class="input-group-text"><i class="fas fa-tools"></i></span>
-                                </div>
-                                <input type="text" class="form-control" name="Name" id="Name" placeholder="Ej. SERVICIO MOTOR" required>
-                            </div>
+                            <select class="form-control select2" name="Name" id="Name" style="width: 100%;" required>
+                                <option value="">-- Seleccione un servicio --</option>
+                                <?php if (!empty($tiposMantenimiento)): ?>
+                                    <?php foreach ($tiposMantenimiento as $tipo): ?>
+                                        <?php $val = $tipo['Name'] ?? $tipo['Code']; ?>
+                                        <option value="<?= esc($val) ?>"><?= esc($val) ?></option>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </select>
                         </div>
                     </div>
 
@@ -242,6 +245,8 @@
     // Abrir modal para nuevo registro
     $(document).on('click', '.btnAddSihistorial_eq', function (e) {
         $("#form-sihistorial_eq")[0].reset();
+        $("#Name option.temp-option").remove();
+        $("#Name").val("").trigger("change");
         $("#isEdit").val("0");
         $("#Code").removeAttr("readonly");
         $("#U_TimeUltReg").val("1000");
@@ -253,7 +258,7 @@
     $(document).on('click', '#btnSaveSihistorial_eq', function (e) {
         var isEdit       = $("#isEdit").val();
         var Code         = $("#Code").val().trim();
-        var Name         = $("#Name").val().trim();
+        var Name         = ($("#Name").val() || "").trim();
         var U_ItemCode   = $("#U_ItemCode").val().trim();
         var U_Fecha      = $("#U_Fecha").val().trim();
         var U_TimeUltReg = $("#U_TimeUltReg").val().trim();
@@ -385,7 +390,21 @@
             success: function (respuesta) {
                 $("#isEdit").val("1");
                 $("#Code").val(respuesta["Code"]).attr("readonly", true);
-                $("#Name").val(respuesta["Name"]);
+
+                // Limpiar opciones temporales previas y asignar valor del catálogo
+                $("#Name option.temp-option").remove();
+                var servicio = (respuesta["Name"] || "").trim();
+                var existeOpcion = $("#Name option").filter(function () {
+                    return $(this).val() === servicio;
+                }).length > 0;
+
+                if (servicio !== '' && !existeOpcion) {
+                    var tempOpt = new Option(servicio, servicio, true, true);
+                    $(tempOpt).addClass('temp-option');
+                    $("#Name").append(tempOpt);
+                }
+                $("#Name").val(servicio).trigger("change");
+
                 $("#U_ItemCode").val(respuesta["U_ItemCode"]);
                 $("#U_Fecha").val(respuesta["U_Fecha"]);
                 // Limpiar posibles dos puntos o comas al cargar la hora (ej. "52:92" -> 5292)
@@ -433,6 +452,13 @@
 
     $(function () {
         $("#modalAddSihistorial_eq").draggable();
+
+        $("#Name").select2({
+            dropdownParent: $('#modalAddSihistorial_eq'),
+            placeholder: "-- Seleccione un servicio --",
+            allowClear: true,
+            width: '100%'
+        });
     });
 </script>
 <?= $this->endSection() ?>
