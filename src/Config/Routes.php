@@ -936,13 +936,18 @@ $routes->group('admin', function ($routes) {
     $routes->get('mttoconfig/getTiposMtto', 'MttoconfigController::getTiposMtto', [
         'namespace' => 'julio101290\boilerplateservicelayer\Controllers'
     ]);
-    
+
     /**
      * Reporte de mantenimientos vencidos
      */
-    
     $routes->get('reportMttoSAP', '\julio101290\boilerplateservicelayer\Controllers\ReportMttoSAPController::index');
     $routes->post('reportMttoSAP/getFiltersAjax', '\julio101290\boilerplateservicelayer\Controllers\ReportMttoSAPController::getFiltersAjax');
     $routes->post('reportMttoSAP/getReportDataAjax', '\julio101290\boilerplateservicelayer\Controllers\ReportMttoSAPController::getReportDataAjax');
-    
+
+    // FixedAssetsSAPController
+    $routes->get('servicelayer/fixedassets', 'FixedAssetsSAPController::index', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
+    $routes->get('servicelayer/fixedassets/getBranchesAjax', 'FixedAssetsSAPController::getBranchesAjax', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
+    $routes->get('servicelayer/fixedassets/getTipoEquipoAjax', 'FixedAssetsSAPController::getTipoEquipoAjax', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
+    $routes->post('servicelayer/fixedassets/getAsset', 'FixedAssetsSAPController::getAsset', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
+    $routes->post('servicelayer/fixedassets/save', 'FixedAssetsSAPController::save', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
 });
