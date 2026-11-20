@@ -206,6 +206,8 @@ class QuotesSAPController extends BaseController
                 } else {
                     $row['statusComputed'] = $st ?: 'PEN';
                 }
+
+                $row['pdfToken'] = $this->generatePublicPdfToken((string) ($row['UUID'] ?? ''));
             }
             unset($row);
 
@@ -1135,7 +1137,7 @@ class QuotesSAPController extends BaseController
      */
     private function resolveLinkedSlpCode(int $idEmpresa, int $idVendedor): ?int
     {
-        $db = \Config\Database::connect();
+        $db        = \Config\Database::connect();
         $rawSapEmp = null;
 
         if ($db->tableExists('employee_sap_link')) {
@@ -1310,7 +1312,7 @@ class QuotesSAPController extends BaseController
     }
 
     // =========================================================================
-    // 6. ESCÁNER DE ARCHIVOS EN WRITABLE Y GENERACIÓN SEGURA DE PDF
+    // 6. ESCÁNER DE ARCHIVOS EN WRITABLE, PDF ANTI-CACHÉ Y ENLACE PÚBLICO WHATSAPP
     // =========================================================================
 
     public function getTemplatesListAjax()
@@ -1373,7 +1375,7 @@ class QuotesSAPController extends BaseController
             $conn = $this->connectODBC($idEmpresa);
 
             $cardCodeClean = str_replace("'", "''", trim((string) $quote['cardCode']));
-            $rsCli = @odbc_exec($conn, "SELECT \"CardName\", \"Phone1\", \"EmailAddress\" FROM \"OCRD\" WHERE \"CardCode\" = '{$cardCodeClean}' LIMIT 1");
+            $rsCli         = @odbc_exec($conn, "SELECT \"CardName\", \"Phone1\", \"EmailAddress\" FROM \"OCRD\" WHERE \"CardCode\" = '{$cardCodeClean}' LIMIT 1");
             if ($rsCli && ($rowCli = odbc_fetch_array($rsCli))) {
                 $clienteSAP['CardName']     = trim($this->toUtf8($rowCli['CardName'] ?? $quote['cardName']));
                 $clienteSAP['Phone1']       = trim($this->toUtf8($rowCli['Phone1'] ?? $quote['telefono']));
@@ -1395,8 +1397,8 @@ class QuotesSAPController extends BaseController
                 $rsUom    = @odbc_exec($conn, "SELECT \"ItemCode\", \"InvntryUom\", \"SalUnitMsr\" FROM \"OITM\" WHERE \"ItemCode\" IN ({$inClaves})");
                 if ($rsUom) {
                     while ($rowUom = odbc_fetch_array($rsUom)) {
-                        $codeU = trim($this->toUtf8($rowUom['ItemCode']));
-                        $uom   = trim($this->toUtf8($rowUom['InvntryUom'] ?: ($rowUom['SalUnitMsr'] ?? 'PZA')));
+                        $codeU               = trim($this->toUtf8($rowUom['ItemCode']));
+                        $uom                 = trim($this->toUtf8($rowUom['InvntryUom'] ?: ($rowUom['SalUnitMsr'] ?? 'PZA')));
                         $unidadesSAP[$codeU] = $uom;
                     }
                     odbc_free_result($rsUom);
@@ -1420,7 +1422,7 @@ class QuotesSAPController extends BaseController
         $noRefacturacion = esc($sucursalLocal['noReinvoiceNotice'] ?? '');
 
         $htmlBloqueProductos = '';
-        $contador = 0;
+        $contador            = 0;
         foreach ($productos as $item) {
             $contador++;
             $bgStyle = ($contador % 2 === 0)
@@ -1536,12 +1538,46 @@ EOF;
             mkdir($pdfDir, 0775, true);
         }
 
-        $fileName = "COTIZACION_{$valorVenta}.pdf";
-        $pdf->Output($pdfDir . $fileName, 'F');
+        $fileName  = "COTIZACION_{$valorVenta}.pdf";
+        $pdfBinary = $pdf->Output($fileName, 'S');
+        file_put_contents($pdfDir . $fileName, $pdfBinary);
 
-        $this->response->setHeader('Content-Type', 'application/pdf');
-        $pdf->Output($fileName, 'I');
-        exit;
+        $disposition = $this->request->getGet('download') ? 'attachment' : 'inline';
+
+        return $this->response
+            ->setStatusCode(200)
+            ->setHeader('Content-Type', 'application/pdf')
+            ->setHeader('Content-Disposition', $disposition . '; filename="' . $fileName . '"')
+            ->setHeader('Content-Length', (string) strlen($pdfBinary))
+            ->setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+            ->setHeader('Pragma', 'no-cache')
+            ->setHeader('Expires', '0')
+            ->setBody($pdfBinary);
+    }
+
+    private function generatePublicPdfToken(string $uuid): string
+    {
+        $encConfig = config('Encryption');
+        $secret    = !empty($encConfig->key) ? $encConfig->key : 'QuotesSAP_PublicPDF_Secret_Key';
+        return substr(hash_hmac('sha256', $uuid, $secret), 0, 16);
+    }
+
+    public function publicReport(string $uuid, string $token)
+    {
+        if (!hash_equals($this->generatePublicPdfToken($uuid), $token)) {
+            return $this->response
+                ->setStatusCode(403)
+                ->setBody('Enlace de cotización inválido.');
+        }
+
+        $quote = $this->quotesSAPModel->where('UUID', $uuid)->first();
+        if (!$quote) {
+            return $this->response
+                ->setStatusCode(404)
+                ->setBody('Cotización no encontrada.');
+        }
+
+        return $this->report($uuid);
     }
 
     private function obtenerInicialesVendedor(string $nombreCompleto): string

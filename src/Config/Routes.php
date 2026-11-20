@@ -803,6 +803,11 @@ $routes->group('admin', function ($routes) {
             ]
     );
 
+    $routes->get(
+            'cotizacion-pdf/(:segment)/(:segment)',
+            '\julio101290\boilerplateservicelayer\Controllers\QuotesSAPController::publicReport/$1/$2'
+    );
+
     // Operaciones CRUD y Sincronización con SAP Service Layer (OQUT)
     $routes->post(
             'quotesSAP/save',

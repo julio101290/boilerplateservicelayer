@@ -67,7 +67,7 @@
                                 <th>Vencimiento</th>
                                 <th>Estatus</th>
                                 <th>SAP</th>
-                                <th style="width: 190px;">Acciones</th>
+                                <th style="width: 210px;">Acciones</th>
                             </tr>
                         </thead>
                         <tbody></tbody>
@@ -151,6 +151,53 @@
                 <button type="button" class="btn btn-info btn-sm" id="btnConfirmStatus">
                     <i class="fas fa-save"></i> Guardar Estatus
                 </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL 3: ENVIAR COTIZACIÓN POR WHATSAPP -->
+<div class="modal fade" id="modalSendWhatsApp" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white py-2">
+                <h5 class="modal-title">
+                    <i class="fab fa-whatsapp mr-1"></i> Enviar Cotización por WhatsApp
+                </h5>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="waQuoteUuid" value="">
+                <input type="hidden" id="waQuoteFolio" value="">
+
+                <div class="form-group">
+                    <label class="mb-1">Teléfono WhatsApp (con lada, ej. 526681234567)</label>
+                    <input type="text" id="waPhone" class="form-control form-control-sm" placeholder="Ej. 526681234567">
+                    <small class="text-muted">Si escribes 10 dígitos de México, se agregará <strong>52</strong> automáticamente.</small>
+                </div>
+
+                <div class="form-group mb-0">
+                    <label class="mb-1">Mensaje</label>
+                    <textarea id="waMessage" class="form-control form-control-sm" rows="5"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer py-2 d-flex justify-content-between flex-wrap">
+                <div>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="btnWaDownloadPdf" title="Descargar PDF para adjuntar manualmente">
+                        <i class="fas fa-file-pdf mr-1"></i> Descargar PDF
+                    </button>
+                    <button type="button" class="btn btn-outline-primary btn-sm d-none" id="btnWaShareFile" title="Compartir archivo PDF directo en celular">
+                        <i class="fas fa-share-alt mr-1"></i> Compartir archivo
+                    </button>
+                </div>
+                <div>
+                    <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">Cerrar</button>
+                    <button type="button" class="btn btn-success btn-sm" id="btnConfirmSendWhatsApp">
+                        <i class="fab fa-whatsapp mr-1"></i> Abrir WhatsApp
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -261,9 +308,13 @@
 
                         var btns = `<div class="btn-group">`;
 
-                        btns += `<a href="<?= base_url('admin/quotesSAP/report') ?>/${uuid}" target="_blank" class="btn btn-secondary btn-xs" title="Imprimir Cotización PDF">
+                        btns += `<a href="<?= base_url('admin/quotesSAP/report') ?>/${uuid}" target="_blank" class="btn btn-secondary btn-xs btnPrintQuotePDF" data-uuid="${uuid}" title="Imprimir Cotización PDF">
                                     <i class="fas fa-print"></i>
                                  </a>`;
+
+                        btns += `<button type="button" class="btn btn-success btn-xs btnSendWhatsApp" title="Enviar PDF por WhatsApp">
+                                    <i class="fab fa-whatsapp"></i>
+                                 </button>`;
 
                         btns += `<button type="button" class="btn btn-info btn-xs btnViewQuoteDetails" data-id="${id}" data-codigo="${codigo}" title="Ver Partidas">
                                     <i class="fas fa-eye"></i>
@@ -304,6 +355,97 @@
 
         $('#btnFilterQuotes').on('click', function () {
             tableQuotesSAP.ajax.reload();
+        });
+
+        // Imprimir PDF con parámetro anti-caché
+        $(document).on('click', '.btnPrintQuotePDF', function (e) {
+            e.preventDefault();
+            var uuid = $(this).attr('data-uuid');
+            window.open("<?= base_url('admin/quotesSAP/report') ?>/" + uuid + "?v=" + Date.now(), "_blank");
+        });
+
+        // Abrir modal de envío por WhatsApp
+        $(document).on('click', '.btnSendWhatsApp', function () {
+            var row = tableQuotesSAP.row($(this).closest('tr')).data();
+            if (!row) return;
+
+            var uuid     = row.UUID || '';
+            var token    = row.pdfToken || '';
+            var codigo   = row.codigo || '';
+            var cliente  = (row.cotizarA && row.cotizarA.trim() !== '') ? row.cotizarA.trim() : (row.cardName || '');
+            var totalFmt = '$' + parseFloat(row.total || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            var rawPhone = String(row.telefono || '').replace(/\D+/g, '');
+
+            if (rawPhone.length === 10) {
+                rawPhone = '52' + rawPhone;
+            }
+
+            var pdfPublicUrl = "<?= base_url('cotizacion-pdf') ?>/" + uuid + "/" + token + "?v=" + Date.now();
+            var mensaje = `Hola ${cliente}, le comparto la Cotización #${codigo} por un total de ${totalFmt}.\n\nPuede ver o descargar el PDF aquí:\n${pdfPublicUrl}`;
+
+            $('#waQuoteUuid').val(uuid);
+            $('#waQuoteFolio').val(codigo);
+            $('#waPhone').val(rawPhone);
+            $('#waMessage').val(mensaje);
+
+            if (navigator.canShare) {
+                $('#btnWaShareFile').removeClass('d-none');
+            }
+
+            $('#modalSendWhatsApp').modal('show');
+        });
+
+        // Abrir WhatsApp con mensaje y liga al PDF
+        $('#btnConfirmSendWhatsApp').on('click', function () {
+            var phone = String($('#waPhone').val() || '').replace(/\D+/g, '');
+            var msg   = String($('#waMessage').val() || '').trim();
+
+            if (phone.length === 10) {
+                phone = '52' + phone;
+            }
+            if (phone.length < 10) {
+                Swal.fire('Teléfono inválido', 'Ingresa un número de WhatsApp válido (mínimo 10 dígitos).', 'warning');
+                return;
+            }
+
+            var waUrl = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+            window.open(waUrl, '_blank');
+        });
+
+        // Descargar PDF actualizado para adjuntar manualmente
+        $('#btnWaDownloadPdf').on('click', function () {
+            var uuid = $('#waQuoteUuid').val();
+            if (!uuid) return;
+            window.open("<?= base_url('admin/quotesSAP/report') ?>/" + uuid + "?download=1&v=" + Date.now(), "_blank");
+        });
+
+        // Compartir archivo PDF directo desde móvil/navegador compatible
+        $('#btnWaShareFile').on('click', async function () {
+            var uuid   = $('#waQuoteUuid').val();
+            var codigo = $('#waQuoteFolio').val();
+            if (!uuid) return;
+
+            try {
+                var resp = await fetch("<?= base_url('admin/quotesSAP/report') ?>/" + uuid + "?v=" + Date.now(), {
+                    cache: 'no-store'
+                });
+                var blob = await resp.blob();
+                var file = new File([blob], `COTIZACION_${codigo}.pdf`, { type: 'application/pdf' });
+
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    await navigator.share({
+                        title: `Cotización #${codigo}`,
+                        text: `Cotización #${codigo}`,
+                        files: [file]
+                    });
+                } else {
+                    Swal.fire('Aviso', 'Este navegador no soporta compartir archivos directamente. Usa "Descargar PDF" o "Abrir WhatsApp".', 'info');
+                }
+            } catch (err) {
+                if (err.name !== 'AbortError') {
+                    Swal.fire('Error', 'No se pudo preparar el PDF para compartir.', 'error');
+                }
+            }
         });
 
         $(document).on('click', '.btnViewQuoteDetails', function () {

@@ -51,7 +51,7 @@
                 </h3>
                 <div class="card-tools ml-auto">
                     <?php if ((int)$idQuote > 0) : ?>
-                        <a href="<?= base_url('admin/quotesSAP/report/' . $uuid) ?>" target="_blank" class="btn btn-corp-red btn-xs mr-1">
+                        <a href="<?= base_url('admin/quotesSAP/report/' . $uuid) ?>?v=<?= time() ?>" target="_blank" class="btn btn-corp-red btn-xs mr-1">
                             <i class="fas fa-print"></i> Imprimir PDF
                         </a>
                     <?php endif; ?>
@@ -421,7 +421,7 @@
                             title: '¡Guardado!',
                             text: res.message
                         }).then(() => {
-                            window.open("<?= base_url('admin/quotesSAP/report') ?>/" + res.uuid, "_blank");
+                            window.open("<?= base_url('admin/quotesSAP/report') ?>/" + res.uuid + "?v=" + Date.now(), "_blank");
                             window.location.href = "<?= base_url('admin/quotesSAP') ?>";
                         });
                     } else {
