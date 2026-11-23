@@ -12,8 +12,8 @@ use julio101290\boilerplateservicelayer\Models\SapservicelayerModel;
 use julio101290\boilerplateservicelayer\Models\Link_sap_branchofficeModel;
 use julio101290\boilerplateservicelayer\Models\User_sap_linkModel;
 
-class ClientStatementSAPController extends BaseController {
-
+class ClientStatementSAPController extends BaseController
+{
     use ResponseTrait;
 
     protected $empresa;
@@ -22,12 +22,13 @@ class ClientStatementSAPController extends BaseController {
     protected $linkSapBranchOffice;
     protected $userSapLink;
 
-    public function __construct() {
-        $this->empresa = new EmpresasModel();
-        $this->sucursales = new BranchofficesModel();
-        $this->serviceLayerModel = new SapservicelayerModel();
+    public function __construct()
+    {
+        $this->empresa             = new EmpresasModel();
+        $this->sucursales          = new BranchofficesModel();
+        $this->serviceLayerModel   = new SapservicelayerModel();
         $this->linkSapBranchOffice = new Link_sap_branchofficeModel();
-        $this->userSapLink = new User_sap_linkModel();
+        $this->userSapLink         = new User_sap_linkModel();
 
         helper(['menu', 'utilerias', 'auth']);
     }
@@ -35,7 +36,8 @@ class ClientStatementSAPController extends BaseController {
     /**
      * Filtra de forma segura por empresa detectando la columna correspondiente.
      */
-    private function applyCompanyFilter($target, string $tableName, $companyVal) {
+    private function applyCompanyFilter($target, string $tableName, $companyVal)
+    {
         $db = \Config\Database::connect();
         if (!$db->tableExists($tableName)) {
             return $target;
@@ -62,24 +64,25 @@ class ClientStatementSAPController extends BaseController {
     }
 
     /**
-     * Vista principal de Movimientos y Estado de Cuenta de Clientes SAP (Solo Lectura)
+     * Vista principal de Movimientos y Estado de Cuenta de Clientes SAP (Solo Lectura).
      */
-    public function index() {
+    public function index()
+    {
         $auth = service('authentication');
         if (!$auth->check()) {
             return redirect()->route('admin');
         }
 
-        $idUser = (int) user()->id;
+        $idUser   = (int) user()->id;
         $empresas = $this->empresa->mdlEmpresasPorUsuario($idUser);
 
         $data = [
-            'title' => 'Movimientos y Estado de Cuenta de Clientes SAP',
-            'subtitle' => 'Consulta de facturas, anticipos, pagos, saldos al corte y mapa de relaciones',
-            'empresas' => $empresas,
+            'title'     => 'Movimientos y Estado de Cuenta de Clientes SAP',
+            'subtitle'  => 'Consulta de facturas, facturas de reserva, anticipos, pagos, saldos al corte y mapa de relaciones',
+            'empresas'  => $empresas,
             'idEmpresa' => (int) ($empresas[0]['id'] ?? 1),
-            'fechaIni' => date('Y-m-01'),
-            'fechaFin' => date('Y-m-d'),
+            'fechaIni'  => date('Y-m-01'),
+            'fechaFin'  => date('Y-m-d'),
         ];
 
         return view('julio101290\boilerplateservicelayer\Views\clientStatementSAP', $data);
@@ -88,23 +91,24 @@ class ClientStatementSAPController extends BaseController {
     /**
      * Carga sucursales SAP (OBPL) permitidas para el usuario y empresa.
      */
-    public function getBranchesAjax() {
+    public function getBranchesAjax()
+    {
         try {
-            $idUser = (int) user()->id;
-            $idEmpresa = (int) ($this->request->getPost('idEmpresa') ?? 1);
+            $idUser     = (int) user()->id;
+            $idEmpresa  = (int) ($this->request->getPost('idEmpresa') ?? 1);
             $sucursales = $this->getAllowedSAPBranches($idUser, $idEmpresa);
 
             return $this->response->setJSON([
-                        'error' => false,
-                        'sucursales' => $sucursales,
-                        'token' => csrf_hash(),
+                'error'      => false,
+                'sucursales' => $sucursales,
+                'token'      => csrf_hash(),
             ]);
         } catch (Throwable $e) {
             return $this->response->setJSON([
-                        'error' => true,
-                        'message' => $e->getMessage(),
-                        'sucursales' => [],
-                        'token' => csrf_hash(),
+                'error'      => true,
+                'message'    => $e->getMessage(),
+                'sucursales' => [],
+                'token'      => csrf_hash(),
             ]);
         }
     }
@@ -112,12 +116,13 @@ class ClientStatementSAPController extends BaseController {
     /**
      * Buscador Select2 AJAX de clientes (OCRD) en SAP HANA.
      */
-    public function searchClientsAjax() {
+    public function searchClientsAjax()
+    {
         try {
             $idEmpresa = (int) ($this->request->getGet('idEmpresa') ?? 1);
-            $term = trim((string) ($this->request->getGet('q') ?? ''));
+            $term      = trim((string) ($this->request->getGet('q') ?? ''));
 
-            $conn = $this->connectODBC($idEmpresa);
+            $conn      = $this->connectODBC($idEmpresa);
             $termClean = str_replace("'", "''", strtoupper($term));
 
             $whereSearch = '';
@@ -144,12 +149,12 @@ class ClientStatementSAPController extends BaseController {
             ";
 
             $results = [];
-            $rs = @odbc_exec($conn, $sql);
+            $rs      = @odbc_exec($conn, $sql);
             if ($rs) {
                 while ($row = odbc_fetch_array($rs)) {
                     $code = trim($this->toUtf8($row['CardCode'] ?? ''));
                     $name = trim($this->toUtf8($row['CardName'] ?? ''));
-                    $rfc = trim($this->toUtf8($row['RFC'] ?? ''));
+                    $rfc  = trim($this->toUtf8($row['RFC'] ?? ''));
 
                     $label = "{$code} - {$name}";
                     if ($rfc !== '') {
@@ -157,7 +162,7 @@ class ClientStatementSAPController extends BaseController {
                     }
 
                     $results[] = [
-                        'id' => $code,
+                        'id'   => $code,
                         'text' => $label,
                     ];
                 }
@@ -169,8 +174,8 @@ class ClientStatementSAPController extends BaseController {
             return $this->response->setJSON(['results' => $results]);
         } catch (Throwable $e) {
             return $this->response->setJSON([
-                        'results' => [],
-                        'error' => $e->getMessage(),
+                'results' => [],
+                'error'   => $e->getMessage(),
             ]);
         }
     }
@@ -178,18 +183,19 @@ class ClientStatementSAPController extends BaseController {
     /**
      * Consulta principal de estado de cuenta, saldos al corte y movimientos del cliente.
      */
-    public function getStatementAjax() {
+    public function getStatementAjax()
+    {
         try {
             $params = [
-                'idUser' => (int) user()->id,
-                'idEmpresa' => (int) ($this->request->getPost('idEmpresa') ?? 1),
-                'cardCode' => trim((string) ($this->request->getPost('cardCode') ?? '')),
-                'bplId' => trim((string) ($this->request->getPost('bplId') ?? 'TODOS')),
-                'fechaIni' => trim((string) ($this->request->getPost('fechaIni') ?? date('Y-m-01'))),
-                'fechaFin' => trim((string) ($this->request->getPost('fechaFin') ?? date('Y-m-d'))),
-                'tipoMov' => strtoupper(trim((string) ($this->request->getPost('tipoMov') ?? 'AMBOS'))),
+                'idUser'     => (int) user()->id,
+                'idEmpresa'  => (int) ($this->request->getPost('idEmpresa') ?? 1),
+                'cardCode'   => trim((string) ($this->request->getPost('cardCode') ?? '')),
+                'bplId'      => trim((string) ($this->request->getPost('bplId') ?? 'TODOS')),
+                'fechaIni'   => trim((string) ($this->request->getPost('fechaIni') ?? date('Y-m-01'))),
+                'fechaFin'   => trim((string) ($this->request->getPost('fechaFin') ?? date('Y-m-d'))),
+                'tipoMov'    => strtoupper(trim((string) ($this->request->getPost('tipoMov') ?? 'AMBOS'))),
                 'estatusSal' => strtoupper(trim((string) ($this->request->getPost('estatusSal') ?? 'TODOS'))),
-                'concepto' => strtoupper(trim((string) ($this->request->getPost('concepto') ?? 'TODOS'))),
+                'concepto'   => strtoupper(trim((string) ($this->request->getPost('concepto') ?? 'TODOS'))),
                 'referencia' => trim((string) ($this->request->getPost('referencia') ?? '')),
                 'cancelados' => strtoupper(trim((string) ($this->request->getPost('cancelados') ?? 'N'))),
             ];
@@ -201,51 +207,52 @@ class ClientStatementSAPController extends BaseController {
             $result = $this->buildStatementDataset($params);
 
             return $this->response->setJSON([
-                        'error' => false,
-                        'cliente' => $result['cliente'],
-                        'kpis' => $result['kpis'],
-                        'aging' => $result['aging'],
-                        'data' => $result['movimientos'],
-                        'token' => csrf_hash(),
+                'error'   => false,
+                'cliente' => $result['cliente'],
+                'kpis'    => $result['kpis'],
+                'aging'   => $result['aging'],
+                'data'    => $result['movimientos'],
+                'token'   => csrf_hash(),
             ]);
         } catch (Throwable $e) {
             return $this->response->setJSON([
-                        'error' => true,
-                        'message' => $e->getMessage(),
-                        'data' => [],
-                        'token' => csrf_hash(),
+                'error'   => true,
+                'message' => $e->getMessage(),
+                'data'    => [],
+                'token'   => csrf_hash(),
             ]);
         }
     }
 
     /**
-     * Obtiene el encabezado y partidas detalladas de cualquier documento SAP (Factura, NC, Anticipo, Pago, Pedido, Entrega, Cotización, Asiento).
+     * Obtiene el encabezado y partidas detalladas de cualquier documento SAP.
      */
-    public function getDocumentDetailAjax() {
+    public function getDocumentDetailAjax()
+    {
         try {
             $idEmpresa = (int) ($this->request->getPost('idEmpresa') ?? 1);
-            $objType = trim((string) ($this->request->getPost('objType') ?? ''));
-            $docEntry = (int) ($this->request->getPost('docEntry') ?? 0);
-            $transId = (int) ($this->request->getPost('transId') ?? 0);
+            $objType   = trim((string) ($this->request->getPost('objType') ?? ''));
+            $docEntry  = (int) ($this->request->getPost('docEntry') ?? 0);
+            $transId   = (int) ($this->request->getPost('transId') ?? 0);
 
             if ($objType === '' || ($docEntry <= 0 && $transId <= 0)) {
                 throw new Exception('Parámetros de documento inválidos.');
             }
 
-            $conn = $this->connectODBC($idEmpresa);
+            $conn   = $this->connectODBC($idEmpresa);
             $detail = $this->fetchDocumentDetail($conn, $objType, $docEntry, $transId);
             odbc_close($conn);
 
             return $this->response->setJSON([
-                        'error' => false,
-                        'detail' => $detail,
-                        'token' => csrf_hash(),
+                'error'  => false,
+                'detail' => $detail,
+                'token'  => csrf_hash(),
             ]);
         } catch (Throwable $e) {
             return $this->response->setJSON([
-                        'error' => true,
-                        'message' => $e->getMessage(),
-                        'token' => csrf_hash(),
+                'error'   => true,
+                'message' => $e->getMessage(),
+                'token'   => csrf_hash(),
             ]);
         }
     }
@@ -253,13 +260,14 @@ class ClientStatementSAPController extends BaseController {
     /**
      * Construye el Mapa de Relaciones (nodos y enlaces) de un documento SAP.
      */
-    public function getRelationshipMapAjax() {
+    public function getRelationshipMapAjax()
+    {
         try {
             $idEmpresa = (int) ($this->request->getPost('idEmpresa') ?? 1);
-            $objType = trim((string) ($this->request->getPost('objType') ?? ''));
-            $docEntry = (int) ($this->request->getPost('docEntry') ?? 0);
-            $transId = (int) ($this->request->getPost('transId') ?? 0);
-            $cardCode = trim((string) ($this->request->getPost('cardCode') ?? ''));
+            $objType   = trim((string) ($this->request->getPost('objType') ?? ''));
+            $docEntry  = (int) ($this->request->getPost('docEntry') ?? 0);
+            $transId   = (int) ($this->request->getPost('transId') ?? 0);
+            $cardCode  = trim((string) ($this->request->getPost('cardCode') ?? ''));
 
             if ($objType === '' || ($docEntry <= 0 && $transId <= 0)) {
                 throw new Exception('No se recibió un documento válido para el mapa de relaciones.');
@@ -270,19 +278,19 @@ class ClientStatementSAPController extends BaseController {
             }
 
             $conn = $this->connectODBC($idEmpresa);
-            $map = $this->buildRelationshipMap($conn, $objType, $docEntry, $cardCode);
+            $map  = $this->buildRelationshipMap($conn, $objType, $docEntry, $cardCode);
             odbc_close($conn);
 
             return $this->response->setJSON([
-                        'error' => false,
-                        'map' => $map,
-                        'token' => csrf_hash(),
+                'error' => false,
+                'map'   => $map,
+                'token' => csrf_hash(),
             ]);
         } catch (Throwable $e) {
             return $this->response->setJSON([
-                        'error' => true,
-                        'message' => $e->getMessage(),
-                        'token' => csrf_hash(),
+                'error'   => true,
+                'message' => $e->getMessage(),
+                'token'   => csrf_hash(),
             ]);
         }
     }
@@ -290,7 +298,8 @@ class ClientStatementSAPController extends BaseController {
     /**
      * Genera el reporte PDF de Estado de Cuenta Detallado a la fecha seleccionada con TCPDF.
      */
-    public function report() {
+    public function report()
+    {
         $auth = service('authentication');
         if (!$auth->check()) {
             return redirect()->route('admin');
@@ -298,15 +307,15 @@ class ClientStatementSAPController extends BaseController {
 
         try {
             $params = [
-                'idUser' => (int) user()->id,
-                'idEmpresa' => (int) ($this->request->getGet('idEmpresa') ?? 1),
-                'cardCode' => trim((string) ($this->request->getGet('cardCode') ?? '')),
-                'bplId' => trim((string) ($this->request->getGet('bplId') ?? 'TODOS')),
-                'fechaIni' => trim((string) ($this->request->getGet('fechaIni') ?? date('Y-m-01'))),
-                'fechaFin' => trim((string) ($this->request->getGet('fechaFin') ?? date('Y-m-d'))),
-                'tipoMov' => strtoupper(trim((string) ($this->request->getGet('tipoMov') ?? 'AMBOS'))),
+                'idUser'     => (int) user()->id,
+                'idEmpresa'  => (int) ($this->request->getGet('idEmpresa') ?? 1),
+                'cardCode'   => trim((string) ($this->request->getGet('cardCode') ?? '')),
+                'bplId'      => trim((string) ($this->request->getGet('bplId') ?? 'TODOS')),
+                'fechaIni'   => trim((string) ($this->request->getGet('fechaIni') ?? date('Y-m-01'))),
+                'fechaFin'   => trim((string) ($this->request->getGet('fechaFin') ?? date('Y-m-d'))),
+                'tipoMov'    => strtoupper(trim((string) ($this->request->getGet('tipoMov') ?? 'AMBOS'))),
                 'estatusSal' => strtoupper(trim((string) ($this->request->getGet('estatusSal') ?? 'TODOS'))),
-                'concepto' => strtoupper(trim((string) ($this->request->getGet('concepto') ?? 'TODOS'))),
+                'concepto'   => strtoupper(trim((string) ($this->request->getGet('concepto') ?? 'TODOS'))),
                 'referencia' => trim((string) ($this->request->getGet('referencia') ?? '')),
                 'cancelados' => strtoupper(trim((string) ($this->request->getGet('cancelados') ?? 'N'))),
             ];
@@ -315,10 +324,10 @@ class ClientStatementSAPController extends BaseController {
                 return $this->response->setStatusCode(400)->setBody('Debe indicar un cliente (cardCode).');
             }
 
-            $dataset = $this->buildStatementDataset($params);
-            $datosEmpresa = $this->empresa->find($params['idEmpresa']) ?: $this->empresa->first();
+            $dataset       = $this->buildStatementDataset($params);
+            $datosEmpresa  = $this->empresa->find($params['idEmpresa']) ?: $this->empresa->first();
             $nombreEmpresa = !empty($datosEmpresa['nombre']) ? $datosEmpresa['nombre'] : 'MI EMPRESA SA DE CV';
-            $rfcEmpresa = !empty($datosEmpresa['rfc']) ? $datosEmpresa['rfc'] : '';
+            $rfcEmpresa    = !empty($datosEmpresa['rfc']) ? $datosEmpresa['rfc'] : '';
 
             $rutasLogoEmpresa = [
                 'writable/templates/quotes/logoReportes.png',
@@ -333,15 +342,14 @@ class ClientStatementSAPController extends BaseController {
             }
 
             $logoHeaderPath = $this->prepararImagenTCPDF($rutasLogoEmpresa, 'pdf_logo_stmt_' . $params['idEmpresa']);
-            $logoHtml = $logoHeaderPath ? '<img src="' . $logoHeaderPath . '" style="width:125px;">' : '';
+            $logoHtml       = $logoHeaderPath ? '<img src="' . $logoHeaderPath . '" style="width:125px;">' : '';
 
-            $cli = $dataset['cliente'];
-            $kpis = $dataset['kpis'];
-            $aging = $dataset['aging'];
-            $movs = $dataset['movimientos'];
-
+            $cli           = $dataset['cliente'];
+            $kpis          = $dataset['kpis'];
+            $aging         = $dataset['aging'];
+            $movs          = $dataset['movimientos'];
             $sucursalTexto = $dataset['sucursalTexto'];
-            $fechaEmision = date('Y-m-d H:i');
+            $fechaEmision  = date('Y-m-d H:i');
 
             $htmlHeader = <<<EOF
 <table cellpadding="3" cellspacing="0" style="width:100%; border-bottom: 2px solid #a82020;">
@@ -424,10 +432,10 @@ class ClientStatementSAPController extends BaseController {
 EOF;
 
             $rowsHtml = '';
-            $i = 0;
+            $i        = 0;
             foreach ($movs as $m) {
                 $i++;
-                $bg = ($i % 2 === 0) ? '#f7f7f7' : '#ffffff';
+                $bg       = ($i % 2 === 0) ? '#f7f7f7' : '#ffffff';
                 $colorSal = $m['SaldoPendiente'] > 0.005 ? '#a82020' : ($m['SaldoPendiente'] < -0.005 ? '#1e7e34' : '#666666');
                 $cancelTx = $m['Cancelado'] === 'S' ? ' [CANC]' : '';
 
@@ -488,21 +496,21 @@ EOF;
                 ob_end_clean();
             }
 
-            $safeCode = preg_replace('/[^A-Za-z0-9_\-]/', '', $cli['CardCode']);
-            $fileName = "EDO_CUENTA_{$safeCode}_{$params['fechaFin']}.pdf";
+            $safeCode  = preg_replace('/[^A-Za-z0-9_\-]/', '', $cli['CardCode']);
+            $fileName  = "EDO_CUENTA_{$safeCode}_{$params['fechaFin']}.pdf";
             $pdfBinary = $pdf->Output($fileName, 'S');
 
             $disposition = $this->request->getGet('download') ? 'attachment' : 'inline';
 
             return $this->response
-                            ->setStatusCode(200)
-                            ->setHeader('Content-Type', 'application/pdf')
-                            ->setHeader('Content-Disposition', $disposition . '; filename="' . $fileName . '"')
-                            ->setHeader('Content-Length', (string) strlen($pdfBinary))
-                            ->setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
-                            ->setHeader('Pragma', 'no-cache')
-                            ->setHeader('Expires', '0')
-                            ->setBody($pdfBinary);
+                ->setStatusCode(200)
+                ->setHeader('Content-Type', 'application/pdf')
+                ->setHeader('Content-Disposition', $disposition . '; filename="' . $fileName . '"')
+                ->setHeader('Content-Length', (string) strlen($pdfBinary))
+                ->setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+                ->setHeader('Pragma', 'no-cache')
+                ->setHeader('Expires', '0')
+                ->setBody($pdfBinary);
         } catch (Throwable $e) {
             return $this->response->setStatusCode(500)->setBody('Error al generar PDF: ' . esc($e->getMessage()));
         }
@@ -511,37 +519,37 @@ EOF;
     /**
      * Núcleo compartido para consultar HANA y armar cliente, KPIs al corte, antigüedad y movimientos.
      */
-    private function buildStatementDataset(array $params): array {
-        $idUser = (int) $params['idUser'];
-        $idEmpresa = (int) $params['idEmpresa'];
-        $cardCode = trim((string) $params['cardCode']);
-        $bplId = trim((string) $params['bplId']);
-        $fechaIni = $this->sanitizeDate($params['fechaIni'], date('Y-m-01'));
-        $fechaFin = $this->sanitizeDate($params['fechaFin'], date('Y-m-d'));
-        $tipoMov = $params['tipoMov'];
+    private function buildStatementDataset(array $params): array
+    {
+        $idUser     = (int) $params['idUser'];
+        $idEmpresa  = (int) $params['idEmpresa'];
+        $cardCode   = trim((string) $params['cardCode']);
+        $bplId      = trim((string) $params['bplId']);
+        $fechaIni   = $this->sanitizeDate($params['fechaIni'], date('Y-m-01'));
+        $fechaFin   = $this->sanitizeDate($params['fechaFin'], date('Y-m-d'));
+        $tipoMov    = $params['tipoMov'];
         $estatusSal = $params['estatusSal'];
-        $concepto = $params['concepto'];
+        $concepto   = $params['concepto'];
         $referencia = trim((string) $params['referencia']);
         $cancelados = $params['cancelados'];
 
         if ($fechaIni > $fechaFin) {
-            $tmp = $fechaIni;
+            $tmp      = $fechaIni;
             $fechaIni = $fechaFin;
             $fechaFin = $tmp;
         }
 
-        $sucursales = $this->getAllowedSAPBranches($idUser, $idEmpresa);
-        $allowedBplIn = array_column($sucursales, 'bplId');
+        $sucursales    = $this->getAllowedSAPBranches($idUser, $idEmpresa);
+        $allowedBplIn  = array_column($sucursales, 'bplId');
         $sucursalTexto = 'TODAS LAS SUCURSALES';
 
-        $conn = $this->connectODBC($idEmpresa);
+        $conn          = $this->connectODBC($idEmpresa);
         $cardCodeClean = str_replace("'", "''", $cardCode);
 
-        // Filtro por sucursal (OBPL) y USR6 si existe enlace de usuario SAP
         $whereBplJdt = '';
         $whereBplDoc = '';
         if ($bplId !== '' && $bplId !== 'TODOS' && is_numeric($bplId)) {
-            $bplInt = (int) $bplId;
+            $bplInt      = (int) $bplId;
             $whereBplJdt = " AND t0.\"BPLId\" = {$bplInt} ";
             $whereBplDoc = " AND \"BPLId\" = {$bplInt} ";
             foreach ($sucursales as $s) {
@@ -551,7 +559,7 @@ EOF;
                 }
             }
         } elseif (!empty($allowedBplIn)) {
-            $inStr = implode(',', array_map('intval', $allowedBplIn));
+            $inStr       = implode(',', array_map('intval', $allowedBplIn));
             $whereBplJdt = " AND (t0.\"BPLId\" IN ({$inStr}) OR t0.\"BPLId\" IS NULL) ";
             $whereBplDoc = " AND \"BPLId\" IN ({$inStr}) ";
         }
@@ -563,13 +571,13 @@ EOF;
 
         // 1. Datos generales del cliente (OCRD + OCTG)
         $cliente = [
-            'CardCode' => $cardCode,
-            'CardName' => '',
-            'RFC' => '',
-            'Phone1' => '',
-            'EmailAddress' => '',
-            'Currency' => 'MXP',
-            'CreditLine' => 0.0,
+            'CardCode'      => $cardCode,
+            'CardName'      => '',
+            'RFC'           => '',
+            'Phone1'        => '',
+            'EmailAddress'  => '',
+            'Currency'      => 'MXP',
+            'CreditLine'    => 0.0,
             'BalanceActual' => 0.0,
             'CondicionPago' => 'Contado',
         ];
@@ -593,13 +601,13 @@ EOF;
         $rsCli = @odbc_exec($conn, $sqlCli);
         if ($rsCli && ($rCli = odbc_fetch_array($rsCli))) {
             $cliente = [
-                'CardCode' => trim($this->toUtf8($rCli['CardCode'] ?? $cardCode)),
-                'CardName' => trim($this->toUtf8($rCli['CardName'] ?? '')),
-                'RFC' => trim($this->toUtf8($rCli['RFC'] ?? '')),
-                'Phone1' => trim($this->toUtf8($rCli['Phone1'] ?? '')),
-                'EmailAddress' => trim($this->toUtf8($rCli['EmailAddress'] ?? '')),
-                'Currency' => trim($this->toUtf8($rCli['Currency'] ?? 'MXP')),
-                'CreditLine' => round((float) ($rCli['CreditLine'] ?? 0), 2),
+                'CardCode'      => trim($this->toUtf8($rCli['CardCode'] ?? $cardCode)),
+                'CardName'      => trim($this->toUtf8($rCli['CardName'] ?? '')),
+                'RFC'           => trim($this->toUtf8($rCli['RFC'] ?? '')),
+                'Phone1'        => trim($this->toUtf8($rCli['Phone1'] ?? '')),
+                'EmailAddress'  => trim($this->toUtf8($rCli['EmailAddress'] ?? '')),
+                'Currency'      => trim($this->toUtf8($rCli['Currency'] ?? 'MXP')),
+                'CreditLine'    => round((float) ($rCli['CreditLine'] ?? 0), 2),
                 'BalanceActual' => round((float) ($rCli['Balance'] ?? 0), 2),
                 'CondicionPago' => trim($this->toUtf8($rCli['CondicionPago'] ?? 'Contado')),
             ];
@@ -608,7 +616,7 @@ EOF;
 
         // 2. Saldo Inicial (anterior a fechaIni)
         $saldoInicial = 0.0;
-        $sqlIni = "
+        $sqlIni       = "
             SELECT IFNULL(SUM(t0.\"Debit\" - t0.\"Credit\"), 0) AS \"SaldoInicial\"
             FROM \"JDT1\" t0
             WHERE t0.\"ShortName\" = '{$cardCodeClean}'
@@ -663,33 +671,33 @@ EOF;
             FROM movs_corte
         ";
 
-        $saldoCorte = 0.0;
-        $vencido = 0.0;
+        $saldoCorte       = 0.0;
+        $vencido          = 0.0;
         $anticipoEfectivo = 0.0;
-        $aging = [
+        $aging            = [
             'porVencer' => 0.0,
-            'd1_30' => 0.0,
-            'd31_60' => 0.0,
-            'd61_90' => 0.0,
-            'd90Mas' => 0.0,
+            'd1_30'     => 0.0,
+            'd31_60'    => 0.0,
+            'd61_90'    => 0.0,
+            'd90Mas'    => 0.0,
         ];
 
         $rsCorte = @odbc_exec($conn, $sqlCorte);
         if ($rsCorte && ($rC = odbc_fetch_array($rsCorte))) {
-            $saldoCorte = round((float) ($rC['SaldoCorte'] ?? 0), 2);
-            $vencido = round((float) ($rC['Vencido'] ?? 0), 2);
-            $anticipoEfectivo = round((float) ($rC['AnticipoEfectivo'] ?? 0), 2);
+            $saldoCorte         = round((float) ($rC['SaldoCorte'] ?? 0), 2);
+            $vencido            = round((float) ($rC['Vencido'] ?? 0), 2);
+            $anticipoEfectivo   = round((float) ($rC['AnticipoEfectivo'] ?? 0), 2);
             $aging['porVencer'] = round((float) ($rC['PorVencer'] ?? 0), 2);
-            $aging['d1_30'] = round((float) ($rC['D1_30'] ?? 0), 2);
-            $aging['d31_60'] = round((float) ($rC['D31_60'] ?? 0), 2);
-            $aging['d61_90'] = round((float) ($rC['D61_90'] ?? 0), 2);
-            $aging['d90Mas'] = round((float) ($rC['D90Mas'] ?? 0), 2);
+            $aging['d1_30']     = round((float) ($rC['D1_30'] ?? 0), 2);
+            $aging['d31_60']    = round((float) ($rC['D31_60'] ?? 0), 2);
+            $aging['d61_90']    = round((float) ($rC['D61_90'] ?? 0), 2);
+            $aging['d90Mas']    = round((float) ($rC['D90Mas'] ?? 0), 2);
             odbc_free_result($rsCorte);
         }
 
         // 4. Anticipos de Facturación disponibles por aplicar (ODPI pagados menos aplicados a la fecha)
         $anticipoFacturacion = 0.0;
-        $sqlAntFact = "
+        $sqlAntFact          = "
             SELECT IFNULL(SUM(
                 CASE WHEN (IFNULL(\"PaidToDate\", 0) - IFNULL(\"DpmAppl\", 0)) > 0
                      THEN (IFNULL(\"PaidToDate\", 0) - IFNULL(\"DpmAppl\", 0))
@@ -782,6 +790,7 @@ EOF;
                     WHEN IFNULL(t1.\"StornoToTr\", 0) > 0 THEN 'S'
                     ELSE 'N'
                 END AS \"Cancelado\",
+                IFNULL(inv.\"isIns\", 'N') AS \"EsReserva\",
                 COALESCE(inv.\"DocCur\", rin.\"DocCur\", dpi.\"DocCur\", rct.\"DocCurr\", 'MXP') AS \"Moneda\"
             FROM \"JDT1\" t0
             INNER JOIN \"OJDT\" t1 ON t1.\"TransId\" = t0.\"TransId\"
@@ -799,30 +808,30 @@ EOF;
         ";
 
         $movimientos = [];
-        $saldoAcum = $saldoInicial;
+        $saldoAcum   = $saldoInicial;
         $totalCargos = 0.0;
         $totalAbonos = 0.0;
 
         $rsMovs = odbc_exec($conn, $sqlMovs);
         if ($rsMovs) {
             while ($row = odbc_fetch_array($rsMovs)) {
-                $objType = trim((string) ($row['ObjType'] ?? '30'));
-                $docEntry = (int) ($row['DocEntry'] ?? 0);
-                $transId = (int) ($row['TransId'] ?? 0);
-                $cargo = round((float) ($row['Cargo'] ?? 0), 2);
-                $abono = round((float) ($row['Abono'] ?? 0), 2);
-                $salPend = round((float) ($row['SaldoPendiente'] ?? 0), 2);
-                $canc = trim($this->toUtf8($row['Cancelado'] ?? 'N'));
-                $refText = trim($this->toUtf8($row['Referencia'] ?? ''));
-                $folio = trim($this->toUtf8($row['Folio'] ?? ''));
-                $facRel = trim($this->toUtf8($row['FacturaRel'] ?? ''));
-                $fecha = trim($this->toUtf8($row['Fecha'] ?? ''));
-                $fechaVen = trim($this->toUtf8($row['FechaVen'] ?? ''));
+                $objType   = trim((string) ($row['ObjType'] ?? '30'));
+                $docEntry  = (int) ($row['DocEntry'] ?? 0);
+                $transId   = (int) ($row['TransId'] ?? 0);
+                $cargo     = round((float) ($row['Cargo'] ?? 0), 2);
+                $abono     = round((float) ($row['Abono'] ?? 0), 2);
+                $salPend   = round((float) ($row['SaldoPendiente'] ?? 0), 2);
+                $canc      = trim($this->toUtf8($row['Cancelado'] ?? 'N'));
+                $esReserva = ($objType === '13' && trim((string) ($row['EsReserva'] ?? 'N')) === 'Y');
+                $refText   = trim($this->toUtf8($row['Referencia'] ?? ''));
+                $folio     = trim($this->toUtf8($row['Folio'] ?? ''));
+                $facRel    = trim($this->toUtf8($row['FacturaRel'] ?? ''));
+                $fecha     = trim($this->toUtf8($row['Fecha'] ?? ''));
+                $fechaVen  = trim($this->toUtf8($row['FechaVen'] ?? ''));
 
                 // Saldo acumulado cronológico real del periodo
                 $saldoAcum = round($saldoAcum + ($cargo - $abono), 2);
 
-                // Filtros de visualización (como en la pantalla de referencia)
                 if ($cancelados === 'N' && $canc === 'S') {
                     continue;
                 }
@@ -838,8 +847,14 @@ EOF;
                 if ($estatusSal === 'SALDADOS' && abs($salPend) > 0.005) {
                     continue;
                 }
-                if ($concepto !== '' && $concepto !== 'TODOS' && $objType !== $concepto) {
-                    continue;
+                if ($concepto !== '' && $concepto !== 'TODOS') {
+                    if ($concepto === '13_RES' && !($objType === '13' && $esReserva)) {
+                        continue;
+                    } elseif ($concepto === '13_NORM' && !($objType === '13' && !$esReserva)) {
+                        continue;
+                    } elseif (!in_array($concepto, ['13_RES', '13_NORM'], true) && $objType !== $concepto) {
+                        continue;
+                    }
                 }
                 if ($referencia !== '' && $referencia !== '*') {
                     $haystack = mb_strtoupper("{$refText} {$folio} {$facRel}");
@@ -851,8 +866,8 @@ EOF;
                 $totalCargos += $cargo;
                 $totalAbonos += $abono;
 
-                $metaTipo = $this->getObjTypeMeta($objType);
-                $estatus = 'SALDADO';
+                $metaTipo = $this->getObjTypeMeta($objType, $esReserva);
+                $estatus  = 'SALDADO';
                 if ($canc === 'S') {
                     $estatus = 'CANCELADO';
                 } elseif (abs($salPend) > 0.005) {
@@ -866,25 +881,26 @@ EOF;
                 }
 
                 $movimientos[] = [
-                    'TransId' => $transId,
-                    'ObjType' => $objType,
-                    'DocEntry' => $docEntry,
-                    'CodigoTipo' => $metaTipo['code'],
-                    'NombreTipo' => $metaTipo['name'],
-                    'BadgeColor' => $metaTipo['badge'],
-                    'Fecha' => $fecha,
-                    'FechaVen' => $fechaVen,
-                    'Folio' => $folio,
-                    'FacturaRel' => $facRel,
-                    'BPLName' => trim($this->toUtf8($row['BPLName'] ?? '')),
-                    'Referencia' => $refText,
-                    'Moneda' => trim($this->toUtf8($row['Moneda'] ?? 'MXP')),
-                    'Cargo' => $cargo,
-                    'Abono' => $abono,
+                    'TransId'        => $transId,
+                    'ObjType'        => $objType,
+                    'DocEntry'       => $docEntry,
+                    'EsReserva'      => $esReserva ? 'S' : 'N',
+                    'CodigoTipo'     => $metaTipo['code'],
+                    'NombreTipo'     => $metaTipo['name'],
+                    'BadgeColor'     => $metaTipo['badge'],
+                    'Fecha'          => $fecha,
+                    'FechaVen'       => $fechaVen,
+                    'Folio'          => $folio,
+                    'FacturaRel'     => $facRel,
+                    'BPLName'        => trim($this->toUtf8($row['BPLName'] ?? '')),
+                    'Referencia'     => $refText,
+                    'Moneda'         => trim($this->toUtf8($row['Moneda'] ?? 'MXP')),
+                    'Cargo'          => $cargo,
+                    'Abono'          => $abono,
                     'SaldoPendiente' => $salPend,
                     'SaldoAcumulado' => $saldoAcum,
-                    'Cancelado' => $canc,
-                    'Estatus' => $estatus,
+                    'Cancelado'      => $canc,
+                    'Estatus'        => $estatus,
                 ];
             }
             odbc_free_result($rsMovs);
@@ -893,41 +909,44 @@ EOF;
         odbc_close($conn);
 
         return [
-            'cliente' => $cliente,
+            'cliente'       => $cliente,
             'sucursalTexto' => $sucursalTexto,
-            'kpis' => [
-                'saldoInicial' => round($saldoInicial, 2),
-                'totalCargos' => round($totalCargos, 2),
-                'totalAbonos' => round($totalAbonos, 2),
-                'saldoCorte' => round($saldoCorte, 2),
-                'vencido' => round($vencido, 2),
-                'anticipoEfectivo' => round($anticipoEfectivo, 2),
+            'kpis'          => [
+                'saldoInicial'        => round($saldoInicial, 2),
+                'totalCargos'         => round($totalCargos, 2),
+                'totalAbonos'         => round($totalAbonos, 2),
+                'saldoCorte'          => round($saldoCorte, 2),
+                'vencido'             => round($vencido, 2),
+                'anticipoEfectivo'    => round($anticipoEfectivo, 2),
                 'anticipoFacturacion' => round($anticipoFacturacion, 2),
             ],
-            'aging' => $aging,
+            'aging'       => $aging,
             'movimientos' => $movimientos,
         ];
     }
 
     /**
-     * Obtiene el detalle completo de un documento SAP (Marketing, Pago o Asiento).
+     * Obtiene el detalle completo de un documento SAP (incluyendo Facturas de Reserva y Devoluciones).
      */
-    private function fetchDocumentDetail($conn, string $objType, int $docEntry, int $transId = 0): array {
-        $meta = $this->getObjTypeMeta($objType);
-
-        // 1. Documentos de Marketing (Ventas)
+    private function fetchDocumentDetail($conn, string $objType, int $docEntry, int $transId = 0): array
+    {
         $marketingTables = [
-            '23' => ['H' => 'OQUT', 'L' => 'QUT1'],
-            '17' => ['H' => 'ORDR', 'L' => 'RDR1'],
-            '15' => ['H' => 'ODLN', 'L' => 'DLN1'],
-            '13' => ['H' => 'OINV', 'L' => 'INV1'],
-            '14' => ['H' => 'ORIN', 'L' => 'RIN1'],
+            '23'  => ['H' => 'OQUT', 'L' => 'QUT1'],
+            '17'  => ['H' => 'ORDR', 'L' => 'RDR1'],
+            '15'  => ['H' => 'ODLN', 'L' => 'DLN1'],
+            '16'  => ['H' => 'ORDN', 'L' => 'RDN1'],
+            '13'  => ['H' => 'OINV', 'L' => 'INV1'],
+            '14'  => ['H' => 'ORIN', 'L' => 'RIN1'],
             '203' => ['H' => 'ODPI', 'L' => 'DPI1'],
         ];
 
         if (isset($marketingTables[$objType])) {
             $tH = $marketingTables[$objType]['H'];
             $tL = $marketingTables[$objType]['L'];
+
+            $extraCols = ($objType === '13')
+                ? ', IFNULL(h."isIns", \'N\') AS "isIns", IFNULL(h."InvntSttus", \'\') AS "InvntSttus"'
+                : ', \'N\' AS "isIns", \'\' AS "InvntSttus"';
 
             $sqlH = "
                 SELECT
@@ -950,6 +969,7 @@ EOF;
                     IFNULL(b.\"BPLName\", '') AS \"BPLName\",
                     IFNULL(s.\"SlpName\", '') AS \"SlpName\",
                     IFNULL(h.\"EDocNum\", '') AS \"UUID\"
+                    {$extraCols}
                 FROM \"{$tH}\" h
                 LEFT JOIN \"OBPL\" b ON b.\"BPLId\" = h.\"BPLId\"
                 LEFT JOIN \"OSLP\" s ON s.\"SlpCode\" = h.\"SlpCode\"
@@ -957,14 +977,17 @@ EOF;
                 LIMIT 1
             ";
 
-            $rsH = odbc_exec($conn, $sqlH);
+            $rsH    = odbc_exec($conn, $sqlH);
             $header = $rsH ? odbc_fetch_array($rsH) : null;
             if ($rsH) {
                 odbc_free_result($rsH);
             }
             if (!$header) {
-                throw new Exception("No se encontró el documento {$meta['name']} #{$docEntry}.");
+                throw new Exception("No se encontró el documento ({$objType}) #{$docEntry}.");
             }
+
+            $esReserva = ($objType === '13' && trim((string) ($header['isIns'] ?? 'N')) === 'Y');
+            $meta      = $this->getObjTypeMeta($objType, $esReserva);
 
             $sqlL = "
                 SELECT
@@ -972,6 +995,7 @@ EOF;
                     IFNULL(\"ItemCode\", '') AS \"ItemCode\",
                     IFNULL(\"Dscription\", '') AS \"Dscription\",
                     IFNULL(\"Quantity\", 0) AS \"Quantity\",
+                    IFNULL(\"OpenQty\", 0) AS \"OpenQty\",
                     IFNULL(\"unitMsr\", '') AS \"UnitMsr\",
                     IFNULL(\"Price\", 0) AS \"Price\",
                     IFNULL(\"DiscPrcnt\", 0) AS \"DiscPrcnt\",
@@ -984,90 +1008,102 @@ EOF;
             ";
 
             $lines = [];
-            $rsL = odbc_exec($conn, $sqlL);
+            $rsL   = odbc_exec($conn, $sqlL);
             if ($rsL) {
                 while ($r = odbc_fetch_array($rsL)) {
+                    $qty     = round((float) ($r['Quantity'] ?? 0), 2);
+                    $openQty = round((float) ($r['OpenQty'] ?? 0), 2);
+                    $uom     = trim($this->toUtf8($r['UnitMsr'] ?? ''));
+
+                    $qtyText = "{$qty} {$uom}";
+                    if ($esReserva) {
+                        $entregado = round($qty - $openQty, 2);
+                        $qtyText  .= " (Ent: {$entregado} / Pend: {$openQty})";
+                    }
+
                     $lines[] = [
-                        'col1' => trim($this->toUtf8($r['ItemCode'] ?? '')),
-                        'col2' => trim($this->toUtf8($r['Dscription'] ?? '')),
-                        'col3' => round((float) ($r['Quantity'] ?? 0), 2) . ' ' . trim($this->toUtf8($r['UnitMsr'] ?? '')),
-                        'col4' => round((float) ($r['Price'] ?? 0), 2),
-                        'col5' => round((float) ($r['DiscPrcnt'] ?? 0), 2),
-                        'col6' => round((float) ($r['VatSum'] ?? 0), 2),
-                        'col7' => round((float) ($r['LineTotal'] ?? 0), 2),
+                        'col1'  => trim($this->toUtf8($r['ItemCode'] ?? '')),
+                        'col2'  => trim($this->toUtf8($r['Dscription'] ?? '')),
+                        'col3'  => $qtyText,
+                        'col4'  => round((float) ($r['Price'] ?? 0), 2),
+                        'col5'  => round((float) ($r['DiscPrcnt'] ?? 0), 2),
+                        'col6'  => round((float) ($r['VatSum'] ?? 0), 2),
+                        'col7'  => round((float) ($r['LineTotal'] ?? 0), 2),
                         'extra' => trim($this->toUtf8($r['WhsCode'] ?? '')),
                     ];
                 }
                 odbc_free_result($rsL);
             }
 
-            $docTotal = round((float) ($header['DocTotal'] ?? 0), 2);
-            $vatSum = round((float) ($header['VatSum'] ?? 0), 2);
+            $docTotal   = round((float) ($header['DocTotal'] ?? 0), 2);
+            $vatSum     = round((float) ($header['VatSum'] ?? 0), 2);
             $paidToDate = round((float) ($header['PaidToDate'] ?? 0), 2);
-            $dpmAmnt = round((float) ($header['DpmAmnt'] ?? 0), 2);
-            $subtotal = round($docTotal - $vatSum + $dpmAmnt, 2);
+            $dpmAmnt    = round((float) ($header['DpmAmnt'] ?? 0), 2);
+            $subtotal   = round($docTotal - $vatSum + $dpmAmnt, 2);
+
+            $headerInfo = [
+                'Fecha'        => trim($this->toUtf8($header['DocDate'] ?? '')),
+                'Vencimiento'  => trim($this->toUtf8($header['DocDueDate'] ?? '')),
+                'Cliente'      => trim($this->toUtf8($header['CardCode'] ?? '')) . ' - ' . trim($this->toUtf8($header['CardName'] ?? '')),
+                'Sucursal'     => trim($this->toUtf8($header['BPLName'] ?? '')),
+                'Vendedor'     => trim($this->toUtf8($header['SlpName'] ?? '')),
+                'Referencia'   => trim($this->toUtf8($header['NumAtCard'] ?? '')),
+                'UUID / Folio' => trim($this->toUtf8($header['UUID'] ?? '')),
+                'Estatus'      => ($header['Canceled'] === 'Y' || $header['Canceled'] === 'C')
+                    ? 'CANCELADO'
+                    : ($header['DocStatus'] === 'C' ? 'CERRADO' : 'ABIERTO'),
+                'Moneda'       => trim($this->toUtf8($header['DocCur'] ?? 'MXP')),
+                'Comentarios'  => trim($this->toUtf8($header['Comments'] ?? '')),
+            ];
+
+            if ($esReserva) {
+                $invSt                                = trim((string) ($header['InvntSttus'] ?? ''));
+                $headerInfo['Estatus Entrega (Inv.)'] = ($invSt === 'C') ? 'ENTREGADO TOTAL' : 'ENTREGAS PENDIENTES';
+            }
 
             return [
-                'mode' => 'MARKETING',
-                'objType' => $objType,
-                'tipo' => $meta['name'],
-                'badge' => $meta['badge'],
+                'mode'     => 'MARKETING',
+                'objType'  => $objType,
+                'tipo'     => $meta['name'],
+                'badge'    => $meta['badge'],
                 'docEntry' => (int) $header['DocEntry'],
-                'docNum' => trim($this->toUtf8($header['DocNum'] ?? '')),
-                'transId' => (int) ($header['TransId'] ?? 0),
-                'header' => [
-                    'Fecha' => trim($this->toUtf8($header['DocDate'] ?? '')),
-                    'Vencimiento' => trim($this->toUtf8($header['DocDueDate'] ?? '')),
-                    'Cliente' => trim($this->toUtf8($header['CardCode'] ?? '')) . ' - ' . trim($this->toUtf8($header['CardName'] ?? '')),
-                    'Sucursal' => trim($this->toUtf8($header['BPLName'] ?? '')),
-                    'Vendedor' => trim($this->toUtf8($header['SlpName'] ?? '')),
-                    'Referencia' => trim($this->toUtf8($header['NumAtCard'] ?? '')),
-                    'UUID / Folio' => trim($this->toUtf8($header['UUID'] ?? '')),
-                    'Estatus' => ($header['Canceled'] === 'Y' || $header['Canceled'] === 'C') ? 'CANCELADO' : ($header['DocStatus'] === 'C' ? 'CERRADO' : 'ABIERTO'),
-                    'Moneda' => trim($this->toUtf8($header['DocCur'] ?? 'MXP')),
-                    'Comentarios' => trim($this->toUtf8($header['Comments'] ?? '')),
-                ],
-                'totals' => [
-                    'Subtotal' => $subtotal,
+                'docNum'   => trim($this->toUtf8($header['DocNum'] ?? '')),
+                'transId'  => (int) ($header['TransId'] ?? 0),
+                'header'   => $headerInfo,
+                'totals'   => [
+                    'Subtotal'    => $subtotal,
                     'AnticipoApl' => $dpmAmnt,
-                    'IVA' => $vatSum,
-                    'Total' => $docTotal,
-                    'Pagado' => $paidToDate,
+                    'IVA'         => $vatSum,
+                    'Total'       => $docTotal,
+                    'Pagado'      => $paidToDate,
                     'SaldoActual' => round($docTotal - $paidToDate, 2),
                 ],
                 'lines' => $lines,
             ];
         }
 
+        $meta = $this->getObjTypeMeta($objType);
+
         // 2. Pagos Recibidos (ORCT / RCT2)
         if ($objType === '24') {
             $sqlP = "
                 SELECT
-                    p.\"DocEntry\",
-                    p.\"DocNum\",
-                    IFNULL(p.\"TransId\", 0) AS \"TransId\",
+                    p.\"DocEntry\", p.\"DocNum\", IFNULL(p.\"TransId\", 0) AS \"TransId\",
                     TO_VARCHAR(p.\"DocDate\", 'YYYY-MM-DD') AS \"DocDate\",
                     TO_VARCHAR(p.\"DocDueDate\", 'YYYY-MM-DD') AS \"DocDueDate\",
-                    p.\"CardCode\",
-                    p.\"CardName\",
-                    IFNULL(p.\"Comments\", '') AS \"Comments\",
-                    IFNULL(p.\"Canceled\", 'N') AS \"Canceled\",
-                    IFNULL(p.\"DocCurr\", 'MXP') AS \"DocCurr\",
-                    IFNULL(p.\"DocTotal\", 0) AS \"DocTotal\",
-                    IFNULL(p.\"CashSum\", 0) AS \"CashSum\",
-                    IFNULL(p.\"TrsfrSum\", 0) AS \"TrsfrSum\",
-                    IFNULL(p.\"CheckSum\", 0) AS \"CheckSum\",
-                    IFNULL(p.\"CreditSum\", 0) AS \"CreditSum\",
-                    IFNULL(p.\"NoDocSum\", 0) AS \"NoDocSum\",
-                    IFNULL(p.\"TrsfrRef\", '') AS \"TrsfrRef\",
-                    IFNULL(b.\"BPLName\", '') AS \"BPLName\"
+                    p.\"CardCode\", p.\"CardName\", IFNULL(p.\"Comments\", '') AS \"Comments\",
+                    IFNULL(p.\"Canceled\", 'N') AS \"Canceled\", IFNULL(p.\"DocCurr\", 'MXP') AS \"DocCurr\",
+                    IFNULL(p.\"DocTotal\", 0) AS \"DocTotal\", IFNULL(p.\"CashSum\", 0) AS \"CashSum\",
+                    IFNULL(p.\"TrsfrSum\", 0) AS \"TrsfrSum\", IFNULL(p.\"CheckSum\", 0) AS \"CheckSum\",
+                    IFNULL(p.\"CreditSum\", 0) AS \"CreditSum\", IFNULL(p.\"NoDocSum\", 0) AS \"NoDocSum\",
+                    IFNULL(p.\"TrsfrRef\", '') AS \"TrsfrRef\", IFNULL(b.\"BPLName\", '') AS \"BPLName\"
                 FROM \"ORCT\" p
                 LEFT JOIN \"OBPL\" b ON b.\"BPLId\" = p.\"BPLId\"
                 WHERE p.\"DocEntry\" = {$docEntry}
                 LIMIT 1
             ";
 
-            $rsP = odbc_exec($conn, $sqlP);
+            $rsP    = odbc_exec($conn, $sqlP);
             $header = $rsP ? odbc_fetch_array($rsP) : null;
             if ($rsP) {
                 odbc_free_result($rsP);
@@ -1083,7 +1119,8 @@ EOF;
                     COALESCE(fi.\"DocNum\", fd.\"DocNum\", fn.\"DocNum\", r2.\"DocEntry\") AS \"TargetDocNum\",
                     TO_VARCHAR(COALESCE(fi.\"DocDate\", fd.\"DocDate\", fn.\"DocDate\"), 'YYYY-MM-DD') AS \"TargetDate\",
                     IFNULL(r2.\"SumApplied\", 0) AS \"SumApplied\",
-                    COALESCE(fi.\"DocTotal\", fd.\"DocTotal\", fn.\"DocTotal\", 0) AS \"TargetTotal\"
+                    COALESCE(fi.\"DocTotal\", fd.\"DocTotal\", fn.\"DocTotal\", 0) AS \"TargetTotal\",
+                    IFNULL(fi.\"isIns\", 'N') AS \"EsReserva\"
                 FROM \"RCT2\" r2
                 LEFT JOIN \"OINV\" fi ON r2.\"InvType\" = '13'  AND fi.\"DocEntry\" = r2.\"DocEntry\"
                 LEFT JOIN \"ODPI\" fd ON r2.\"InvType\" = '203' AND fd.\"DocEntry\" = r2.\"DocEntry\"
@@ -1093,17 +1130,18 @@ EOF;
             ";
 
             $lines = [];
-            $rsL = odbc_exec($conn, $sqlL);
+            $rsL   = odbc_exec($conn, $sqlL);
             if ($rsL) {
                 while ($r = odbc_fetch_array($rsL)) {
                     $invType = trim((string) ($r['InvType'] ?? ''));
-                    $mInv = $this->getObjTypeMeta($invType);
+                    $esRes   = ($invType === '13' && trim((string) ($r['EsReserva'] ?? 'N')) === 'Y');
+                    $mInv    = $this->getObjTypeMeta($invType, $esRes);
                     $lines[] = [
-                        'objType' => $invType,
+                        'objType'  => $invType,
                         'docEntry' => (int) ($r['TargetEntry'] ?? 0),
-                        'tipoDoc' => $mInv['name'],
-                        'folio' => trim($this->toUtf8($r['TargetDocNum'] ?? '')),
-                        'fecha' => trim($this->toUtf8($r['TargetDate'] ?? '')),
+                        'tipoDoc'  => $mInv['name'],
+                        'folio'    => trim($this->toUtf8($r['TargetDocNum'] ?? '')),
+                        'fecha'    => trim($this->toUtf8($r['TargetDate'] ?? '')),
                         'totalDoc' => round((float) ($r['TargetTotal'] ?? 0), 2),
                         'aplicado' => round((float) ($r['SumApplied'] ?? 0), 2),
                     ];
@@ -1112,30 +1150,30 @@ EOF;
             }
 
             return [
-                'mode' => 'PAYMENT',
-                'objType' => '24',
-                'tipo' => $meta['name'],
-                'badge' => $meta['badge'],
+                'mode'     => 'PAYMENT',
+                'objType'  => '24',
+                'tipo'     => $meta['name'],
+                'badge'    => $meta['badge'],
                 'docEntry' => (int) $header['DocEntry'],
-                'docNum' => trim($this->toUtf8($header['DocNum'] ?? '')),
-                'transId' => (int) ($header['TransId'] ?? 0),
-                'header' => [
-                    'Fecha' => trim($this->toUtf8($header['DocDate'] ?? '')),
-                    'Vencimiento' => trim($this->toUtf8($header['DocDueDate'] ?? '')),
-                    'Cliente' => trim($this->toUtf8($header['CardCode'] ?? '')) . ' - ' . trim($this->toUtf8($header['CardName'] ?? '')),
-                    'Sucursal' => trim($this->toUtf8($header['BPLName'] ?? '')),
+                'docNum'   => trim($this->toUtf8($header['DocNum'] ?? '')),
+                'transId'  => (int) ($header['TransId'] ?? 0),
+                'header'   => [
+                    'Fecha'        => trim($this->toUtf8($header['DocDate'] ?? '')),
+                    'Vencimiento'  => trim($this->toUtf8($header['DocDueDate'] ?? '')),
+                    'Cliente'      => trim($this->toUtf8($header['CardCode'] ?? '')) . ' - ' . trim($this->toUtf8($header['CardName'] ?? '')),
+                    'Sucursal'     => trim($this->toUtf8($header['BPLName'] ?? '')),
                     'Ref. Transf.' => trim($this->toUtf8($header['TrsfrRef'] ?? '')),
-                    'Estatus' => $header['Canceled'] === 'Y' ? 'CANCELADO' : 'APLICADO',
-                    'Moneda' => trim($this->toUtf8($header['DocCurr'] ?? 'MXP')),
-                    'Comentarios' => trim($this->toUtf8($header['Comments'] ?? '')),
+                    'Estatus'      => $header['Canceled'] === 'Y' ? 'CANCELADO' : 'APLICADO',
+                    'Moneda'       => trim($this->toUtf8($header['DocCurr'] ?? 'MXP')),
+                    'Comentarios'  => trim($this->toUtf8($header['Comments'] ?? '')),
                 ],
                 'totals' => [
-                    'Efectivo' => round((float) ($header['CashSum'] ?? 0), 2),
+                    'Efectivo'      => round((float) ($header['CashSum'] ?? 0), 2),
                     'Transferencia' => round((float) ($header['TrsfrSum'] ?? 0), 2),
-                    'Cheque' => round((float) ($header['CheckSum'] ?? 0), 2),
-                    'Tarjeta' => round((float) ($header['CreditSum'] ?? 0), 2),
-                    'PagoACuenta' => round((float) ($header['NoDocSum'] ?? 0), 2),
-                    'Total' => round((float) ($header['DocTotal'] ?? 0), 2),
+                    'Cheque'        => round((float) ($header['CheckSum'] ?? 0), 2),
+                    'Tarjeta'       => round((float) ($header['CreditSum'] ?? 0), 2),
+                    'PagoACuenta'   => round((float) ($header['NoDocSum'] ?? 0), 2),
+                    'Total'         => round((float) ($header['DocTotal'] ?? 0), 2),
                 ],
                 'lines' => $lines,
             ];
@@ -1143,21 +1181,15 @@ EOF;
 
         // 3. Asiento Contable (OJDT / JDT1) o cualquier otro TransType
         $targetTransId = $transId > 0 ? $transId : $docEntry;
-        $sqlJ = "
-            SELECT
-                \"TransId\",
-                \"Number\",
-                TO_VARCHAR(\"RefDate\", 'YYYY-MM-DD') AS \"RefDate\",
-                TO_VARCHAR(\"DueDate\", 'YYYY-MM-DD') AS \"DueDate\",
-                IFNULL(\"Memo\", '') AS \"Memo\",
-                IFNULL(\"Ref1\", '') AS \"Ref1\",
-                IFNULL(\"Ref2\", '') AS \"Ref2\",
-                IFNULL(\"StornoToTr\", 0) AS \"StornoToTr\"
-            FROM \"OJDT\"
-            WHERE \"TransId\" = {$targetTransId}
-            LIMIT 1
+        $sqlJ          = "
+            SELECT \"TransId\", \"Number\",
+                   TO_VARCHAR(\"RefDate\", 'YYYY-MM-DD') AS \"RefDate\",
+                   TO_VARCHAR(\"DueDate\", 'YYYY-MM-DD') AS \"DueDate\",
+                   IFNULL(\"Memo\", '') AS \"Memo\", IFNULL(\"Ref1\", '') AS \"Ref1\",
+                   IFNULL(\"Ref2\", '') AS \"Ref2\", IFNULL(\"StornoToTr\", 0) AS \"StornoToTr\"
+            FROM \"OJDT\" WHERE \"TransId\" = {$targetTransId} LIMIT 1
         ";
-        $rsJ = odbc_exec($conn, $sqlJ);
+        $rsJ    = odbc_exec($conn, $sqlJ);
         $header = $rsJ ? odbc_fetch_array($rsJ) : null;
         if ($rsJ) {
             odbc_free_result($rsJ);
@@ -1167,14 +1199,10 @@ EOF;
         }
 
         $sqlJL = "
-            SELECT
-                j.\"Account\",
-                IFNULL(a.\"AcctName\", '') AS \"AcctName\",
-                IFNULL(j.\"ShortName\", '') AS \"ShortName\",
-                IFNULL(j.\"LineMemo\", '') AS \"LineMemo\",
-                IFNULL(j.\"Debit\", 0) AS \"Debit\",
-                IFNULL(j.\"Credit\", 0) AS \"Credit\",
-                IFNULL(b.\"BPLName\", '') AS \"BPLName\"
+            SELECT j.\"Account\", IFNULL(a.\"AcctName\", '') AS \"AcctName\",
+                   IFNULL(j.\"ShortName\", '') AS \"ShortName\", IFNULL(j.\"LineMemo\", '') AS \"LineMemo\",
+                   IFNULL(j.\"Debit\", 0) AS \"Debit\", IFNULL(j.\"Credit\", 0) AS \"Credit\",
+                   IFNULL(b.\"BPLName\", '') AS \"BPLName\"
             FROM \"JDT1\" j
             LEFT JOIN \"OACT\" a ON a.\"AcctCode\" = j.\"Account\"
             LEFT JOIN \"OBPL\" b ON b.\"BPLId\" = j.\"BPLId\"
@@ -1183,46 +1211,46 @@ EOF;
         ";
 
         $lines = [];
-        $sumD = 0.0;
-        $sumC = 0.0;
-        $rsJL = odbc_exec($conn, $sqlJL);
+        $sumD  = 0.0;
+        $sumC  = 0.0;
+        $rsJL  = odbc_exec($conn, $sqlJL);
         if ($rsJL) {
             while ($r = odbc_fetch_array($rsJL)) {
-                $d = round((float) ($r['Debit'] ?? 0), 2);
-                $c = round((float) ($r['Credit'] ?? 0), 2);
+                $d     = round((float) ($r['Debit'] ?? 0), 2);
+                $c     = round((float) ($r['Credit'] ?? 0), 2);
                 $sumD += $d;
                 $sumC += $c;
                 $lines[] = [
-                    'account' => trim($this->toUtf8($r['Account'] ?? '')),
-                    'acctName' => trim($this->toUtf8($r['AcctName'] ?? '')),
+                    'account'   => trim($this->toUtf8($r['Account'] ?? '')),
+                    'acctName'  => trim($this->toUtf8($r['AcctName'] ?? '')),
                     'shortName' => trim($this->toUtf8($r['ShortName'] ?? '')),
-                    'memo' => trim($this->toUtf8($r['LineMemo'] ?? '')),
-                    'bplName' => trim($this->toUtf8($r['BPLName'] ?? '')),
-                    'debit' => $d,
-                    'credit' => $c,
+                    'memo'      => trim($this->toUtf8($r['LineMemo'] ?? '')),
+                    'bplName'   => trim($this->toUtf8($r['BPLName'] ?? '')),
+                    'debit'     => $d,
+                    'credit'    => $c,
                 ];
             }
             odbc_free_result($rsJL);
         }
 
         return [
-            'mode' => 'JOURNAL',
-            'objType' => $objType,
-            'tipo' => $meta['name'],
-            'badge' => $meta['badge'],
+            'mode'     => 'JOURNAL',
+            'objType'  => $objType,
+            'tipo'     => $meta['name'],
+            'badge'    => $meta['badge'],
             'docEntry' => (int) $header['TransId'],
-            'docNum' => trim($this->toUtf8($header['Number'] ?? $header['TransId'])),
-            'transId' => (int) $header['TransId'],
-            'header' => [
+            'docNum'   => trim($this->toUtf8($header['Number'] ?? $header['TransId'])),
+            'transId'  => (int) $header['TransId'],
+            'header'   => [
                 'Fecha Cont.' => trim($this->toUtf8($header['RefDate'] ?? '')),
                 'Vencimiento' => trim($this->toUtf8($header['DueDate'] ?? '')),
-                'Ref. 1' => trim($this->toUtf8($header['Ref1'] ?? '')),
-                'Ref. 2' => trim($this->toUtf8($header['Ref2'] ?? '')),
-                'Estatus' => (int) ($header['StornoToTr'] ?? 0) > 0 ? 'ANULADO / STORNO' : 'CONTABILIZADO',
+                'Ref. 1'      => trim($this->toUtf8($header['Ref1'] ?? '')),
+                'Ref. 2'      => trim($this->toUtf8($header['Ref2'] ?? '')),
+                'Estatus'     => (int) ($header['StornoToTr'] ?? 0) > 0 ? 'ANULADO / STORNO' : 'CONTABILIZADO',
                 'Comentarios' => trim($this->toUtf8($header['Memo'] ?? '')),
             ],
             'totals' => [
-                'TotalDebito' => round($sumD, 2),
+                'TotalDebito'  => round($sumD, 2),
                 'TotalCredito' => round($sumC, 2),
             ],
             'lines' => $lines,
@@ -1230,22 +1258,23 @@ EOF;
     }
 
     /**
-     * Construye el grafo de Mapa de Relaciones recorriendo base/destino, anticipos, pagos y reconciliaciones.
+     * Construye el grafo del Mapa de Relaciones (Base/Destino, Facturas de Reserva -> Entregas, Devoluciones, Anticipos, Pagos y Reconciliaciones).
      */
-    private function buildRelationshipMap($conn, string $rootObjType, int $rootDocEntry, string $cardCode = ''): array {
+    private function buildRelationshipMap($conn, string $rootObjType, int $rootDocEntry, string $cardCode = ''): array
+    {
         $rootKey = "{$rootObjType}_{$rootDocEntry}";
-        $nodes = [];
-        $edges = [];
+        $nodes   = [];
+        $edges   = [];
         $edgeSet = [];
         $visited = [];
-        $queue = [
+        $queue   = [
             ['objType' => $rootObjType, 'docEntry' => $rootDocEntry, 'depth' => 0]
         ];
 
         $maxDepth = 3;
-        $maxNodes = 28;
+        $maxNodes = 150;
 
-        $addEdge = function (string $from, string $to, string $label, string $type = 'doc') use (&$edges, &$edgeSet) {
+        $addEdge = function (string $from, string $to, string $label, string $type = 'flow') use (&$edges, &$edgeSet) {
             if ($from === $to) {
                 return;
             }
@@ -1254,20 +1283,20 @@ EOF;
                 return;
             }
             $edgeSet[$sig] = true;
-            $edges[] = [
-                'from' => $from,
-                'to' => $to,
+            $edges[]       = [
+                'from'  => $from,
+                'to'    => $to,
                 'label' => $label,
-                'type' => $type,
+                'type'  => $type,
             ];
         };
 
         while (!empty($queue) && count($nodes) < $maxNodes) {
-            $item = array_shift($queue);
-            $objType = (string) $item['objType'];
+            $item     = array_shift($queue);
+            $objType  = (string) $item['objType'];
             $docEntry = (int) $item['docEntry'];
-            $depth = (int) $item['depth'];
-            $key = "{$objType}_{$docEntry}";
+            $depth    = (int) $item['depth'];
+            $key      = "{$objType}_{$docEntry}";
 
             if ($docEntry <= 0 || isset($visited[$key])) {
                 continue;
@@ -1279,9 +1308,9 @@ EOF;
                 continue;
             }
 
-            $summary['id'] = $key;
+            $summary['id']        = $key;
             $summary['isCurrent'] = ($key === $rootKey);
-            $nodes[$key] = $summary;
+            $nodes[$key]          = $summary;
 
             if ($cardCode === '' && !empty($summary['cardCode'])) {
                 $cardCode = $summary['cardCode'];
@@ -1291,12 +1320,13 @@ EOF;
                 continue;
             }
 
-            // A) Documentos Base (hacia atrás por líneas BaseType / BaseEntry)
+            // A) Documentos Base (hacia atrás por BaseType / BaseEntry)
             $lineTableMap = [
-                '17' => 'RDR1',
-                '15' => 'DLN1',
-                '13' => 'INV1',
-                '14' => 'RIN1',
+                '17'  => 'RDR1',
+                '15'  => 'DLN1',
+                '16'  => 'RDN1',
+                '13'  => 'INV1',
+                '14'  => 'RIN1',
                 '203' => 'DPI1',
             ];
 
@@ -1307,15 +1337,16 @@ EOF;
                     FROM \"{$lt}\"
                     WHERE \"DocEntry\" = {$docEntry}
                       AND \"BaseEntry\" IS NOT NULL
-                      AND \"BaseType\" IN (23, 17, 15, 13, 203)
-                    LIMIT 15
+                      AND \"BaseType\" IN (23, 17, 15, 16, 13, 203)
+                    LIMIT 60
                 ");
                 if ($rs) {
                     while ($r = odbc_fetch_array($rs)) {
-                        $bType = (string) (int) $r['BaseType'];
+                        $bType  = (string) (int) $r['BaseType'];
                         $bEntry = (int) $r['BaseEntry'];
-                        $bKey = "{$bType}_{$bEntry}";
-                        $addEdge($bKey, $key, 'Copiado a', 'flow');
+                        $bKey   = "{$bType}_{$bEntry}";
+                        $lbl    = ($objType === '15' && $bType === '13') ? 'Entrega de Reserva' : 'Copiado a';
+                        $addEdge($bKey, $key, $lbl, 'flow');
                         if (!isset($visited[$bKey])) {
                             $queue[] = ['objType' => $bType, 'docEntry' => $bEntry, 'depth' => $depth + 1];
                         }
@@ -1324,12 +1355,12 @@ EOF;
                 }
             }
 
-            // B) Documentos Destino (hacia adelante)
+            // B) Documentos Destino (hacia adelante — incluye 13 -> 15 para Facturas de Reserva)
             $targetTablesByBase = [
-                '23' => ['17' => 'RDR1', '15' => 'DLN1', '13' => 'INV1'],
-                '17' => ['15' => 'DLN1', '13' => 'INV1', '203' => 'DPI1'],
-                '15' => ['13' => 'INV1'],
-                '13' => ['14' => 'RIN1'],
+                '23'  => ['17' => 'RDR1', '15' => 'DLN1', '13' => 'INV1'],
+                '17'  => ['15' => 'DLN1', '13' => 'INV1', '203' => 'DPI1'],
+                '15'  => ['13' => 'INV1', '16' => 'RDN1'],
+                '13'  => ['15' => 'DLN1', '14' => 'RIN1'],
                 '203' => ['14' => 'RIN1'],
             ];
 
@@ -1341,13 +1372,14 @@ EOF;
                         FROM \"{$tTable}\"
                         WHERE \"BaseType\" = {$objInt}
                           AND \"BaseEntry\" = {$docEntry}
-                        LIMIT 15
+                        LIMIT 80
                     ");
                     if ($rs) {
                         while ($r = odbc_fetch_array($rs)) {
                             $tEntry = (int) $r['DocEntry'];
-                            $tKey = "{$tType}_{$tEntry}";
-                            $addEdge($key, $tKey, 'Generó', 'flow');
+                            $tKey   = "{$tType}_{$tEntry}";
+                            $lbl    = ($objType === '13' && (string) $tType === '15') ? 'Entrega de Reserva' : 'Generó';
+                            $addEdge($key, $tKey, $lbl, 'flow');
                             if (!isset($visited[$tKey])) {
                                 $queue[] = ['objType' => (string) $tType, 'docEntry' => $tEntry, 'depth' => $depth + 1];
                             }
@@ -1362,15 +1394,14 @@ EOF;
                 $rs = @odbc_exec($conn, "
                     SELECT \"BaseAbs\" AS \"DpiEntry\", SUM(IFNULL(\"DrawnSum\", 0)) AS \"DrawnSum\"
                     FROM \"INV9\"
-                    WHERE \"DocEntry\" = {$docEntry}
-                      AND \"ObjType\" = 203
+                    WHERE \"DocEntry\" = {$docEntry} AND \"ObjType\" = 203
                     GROUP BY \"BaseAbs\"
                 ");
                 if ($rs) {
                     while ($r = odbc_fetch_array($rs)) {
                         $dEntry = (int) $r['DpiEntry'];
-                        $drawn = number_format((float) $r['DrawnSum'], 2);
-                        $dKey = "203_{$dEntry}";
+                        $drawn  = number_format((float) $r['DrawnSum'], 2);
+                        $dKey   = "203_{$dEntry}";
                         $addEdge($dKey, $key, "Anticipo \${$drawn}", 'downpayment');
                         if (!isset($visited[$dKey])) {
                             $queue[] = ['objType' => '203', 'docEntry' => $dEntry, 'depth' => $depth + 1];
@@ -1382,15 +1413,14 @@ EOF;
                 $rs = @odbc_exec($conn, "
                     SELECT \"DocEntry\" AS \"InvEntry\", SUM(IFNULL(\"DrawnSum\", 0)) AS \"DrawnSum\"
                     FROM \"INV9\"
-                    WHERE \"BaseAbs\" = {$docEntry}
-                      AND \"ObjType\" = 203
+                    WHERE \"BaseAbs\" = {$docEntry} AND \"ObjType\" = 203
                     GROUP BY \"DocEntry\"
                 ");
                 if ($rs) {
                     while ($r = odbc_fetch_array($rs)) {
                         $iEntry = (int) $r['InvEntry'];
-                        $drawn = number_format((float) $r['DrawnSum'], 2);
-                        $iKey = "13_{$iEntry}";
+                        $drawn  = number_format((float) $r['DrawnSum'], 2);
+                        $iKey   = "13_{$iEntry}";
                         $addEdge($key, $iKey, "Anticipo \${$drawn}", 'downpayment');
                         if (!isset($visited[$iKey])) {
                             $queue[] = ['objType' => '13', 'docEntry' => $iEntry, 'depth' => $depth + 1];
@@ -1405,16 +1435,15 @@ EOF;
                 $rs = @odbc_exec($conn, "
                     SELECT r2.\"DocNum\" AS \"PayEntry\", SUM(IFNULL(r2.\"SumApplied\", 0)) AS \"SumApplied\"
                     FROM \"RCT2\" r2
-                    WHERE r2.\"InvType\" = '{$objType}'
-                      AND r2.\"DocEntry\" = {$docEntry}
+                    WHERE r2.\"InvType\" = '{$objType}' AND r2.\"DocEntry\" = {$docEntry}
                     GROUP BY r2.\"DocNum\"
-                    LIMIT 15
+                    LIMIT 40
                 ");
                 if ($rs) {
                     while ($r = odbc_fetch_array($rs)) {
                         $pEntry = (int) $r['PayEntry'];
                         $sumApl = number_format((float) $r['SumApplied'], 2);
-                        $pKey = "24_{$pEntry}";
+                        $pKey   = "24_{$pEntry}";
                         $addEdge($key, $pKey, "Pago \${$sumApl}", 'payment');
                         if (!isset($visited[$pKey])) {
                             $queue[] = ['objType' => '24', 'docEntry' => $pEntry, 'depth' => $depth + 1];
@@ -1428,14 +1457,14 @@ EOF;
                     FROM \"RCT2\" r2
                     WHERE r2.\"DocNum\" = {$docEntry}
                     GROUP BY r2.\"InvType\", r2.\"DocEntry\"
-                    LIMIT 20
+                    LIMIT 60
                 ");
                 if ($rs) {
                     while ($r = odbc_fetch_array($rs)) {
-                        $tType = trim((string) $r['InvType']);
+                        $tType  = trim((string) $r['InvType']);
                         $tEntry = (int) $r['TargetEntry'];
                         $sumApl = number_format((float) $r['SumApplied'], 2);
-                        $tKey = "{$tType}_{$tEntry}";
+                        $tKey   = "{$tType}_{$tEntry}";
                         $addEdge($tKey, $key, "Pago \${$sumApl}", 'payment');
                         if (!isset($visited[$tKey])) {
                             $queue[] = ['objType' => $tType, 'docEntry' => $tEntry, 'depth' => $depth + 1];
@@ -1445,11 +1474,11 @@ EOF;
                 }
             }
 
-            // E) Reconciliaciones Internas (OITR / ITR1) — conecta pagos a cuenta, NC y asientos reconciliados manualmente
+            // E) Reconciliaciones Internas (OITR / ITR1)
             $nodeTransId = (int) ($summary['transId'] ?? 0);
             if ($nodeTransId > 0 && $cardCode !== '') {
                 $ccClean = str_replace("'", "''", $cardCode);
-                $rs = @odbc_exec($conn, "
+                $rs      = @odbc_exec($conn, "
                     SELECT DISTINCT
                         r0.\"ReconNum\",
                         j2.\"TransType\",
@@ -1463,17 +1492,21 @@ EOF;
                     INNER JOIN \"OJDT\" j2 ON j2.\"TransId\" = r2.\"TransId\"
                     WHERE r1.\"TransId\" = {$nodeTransId}
                       AND r1.\"ShortName\" = '{$ccClean}'
-                    LIMIT 12
+                    LIMIT 20
                 ");
                 if ($rs) {
                     while ($r = odbc_fetch_array($rs)) {
-                        $rType = trim((string) $r['TransType']);
+                        $rType  = trim((string) $r['TransType']);
                         $rEntry = (int) $r['RelEntry'];
                         $recNum = trim((string) $r['ReconNum']);
-                        $rKey = "{$rType}_{$rEntry}";
+                        $rKey   = "{$rType}_{$rEntry}";
 
-                        // Si ya existe vínculo directo por pago o anticipo, evitamos duplicar flecha visual
-                        if (isset($edgeSet["{$key}=>{$rKey}|payment"]) || isset($edgeSet["{$rKey}=>{$key}|payment"]) || isset($edgeSet["{$key}=>{$rKey}|downpayment"]) || isset($edgeSet["{$rKey}=>{$key}|downpayment"])) {
+                        if (
+                            isset($edgeSet["{$key}=>{$rKey}|payment"])
+                            || isset($edgeSet["{$rKey}=>{$key}|payment"])
+                            || isset($edgeSet["{$key}=>{$rKey}|downpayment"])
+                            || isset($edgeSet["{$rKey}=>{$key}|downpayment"])
+                        ) {
                             continue;
                         }
 
@@ -1488,35 +1521,48 @@ EOF;
             }
         }
 
-        // Filtrar aristas cuyos nodos sí existan en el mapa final
-        $validEdges = array_values(array_filter($edges, function ($e) use ($nodes) {
-                    return isset($nodes[$e['from']]) && isset($nodes[$e['to']]);
-                }));
+        // Ajustar columnas para que el flujo de Factura de Reserva -> Entregas lea siempre de izquierda a derecha
+        $validEdges = array_values(array_filter($edges, fn($e) => isset($nodes[$e['from']]) && isset($nodes[$e['to']])));
+        foreach ($validEdges as $e) {
+            $fromNode = $nodes[$e['from']];
+            $toNode   = $nodes[$e['to']];
+            if (!empty($fromNode['isReserve']) && $toNode['objType'] === '15') {
+                $nodes[$e['from']]['stage'] = 3;
+                $nodes[$e['to']]['stage']   = 4;
+            }
+            if ($fromNode['objType'] === '15' && $toNode['objType'] === '16') {
+                $nodes[$e['to']]['stage'] = max(5, (int) $nodes[$e['from']]['stage'] + 1);
+            }
+        }
 
         return [
             'rootId' => $rootKey,
-            'nodes' => array_values($nodes),
-            'edges' => $validEdges,
+            'nodes'  => array_values($nodes),
+            'edges'  => $validEdges,
         ];
     }
 
     /**
      * Resumen compacto de un documento para tarjeta en el Mapa de Relaciones.
      */
-    private function fetchDocSummary($conn, string $objType, int $docEntry): ?array {
-        $meta = $this->getObjTypeMeta($objType);
-
+    private function fetchDocSummary($conn, string $objType, int $docEntry): ?array
+    {
         $marketingMap = [
-            '23' => 'OQUT',
-            '17' => 'ORDR',
-            '15' => 'ODLN',
-            '13' => 'OINV',
-            '14' => 'ORIN',
+            '23'  => 'OQUT',
+            '17'  => 'ORDR',
+            '15'  => 'ODLN',
+            '16'  => 'ORDN',
+            '13'  => 'OINV',
+            '14'  => 'ORIN',
             '203' => 'ODPI',
         ];
 
         if (isset($marketingMap[$objType])) {
-            $tbl = $marketingMap[$objType];
+            $tbl       = $marketingMap[$objType];
+            $extraCols = ($objType === '13')
+                ? ', IFNULL("isIns", \'N\') AS "isIns", IFNULL("InvntSttus", \'\') AS "InvntSttus"'
+                : ', \'N\' AS "isIns", \'\' AS "InvntSttus"';
+
             $rs = @odbc_exec($conn, "
                 SELECT
                     \"DocEntry\", \"DocNum\", IFNULL(\"TransId\", 0) AS \"TransId\",
@@ -1527,6 +1573,7 @@ EOF;
                     IFNULL(\"DocStatus\", 'O') AS \"DocStatus\",
                     IFNULL(\"CANCELED\", 'N') AS \"Canceled\",
                     IFNULL(\"NumAtCard\", '') AS \"Ref\"
+                    {$extraCols}
                 FROM \"{$tbl}\"
                 WHERE \"DocEntry\" = {$docEntry}
                 LIMIT 1
@@ -1539,30 +1586,41 @@ EOF;
             }
             odbc_free_result($rs);
 
+            $esReserva = ($objType === '13' && trim((string) ($r['isIns'] ?? 'N')) === 'Y');
+            $meta      = $this->getObjTypeMeta($objType, $esReserva);
+
             $total = round((float) $r['DocTotal'], 2);
-            $paid = round((float) $r['PaidToDate'], 2);
-            $canc = in_array($r['Canceled'], ['Y', 'C'], true);
+            $paid  = round((float) $r['PaidToDate'], 2);
+            $canc  = in_array($r['Canceled'], ['Y', 'C'], true);
+
+            $estatusTxt = $canc ? 'CANCELADO' : ($r['DocStatus'] === 'C' ? 'CERRADO' : 'ABIERTO');
+            if ($esReserva && !$canc) {
+                $estatusTxt .= (trim((string) ($r['InvntSttus'] ?? '')) === 'C') ? ' / ENT. CERRADA' : ' / POR ENTREGAR';
+            }
 
             return [
-                'objType' => $objType,
-                'docEntry' => (int) $r['DocEntry'],
-                'docNum' => trim($this->toUtf8($r['DocNum'] ?? '')),
-                'transId' => (int) $r['TransId'],
-                'cardCode' => trim($this->toUtf8($r['CardCode'] ?? '')),
-                'tipo' => $meta['name'],
-                'code' => $meta['code'],
-                'badge' => $meta['badge'],
-                'icon' => $meta['icon'],
-                'stage' => $meta['stage'],
-                'fecha' => trim($this->toUtf8($r['DocDate'] ?? '')),
-                'total' => $total,
-                'saldo' => round($total - $paid, 2),
-                'moneda' => trim($this->toUtf8($r['DocCur'] ?? 'MXP')),
-                'estatus' => $canc ? 'CANCELADO' : ($r['DocStatus'] === 'C' ? 'CERRADO' : 'ABIERTO'),
+                'objType'   => $objType,
+                'isReserve' => $esReserva,
+                'docEntry'  => (int) $r['DocEntry'],
+                'docNum'    => trim($this->toUtf8($r['DocNum'] ?? '')),
+                'transId'   => (int) $r['TransId'],
+                'cardCode'  => trim($this->toUtf8($r['CardCode'] ?? '')),
+                'tipo'      => $meta['name'],
+                'code'      => $meta['code'],
+                'badge'     => $meta['badge'],
+                'icon'      => $meta['icon'],
+                'stage'     => $meta['stage'],
+                'fecha'     => trim($this->toUtf8($r['DocDate'] ?? '')),
+                'total'     => $total,
+                'saldo'     => round($total - $paid, 2),
+                'moneda'    => trim($this->toUtf8($r['DocCur'] ?? 'MXP')),
+                'estatus'   => $estatusTxt,
                 'cancelado' => $canc,
-                'ref' => trim($this->toUtf8($r['Ref'] ?? '')),
+                'ref'       => trim($this->toUtf8($r['Ref'] ?? '')),
             ];
         }
+
+        $meta = $this->getObjTypeMeta($objType);
 
         if ($objType === '24') {
             $rs = @odbc_exec($conn, "
@@ -1588,37 +1646,35 @@ EOF;
 
             $canc = ($r['Canceled'] === 'Y');
             return [
-                'objType' => '24',
-                'docEntry' => (int) $r['DocEntry'],
-                'docNum' => trim($this->toUtf8($r['DocNum'] ?? '')),
-                'transId' => (int) $r['TransId'],
-                'cardCode' => trim($this->toUtf8($r['CardCode'] ?? '')),
-                'tipo' => $meta['name'],
-                'code' => $meta['code'],
-                'badge' => $meta['badge'],
-                'icon' => $meta['icon'],
-                'stage' => $meta['stage'],
-                'fecha' => trim($this->toUtf8($r['DocDate'] ?? '')),
-                'total' => round((float) $r['DocTotal'], 2),
-                'saldo' => round((float) $r['NoDocSum'], 2),
-                'moneda' => trim($this->toUtf8($r['DocCur'] ?? 'MXP')),
-                'estatus' => $canc ? 'CANCELADO' : 'APLICADO',
+                'objType'   => '24',
+                'isReserve' => false,
+                'docEntry'  => (int) $r['DocEntry'],
+                'docNum'    => trim($this->toUtf8($r['DocNum'] ?? '')),
+                'transId'   => (int) $r['TransId'],
+                'cardCode'  => trim($this->toUtf8($r['CardCode'] ?? '')),
+                'tipo'      => $meta['name'],
+                'code'      => $meta['code'],
+                'badge'     => $meta['badge'],
+                'icon'      => $meta['icon'],
+                'stage'     => $meta['stage'],
+                'fecha'     => trim($this->toUtf8($r['DocDate'] ?? '')),
+                'total'     => round((float) $r['DocTotal'], 2),
+                'saldo'     => round((float) $r['NoDocSum'], 2),
+                'moneda'    => trim($this->toUtf8($r['DocCur'] ?? 'MXP')),
+                'estatus'   => $canc ? 'CANCELADO' : 'APLICADO',
                 'cancelado' => $canc,
-                'ref' => trim($this->toUtf8($r['Ref'] ?? '')),
+                'ref'       => trim($this->toUtf8($r['Ref'] ?? '')),
             ];
         }
 
         // Asiento Contable (30) u otro objeto genérico
         $rs = @odbc_exec($conn, "
-            SELECT
-                \"TransId\", \"Number\",
-                TO_VARCHAR(\"RefDate\", 'YYYY-MM-DD') AS \"RefDate\",
-                IFNULL(\"LocTotal\", 0) AS \"LocTotal\",
-                IFNULL(\"Memo\", '') AS \"Memo\",
-                IFNULL(\"StornoToTr\", 0) AS \"StornoToTr\"
-            FROM \"OJDT\"
-            WHERE \"TransId\" = {$docEntry}
-            LIMIT 1
+            SELECT \"TransId\", \"Number\",
+                   TO_VARCHAR(\"RefDate\", 'YYYY-MM-DD') AS \"RefDate\",
+                   IFNULL(\"LocTotal\", 0) AS \"LocTotal\",
+                   IFNULL(\"Memo\", '') AS \"Memo\",
+                   IFNULL(\"StornoToTr\", 0) AS \"StornoToTr\"
+            FROM \"OJDT\" WHERE \"TransId\" = {$docEntry} LIMIT 1
         ");
         if (!$rs || !($r = odbc_fetch_array($rs))) {
             if ($rs) {
@@ -1630,47 +1686,60 @@ EOF;
 
         $canc = ((int) ($r['StornoToTr'] ?? 0) > 0);
         return [
-            'objType' => $objType,
-            'docEntry' => (int) $r['TransId'],
-            'docNum' => trim($this->toUtf8($r['Number'] ?? $r['TransId'])),
-            'transId' => (int) $r['TransId'],
-            'cardCode' => '',
-            'tipo' => $meta['name'],
-            'code' => $meta['code'],
-            'badge' => $meta['badge'],
-            'icon' => $meta['icon'],
-            'stage' => $meta['stage'],
-            'fecha' => trim($this->toUtf8($r['RefDate'] ?? '')),
-            'total' => round((float) $r['LocTotal'], 2),
-            'saldo' => 0.0,
-            'moneda' => 'MXP',
-            'estatus' => $canc ? 'ANULADO' : 'CONTABILIZADO',
+            'objType'   => $objType,
+            'isReserve' => false,
+            'docEntry'  => (int) $r['TransId'],
+            'docNum'    => trim($this->toUtf8($r['Number'] ?? $r['TransId'])),
+            'transId'   => (int) $r['TransId'],
+            'cardCode'  => '',
+            'tipo'      => $meta['name'],
+            'code'      => $meta['code'],
+            'badge'     => $meta['badge'],
+            'icon'      => $meta['icon'],
+            'stage'     => $meta['stage'],
+            'fecha'     => trim($this->toUtf8($r['RefDate'] ?? '')),
+            'total'     => round((float) $r['LocTotal'], 2),
+            'saldo'     => 0.0,
+            'moneda'    => 'MXP',
+            'estatus'   => $canc ? 'ANULADO' : 'CONTABILIZADO',
             'cancelado' => $canc,
-            'ref' => trim($this->toUtf8($r['Memo'] ?? '')),
+            'ref'       => trim($this->toUtf8($r['Memo'] ?? '')),
         ];
     }
 
     /**
-     * Metadatos visuales y orden de etapa por ObjType de SAP Business One.
+     * Metadatos visuales por ObjType (diferenciando Factura de Reserva).
      */
-    private function getObjTypeMeta(string $objType): array {
+    private function getObjTypeMeta(string $objType, bool $isReserve = false): array
+    {
+        if ($objType === '13' && $isReserve) {
+            return [
+                'code'  => 'RES',
+                'name'  => 'Factura de Reserva',
+                'badge' => 'reserve',
+                'icon'  => 'fa-boxes',
+                'stage' => 3,
+            ];
+        }
+
         $map = [
-            '23' => ['code' => 'COT', 'name' => 'Cotización', 'badge' => 'secondary', 'icon' => 'fa-file-alt', 'stage' => 1],
-            '17' => ['code' => 'PED', 'name' => 'Orden de Venta', 'badge' => 'info', 'icon' => 'fa-shopping-cart', 'stage' => 2],
-            '15' => ['code' => 'ENT', 'name' => 'Entrega', 'badge' => 'primary', 'icon' => 'fa-truck', 'stage' => 3],
-            '203' => ['code' => 'ANT', 'name' => 'Factura Anticipo', 'badge' => 'warning', 'icon' => 'fa-hand-holding-usd', 'stage' => 4],
-            '13' => ['code' => 'FAC', 'name' => 'Factura Cliente', 'badge' => 'danger', 'icon' => 'fa-file-invoice-dollar', 'stage' => 4],
-            '14' => ['code' => 'NC', 'name' => 'Nota de Crédito', 'badge' => 'purple', 'icon' => 'fa-undo-alt', 'stage' => 5],
-            '24' => ['code' => 'PAG', 'name' => 'Pago Recibido', 'badge' => 'success', 'icon' => 'fa-money-bill-wave', 'stage' => 5],
-            '46' => ['code' => 'PEF', 'name' => 'Pago Efectuado', 'badge' => 'dark', 'icon' => 'fa-money-check-alt', 'stage' => 5],
-            '30' => ['code' => 'ASI', 'name' => 'Asiento Contable', 'badge' => 'dark', 'icon' => 'fa-book', 'stage' => 5],
+            '23'  => ['code' => 'COT', 'name' => 'Cotización',       'badge' => 'secondary', 'icon' => 'fa-file-alt',            'stage' => 1],
+            '17'  => ['code' => 'PED', 'name' => 'Orden de Venta',   'badge' => 'info',      'icon' => 'fa-shopping-cart',       'stage' => 2],
+            '15'  => ['code' => 'ENT', 'name' => 'Entrega',          'badge' => 'primary',   'icon' => 'fa-truck',               'stage' => 3],
+            '16'  => ['code' => 'DEV', 'name' => 'Devolución',       'badge' => 'dark',      'icon' => 'fa-dolly',               'stage' => 5],
+            '203' => ['code' => 'ANT', 'name' => 'Factura Anticipo', 'badge' => 'warning',   'icon' => 'fa-hand-holding-usd',    'stage' => 4],
+            '13'  => ['code' => 'FAC', 'name' => 'Factura Cliente',  'badge' => 'danger',    'icon' => 'fa-file-invoice-dollar', 'stage' => 4],
+            '14'  => ['code' => 'NC',  'name' => 'Nota de Crédito',  'badge' => 'purple',    'icon' => 'fa-undo-alt',            'stage' => 5],
+            '24'  => ['code' => 'PAG', 'name' => 'Pago Recibido',    'badge' => 'success',   'icon' => 'fa-money-bill-wave',     'stage' => 5],
+            '46'  => ['code' => 'PEF', 'name' => 'Pago Efectuado',   'badge' => 'dark',      'icon' => 'fa-money-check-alt',     'stage' => 5],
+            '30'  => ['code' => 'ASI', 'name' => 'Asiento Contable', 'badge' => 'dark',      'icon' => 'fa-book',                'stage' => 5],
         ];
 
         return $map[$objType] ?? [
-            'code' => "T{$objType}",
-            'name' => "Documento ({$objType})",
+            'code'  => "T{$objType}",
+            'name'  => "Documento ({$objType})",
             'badge' => 'secondary',
-            'icon' => 'fa-file',
+            'icon'  => 'fa-file',
             'stage' => 5,
         ];
     }
@@ -1678,27 +1747,28 @@ EOF;
     /**
      * Obtiene las sucursales de SAP (OBPL) permitidas para el usuario.
      */
-    private function getAllowedSAPBranches(int $idUser, int $idEmpresa): array {
-        $db = \Config\Database::connect();
+    private function getAllowedSAPBranches(int $idUser, int $idEmpresa): array
+    {
+        $db         = \Config\Database::connect();
         $allowedBpl = [];
 
         if ($db->tableExists('usuarios_sucursal') && $db->tableExists('link_sap_branchoffice')) {
             $userBranches = $db->table('usuarios_sucursal')
-                    ->select('idSucursal')
-                    ->where('idUsuario', $idUser)
-                    ->where('status', 'on')
-                    ->get()
-                    ->getResultArray();
+                ->select('idSucursal')
+                ->where('idUsuario', $idUser)
+                ->where('status', 'on')
+                ->get()
+                ->getResultArray();
 
             if (!empty($userBranches)) {
-                $branchIds = array_column($userBranches, 'idSucursal');
+                $branchIds  = array_column($userBranches, 'idSucursal');
                 $enlBuilder = $this->linkSapBranchOffice->builder();
                 $this->applyCompanyFilter($enlBuilder, 'link_sap_branchoffice', $idEmpresa);
                 $links = $enlBuilder
-                        ->whereIn('idBranchOffice', $branchIds)
-                        ->where('deleted_at', null)
-                        ->get()
-                        ->getResultArray();
+                    ->whereIn('idBranchOffice', $branchIds)
+                    ->where('deleted_at', null)
+                    ->get()
+                    ->getResultArray();
 
                 foreach ($links as $l) {
                     if (!empty($l['idBranchOfficeSAP'])) {
@@ -1710,7 +1780,7 @@ EOF;
 
         $branches = [];
         try {
-            $conn = $this->connectODBC($idEmpresa);
+            $conn  = $this->connectODBC($idEmpresa);
             $where = ' WHERE "Disabled" = \'N\' ';
             if (!empty($allowedBpl)) {
                 $where .= ' AND "BPLId" IN (' . implode(',', array_unique($allowedBpl)) . ') ';
@@ -1719,18 +1789,17 @@ EOF;
             $rs = @odbc_exec($conn, 'SELECT "BPLId", "BPLName" FROM "OBPL" ' . $where . ' ORDER BY "BPLId" ASC');
             if ($rs) {
                 while ($row = odbc_fetch_array($rs)) {
-                    $id = (int) $row['BPLId'];
-                    $name = trim($this->toUtf8($row['BPLName'] ?? ''));
+                    $id         = (int) $row['BPLId'];
+                    $name       = trim($this->toUtf8($row['BPLName'] ?? ''));
                     $branches[] = [
                         'bplId' => $id,
-                        'text' => "{$id} - {$name}",
+                        'text'  => "{$id} - {$name}",
                     ];
                 }
                 odbc_free_result($rs);
             }
             odbc_close($conn);
         } catch (Throwable $ignore) {
-            
         }
 
         return $branches;
@@ -1739,7 +1808,8 @@ EOF;
     /**
      * Resuelve UserID de SAP (OUSR/USR6) si el usuario web está enlazado.
      */
-    private function resolveLinkedSapUserId($conn, int $idEmpresa, int $idUser): int {
+    private function resolveLinkedSapUserId($conn, int $idEmpresa, int $idUser): int
+    {
         try {
             $db = \Config\Database::connect();
             if (!$db->tableExists('user_sap_link')) {
@@ -1749,10 +1819,10 @@ EOF;
             $builder = $this->userSapLink->builder();
             $this->applyCompanyFilter($builder, 'user_sap_link', $idEmpresa);
             $link = $builder
-                    ->where('iduser', $idUser)
-                    ->where('deleted_at', null)
-                    ->get()
-                    ->getRowArray();
+                ->where('iduser', $idUser)
+                ->where('deleted_at', null)
+                ->get()
+                ->getRowArray();
 
             if (!$link || empty($link['sapuser'])) {
                 return 0;
@@ -1760,7 +1830,7 @@ EOF;
 
             $sapUser = trim((string) $link['sapuser']);
             if (is_numeric($sapUser)) {
-                $uid = (int) $sapUser;
+                $uid   = (int) $sapUser;
                 $rsChk = @odbc_exec($conn, "SELECT COUNT(*) AS \"Cnt\" FROM \"USR6\" WHERE \"UserID\" = {$uid}");
                 if ($rsChk && ($r = odbc_fetch_array($rsChk)) && (int) ($r['Cnt'] ?? 0) > 0) {
                     odbc_free_result($rsChk);
@@ -1769,7 +1839,7 @@ EOF;
             }
 
             $codeClean = str_replace("'", "''", $sapUser);
-            $rsOusr = @odbc_exec($conn, "SELECT \"USERID\" FROM \"OUSR\" WHERE UPPER(\"USER_CODE\") = UPPER('{$codeClean}') LIMIT 1");
+            $rsOusr    = @odbc_exec($conn, "SELECT \"USERID\" FROM \"OUSR\" WHERE UPPER(\"USER_CODE\") = UPPER('{$codeClean}') LIMIT 1");
             if ($rsOusr && ($row = odbc_fetch_array($rsOusr))) {
                 $uid = (int) ($row['USERID'] ?? 0);
                 odbc_free_result($rsOusr);
@@ -1782,28 +1852,29 @@ EOF;
                 }
             }
         } catch (Throwable $ignore) {
-            
         }
 
         return 0;
     }
 
-    private function connectODBC(int $idEmpresa = 0) {
+    private function connectODBC(int $idEmpresa = 0)
+    {
         $tableSL = $this->serviceLayerModel->table ?? 'sapservicelayer';
         $builder = $this->serviceLayerModel->builder();
         if ($idEmpresa > 0) {
             $this->applyCompanyFilter($builder, $tableSL, $idEmpresa);
         }
-        $dataConect = $builder->where('deleted_at', null)->get()->getRowArray() ?: $this->serviceLayerModel->where('deleted_at', null)->first();
+        $dataConect = $builder->where('deleted_at', null)->get()->getRowArray()
+            ?: $this->serviceLayerModel->where('deleted_at', null)->first();
 
         if (!$dataConect) {
             throw new Exception('No se encontró configuración de conexión SAP.');
         }
 
         $conn = odbc_connect(
-                $dataConect['nameODBC'],
-                $dataConect['userODBC'],
-                $dataConect['passwordODBC']
+            $dataConect['nameODBC'],
+            $dataConect['userODBC'],
+            $dataConect['passwordODBC']
         );
 
         if (!$conn) {
@@ -1817,7 +1888,8 @@ EOF;
         return $conn;
     }
 
-    private function prepararImagenTCPDF(array $rutasRelativas, string $cacheKey): string {
+    private function prepararImagenTCPDF(array $rutasRelativas, string $cacheKey): string
+    {
         foreach ($rutasRelativas as $rel) {
             $full = ROOTPATH . ltrim($rel, '/');
             if (!is_file($full)) {
@@ -1829,10 +1901,10 @@ EOF;
                     @mkdir($tmpDir, 0775, true);
                 }
                 $dest = $tmpDir . $cacheKey . '.jpg';
-                $img = @imagecreatefrompng($full);
+                $img  = @imagecreatefrompng($full);
                 if ($img) {
-                    $w = imagesx($img);
-                    $h = imagesy($img);
+                    $w  = imagesx($img);
+                    $h  = imagesy($img);
                     $bg = imagecreatetruecolor($w, $h);
                     imagefill($bg, 0, 0, imagecolorallocate($bg, 255, 255, 255));
                     imagecopy($bg, $img, 0, 0, 0, 0, $w, $h);
@@ -1847,19 +1919,23 @@ EOF;
         return '';
     }
 
-    private function sanitizeDate(string $date, string $default): string {
+    private function sanitizeDate(string $date, string $default): string
+    {
         return preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) ? $date : $default;
     }
 
-    private function fmt($num): string {
+    private function fmt($num): string
+    {
         return number_format((float) $num, 2, '.', ',');
     }
 
-    private function escPdf(string $text): string {
+    private function escPdf(string $text): string
+    {
         return htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
     }
 
-    private function toUtf8($value): string {
+    private function toUtf8($value): string
+    {
         if (is_null($value)) {
             return '';
         }

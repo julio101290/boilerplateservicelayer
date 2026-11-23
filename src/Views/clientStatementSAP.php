@@ -30,7 +30,11 @@
     }
     .badge-purple {
         background-color: #6f42c1;
-        color: #fff;
+        color: #ffffff;
+    }
+    .badge-reserve {
+        background-color: #d97706;
+        color: #ffffff;
     }
     .table-edo th {
         font-size: 0.78rem;
@@ -53,80 +57,96 @@
     .row-vencido {
         background-color: #fff5f5 !important;
     }
-    /* Estilos Mapa de Relaciones */
+
+    /* Mapa de Relaciones Interactivo (Arrastrable + Zoom + Agrupación Expandible) */
+    .modal-relmap-fullscreen {
+        max-width: 98vw !important;
+        width: 98vw !important;
+        margin: 0.6rem auto !important;
+    }
+    .modal-relmap-fullscreen .rel-map-wrapper {
+        height: calc(100vh - 180px) !important;
+    }
     .rel-map-wrapper {
         position: relative;
-        overflow-x: auto;
-        min-height: 360px;
-        background: #f8f9fb;
-        border: 1px solid #dee2e6;
+        overflow: auto;
+        height: 520px;
+        background-color: #f4f6f9;
+        background-image: radial-gradient(#d5dce4 1px, transparent 1px);
+        background-size: 20px 20px;
+        border: 1px solid #ced4da;
         border-radius: 6px;
-        padding: 24px 18px;
+        cursor: grab;
+        user-select: none;
+    }
+    .rel-map-wrapper.is-panning {
+        cursor: grabbing;
+    }
+    .rel-map-stage {
+        position: relative;
+        min-width: 100%;
+        min-height: 100%;
     }
     .rel-map-canvas {
         position: relative;
-        display: flex;
-        flex-direction: row;
-        align-items: flex-start;
-        gap: 64px;
-        min-width: max-content;
-        z-index: 2;
+        transform-origin: 0 0;
     }
     .rel-map-svg {
         position: absolute;
         top: 0;
         left: 0;
         pointer-events: none;
+        overflow: visible;
         z-index: 1;
     }
-    .rel-stage-col {
-        display: flex;
-        flex-direction: column;
-        gap: 18px;
-        min-width: 220px;
-    }
-    .rel-stage-title {
-        font-size: 0.72rem;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        font-weight: 700;
-        color: #6c757d;
-        text-align: center;
-        border-bottom: 1px dashed #ced4da;
-        padding-bottom: 4px;
-    }
-    .rel-node-card {
-        width: 225px;
+    .rel-node-card,
+    .rel-group-card {
+        position: absolute;
+        width: 235px;
         background: #ffffff;
-        border: 2px solid #dee2e6;
-        border-radius: 6px;
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
-        transition: transform 0.15s ease, box-shadow 0.15s ease;
-        cursor: pointer;
+        border: 2px solid #cfd6df;
+        border-radius: 7px;
+        box-shadow: 0 3px 8px rgba(0, 0, 0, 0.09);
+        z-index: 2;
+        cursor: move;
+        transition: box-shadow 0.12s ease, border-color 0.12s ease;
     }
-    .rel-node-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 5px 12px rgba(0, 0, 0, 0.14);
+    .rel-node-card:hover,
+    .rel-group-card:hover {
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.16);
         border-color: var(--corp-red);
+        z-index: 5;
+    }
+    .rel-node-card.is-dragging,
+    .rel-group-card.is-dragging {
+        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.24);
+        border-color: var(--corp-red);
+        z-index: 20;
+        opacity: 0.96;
     }
     .rel-node-card.is-current {
         border: 2.5px solid var(--corp-red);
-        box-shadow: 0 0 0 3px rgba(168, 32, 32, 0.18);
+        box-shadow: 0 0 0 4px rgba(168, 32, 32, 0.18);
+    }
+    .rel-group-card {
+        border-style: dashed;
+        border-width: 2px;
+        background: #fffdf7;
     }
     .rel-node-header {
-        padding: 5px 8px;
+        padding: 6px 9px;
         font-size: 0.75rem;
         font-weight: 700;
-        border-top-left-radius: 4px;
-        border-top-right-radius: 4px;
+        border-top-left-radius: 5px;
+        border-top-right-radius: 5px;
         display: flex;
         justify-content: space-between;
         align-items: center;
     }
     .rel-node-body {
         padding: 7px 9px;
-        font-size: 0.76rem;
-        line-height: 1.35;
+        font-size: 0.75rem;
+        line-height: 1.38;
     }
 </style>
 
@@ -245,7 +265,7 @@
                 </div>
             </div>
 
-            <!-- FILTROS SECUNDARIOS (TIPO, SALDO, CONCEPTO, REFERENCIA, CANCELADOS) -->
+            <!-- FILTROS SECUNDARIOS -->
             <div class="form-row align-items-end border-top pt-2 mt-1">
                 <div class="form-group col-lg-2 col-md-4 col-sm-6 col-12 mb-1">
                     <label class="mb-1 small font-weight-bold">Tipo Movimiento</label>
@@ -269,7 +289,9 @@
                     <label class="mb-1 small font-weight-bold">Concepto / Documento</label>
                     <select class="form-control form-control-sm" id="filtroConcepto">
                         <option value="TODOS" selected>Todos</option>
-                        <option value="13">Facturas (13)</option>
+                        <option value="13">Facturas (Normales y Reserva)</option>
+                        <option value="13_NORM">Solo Facturas Normales</option>
+                        <option value="13_RES">Solo Facturas de Reserva</option>
                         <option value="203">Anticipos Fact. (203)</option>
                         <option value="24">Pagos Recibidos (24)</option>
                         <option value="14">Notas de Crédito (14)</option>
@@ -348,9 +370,9 @@
     </div>
 </div>
 
-<!-- MODAL: MAPA DE RELACIONES -->
+<!-- MODAL: MAPA DE RELACIONES INTERACTIVO -->
 <div class="modal fade" id="modalRelMap" tabindex="-1" role="dialog" aria-hidden="true">
-    <div class="modal-dialog modal-xl" role="document" style="max-width: 94%;">
+    <div class="modal-dialog modal-xl" id="modalRelMapDialog" role="document" style="max-width: 94%;">
         <div class="modal-content">
             <div class="modal-header bg-corp-red py-2">
                 <h5 class="modal-title font-weight-bold">
@@ -360,29 +382,61 @@
                     <span aria-hidden="true">&times;</span>
                 </button>
             </div>
-            <div class="modal-body p-3">
-                <div class="d-flex justify-content-between align-items-center mb-2 small text-muted">
-                    <div>
-                        <i class="fas fa-mouse-pointer mr-1 text-danger"></i>
-                        Haz clic en cualquier tarjeta del diagrama para ver el <b>detalle completo</b> de ese documento.
+            <div class="modal-body p-2">
+                <!-- BARRA DE CONTROL DEL DIAGRAMA -->
+                <div class="d-flex flex-wrap justify-content-between align-items-center bg-light border rounded px-2 py-1 mb-2" style="gap: 6px;">
+                    <div class="btn-group btn-group-sm">
+                        <button type="button" class="btn btn-outline-danger font-weight-bold" id="btnRelExpandAll" title="Expandir todos los grupos">
+                            <i class="fas fa-expand-arrows-alt mr-1"></i> Expandir Todo
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" id="btnRelCollapseAll" title="Agrupar cuando hay muchos documentos">
+                            <i class="fas fa-compress-arrows-alt mr-1"></i> Agrupar
+                        </button>
+                        <button type="button" class="btn btn-outline-dark" id="btnRelAutoLayout" title="Reordenar cuadros automáticamente">
+                            <i class="fas fa-magic mr-1"></i> Auto-Ordenar
+                        </button>
                     </div>
-                    <div>
-                        <span class="badge badge-danger mr-1">Borde Rojo = Documento Seleccionado</span>
-                        <span class="badge badge-success mr-1">Línea Verde = Pago</span>
-                        <span class="badge badge-warning mr-1">Línea Ámbar = Anticipo</span>
-                        <span class="badge badge-info">Línea Punteada = Reconciliación</span>
+
+                    <div class="small text-muted d-none d-lg-block">
+                        <i class="fas fa-arrows-alt text-danger mr-1"></i> Arrastra cualquier cuadro o el fondo para moverte &nbsp;|&nbsp;
+                        <span id="relMapStats" class="font-weight-bold text-dark"></span>
+                    </div>
+
+                    <div class="btn-group btn-group-sm">
+                        <button type="button" class="btn btn-outline-secondary" id="btnRelZoomOut" title="Alejar"><i class="fas fa-search-minus"></i></button>
+                        <button type="button" class="btn btn-outline-secondary font-weight-bold" id="btnRelZoomReset" title="Restablecer Zoom">100%</button>
+                        <button type="button" class="btn btn-outline-secondary" id="btnRelZoomIn" title="Acercar"><i class="fas fa-search-plus"></i></button>
+                        <button type="button" class="btn btn-outline-primary ml-1" id="btnRelFullscreen" title="Expandir / Restaurar ventana">
+                            <i class="fas fa-expand"></i>
+                        </button>
                     </div>
                 </div>
+
                 <div id="relMapLoading" class="text-center py-5 d-none">
                     <i class="fas fa-spinner fa-spin fa-2x text-danger"></i>
                     <p class="mt-2 mb-0 text-muted">Construyendo mapa de relaciones en SAP HANA...</p>
                 </div>
+
                 <div id="relMapWrapper" class="rel-map-wrapper">
-                    <svg id="relMapSvg" class="rel-map-svg"></svg>
-                    <div id="relMapCanvas" class="rel-map-canvas"></div>
+                    <div id="relMapStage" class="rel-map-stage">
+                        <div id="relMapCanvas" class="rel-map-canvas">
+                            <svg id="relMapSvg" class="rel-map-svg"></svg>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex flex-wrap justify-content-between align-items-center mt-1 small text-muted px-1">
+                    <div>
+                        <span class="badge badge-danger mr-1">Borde Rojo = Seleccionado</span>
+                        <span class="badge badge-reserve mr-1">Factura Reserva</span>
+                        <span class="badge badge-success mr-1">Línea Verde = Pago</span>
+                        <span class="badge badge-warning mr-1">Ámbar = Anticipo</span>
+                        <span class="badge badge-info">Punteada = Reconciliación</span>
+                    </div>
+                    <small>Clic en <b>Detalle</b> o doble clic en un cuadro para inspeccionar partidas.</small>
                 </div>
             </div>
-            <div class="modal-footer py-2">
+            <div class="modal-footer py-1">
                 <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">Cerrar</button>
             </div>
         </div>
@@ -424,13 +478,28 @@
 <script>
     var tableMovimientos = null;
     var currentDetailRef = null;
-    var lastRelMapData   = null;
+
+    // Estado del motor interactivo del Mapa de Relaciones
+    var relMapState = {
+        rawNodes: [],
+        rawEdges: [],
+        visibleItems: [],
+        visibleEdges: [],
+        positions: {},
+        expandedGroups: {},
+        groupThreshold: 4,
+        zoom: 1,
+        canvasW: 1100,
+        canvasH: 520,
+        rafId: null
+    };
 
     $(document).ready(function () {
         $('#idEmpresa, #filtroSucursal').select2();
 
         inicializarSelectCliente();
         inicializarDataTable();
+        inicializarControlesMapaRelaciones();
         cargarSucursales();
 
         $('#idEmpresa').on('change', function () {
@@ -450,7 +519,7 @@
             exportarEstadoCuentaPDF();
         });
 
-        // Clic en fila -> abre Mapa de Relaciones (excepto si se hace clic en botones de acción)
+        // Clic en fila -> abre Mapa de Relaciones
         $('#tableMovimientos tbody').on('click', 'tr', function (e) {
             if ($(e.target).closest('button').length) return;
             var rowData = tableMovimientos.row(this).data();
@@ -480,13 +549,16 @@
             }, 250);
         });
 
-        // Redibujar flechas SVG al terminar de abrir modal o redimensionar
-        $('#modalRelMap').on('shown.bs.modal', function () {
-            if (lastRelMapData) dibujarConectoresSVG(lastRelMapData.edges || []);
+        // Mantener scroll correcto cuando se abre el modal de detalle encima del mapa de relaciones
+        $('#modalDocDetail').on('hidden.bs.modal', function () {
+            if ($('#modalRelMap').hasClass('show')) {
+                $('body').addClass('modal-open');
+            }
         });
-        $(window).on('resize', function () {
-            if ($('#modalRelMap').hasClass('show') && lastRelMapData) {
-                dibujarConectoresSVG(lastRelMapData.edges || []);
+
+        $('#modalRelMap').on('shown.bs.modal', function () {
+            if (relMapState.visibleItems.length) {
+                dibujarConectoresSVG();
             }
         });
     });
@@ -681,7 +753,6 @@
                     return;
                 }
 
-                // KPIs
                 var k = res.kpis || {};
                 var a = res.aging || {};
                 $('#kpiSaldoCorte').text(fmtMoney(k.saldoCorte));
@@ -691,7 +762,6 @@
                 $('#kpiAnticipoEfvo').text(fmtMoney(k.anticipoEfectivo));
                 $('#kpiAnticipoFact').text(fmtMoney(k.anticipoFacturacion));
 
-                // Resumen cliente + Antigüedad
                 var c = res.cliente || {};
                 $('#infoCliNombre').text(`${c.CardCode || ''} - ${c.CardName || ''}`);
                 $('#infoCliRFC').text(c.RFC || '-');
@@ -739,10 +809,104 @@
         window.open("<?= site_url('admin/clientStatementSAP/report') ?>?" + qs, '_blank');
     }
 
+    /* =========================================================================
+     * MOTOR INTERACTIVO DEL MAPA DE RELACIONES
+     * ========================================================================= */
+    function inicializarControlesMapaRelaciones() {
+        $('#btnRelExpandAll').on('click', function () {
+            obtenerClavesGrupos().forEach(function (gk) {
+                relMapState.expandedGroups[gk] = true;
+            });
+            relMapState.positions = {};
+            reconstruirMapaRelaciones();
+        });
+
+        $('#btnRelCollapseAll').on('click', function () {
+            relMapState.expandedGroups = {};
+            relMapState.positions = {};
+            reconstruirMapaRelaciones();
+        });
+
+        $('#btnRelAutoLayout').on('click', function () {
+            relMapState.positions = {};
+            reconstruirMapaRelaciones();
+        });
+
+        $('#btnRelZoomIn').on('click', function () { aplicarZoomMapa(relMapState.zoom + 0.15); });
+        $('#btnRelZoomOut').on('click', function () { aplicarZoomMapa(relMapState.zoom - 0.15); });
+        $('#btnRelZoomReset').on('click', function () { aplicarZoomMapa(1); });
+
+        $('#btnRelFullscreen').on('click', function () {
+            var $dlg = $('#modalRelMapDialog');
+            $dlg.toggleClass('modal-relmap-fullscreen');
+            var isFull = $dlg.hasClass('modal-relmap-fullscreen');
+            $(this).html(isFull ? '<i class="fas fa-compress"></i>' : '<i class="fas fa-expand"></i>');
+        });
+
+        // Paneo arrastrando el fondo del canvas
+        var panning = false, panStartX = 0, panStartY = 0, panScrollL = 0, panScrollT = 0;
+        $('#relMapWrapper').on('mousedown', function (e) {
+            if ($(e.target).closest('.rel-node-card, .rel-group-card').length) return;
+            panning = true;
+            $(this).addClass('is-panning');
+            panStartX  = e.clientX;
+            panStartY  = e.clientY;
+            panScrollL = this.scrollLeft;
+            panScrollT = this.scrollTop;
+        });
+
+        $(document).on('mousemove.relpan', function (e) {
+            if (!panning) return;
+            var w = document.getElementById('relMapWrapper');
+            if (!w) return;
+            w.scrollLeft = panScrollL - (e.clientX - panStartX);
+            w.scrollTop  = panScrollT - (e.clientY - panStartY);
+        }).on('mouseup.relpan', function () {
+            if (panning) {
+                panning = false;
+                $('#relMapWrapper').removeClass('is-panning');
+            }
+        });
+    }
+
+    function obtenerClavesGrupos() {
+        var keys = {};
+        relMapState.rawNodes.forEach(function (n) {
+            var gk = `grp_${n.stage || 5}_${n.objType}_${n.isReserve ? 'R' : 'N'}`;
+            keys[gk] = true;
+        });
+        return Object.keys(keys);
+    }
+
+    function aplicarZoomMapa(nuevoZoom) {
+        relMapState.zoom = Math.max(0.45, Math.min(1.6, Math.round(nuevoZoom * 100) / 100));
+        $('#btnRelZoomReset').text(Math.round(relMapState.zoom * 100) + '%');
+        actualizarDimensionesCanvas();
+    }
+
+    function actualizarDimensionesCanvas() {
+        var z = relMapState.zoom;
+        $('#relMapCanvas').css({
+            width: relMapState.canvasW + 'px',
+            height: relMapState.canvasH + 'px',
+            transform: `scale(${z})`
+        });
+        $('#relMapStage').css({
+            width: Math.ceil(relMapState.canvasW * z) + 'px',
+            height: Math.ceil(relMapState.canvasH * z) + 'px'
+        });
+        var svg = document.getElementById('relMapSvg');
+        if (svg) {
+            svg.setAttribute('width', relMapState.canvasW);
+            svg.setAttribute('height', relMapState.canvasH);
+        }
+    }
+
     function abrirMapaRelaciones(objType, docEntry, transId, label) {
         $('#relMapTitulo').text(label ? `— ${label}` : '');
-        $('#relMapCanvas').empty();
+        $('#relMapCanvas').find('.rel-node-card, .rel-group-card').remove();
         $('#relMapSvg').empty();
+        $('#relMapStats').text('');
         $('#relMapWrapper').addClass('d-none');
         $('#relMapLoading').removeClass('d-none');
         $('#modalRelMap').modal('show');
@@ -765,62 +929,236 @@
                 $('#relMapWrapper').removeClass('d-none');
 
                 if (res.error || !res.map) {
-                    $('#relMapCanvas').html(`<div class="alert alert-danger m-3">${escHtml(res.message || 'No se pudo generar el mapa de relaciones.')}</div>`);
+                    Swal.fire('Error', res.message || 'No se pudo generar el mapa de relaciones.', 'error');
                     return;
                 }
 
-                lastRelMapData = res.map;
-                renderizarMapaRelaciones(res.map);
+                relMapState.rawNodes       = res.map.nodes || [];
+                relMapState.rawEdges       = res.map.edges || [];
+                relMapState.positions      = {};
+                relMapState.expandedGroups = {};
+                relMapState.zoom           = 1;
+                $('#btnRelZoomReset').text('100%');
+
+                reconstruirMapaRelaciones();
             },
             error: function (jqXHR) {
                 $('#relMapLoading').addClass('d-none');
                 $('#relMapWrapper').removeClass('d-none');
-                $('#relMapCanvas').html(`<div class="alert alert-danger m-3">${escHtml(jqXHR.responseText || 'Error de servidor')}</div>`);
+                Swal.fire('Error', jqXHR.responseText || 'Error de servidor', 'error');
             }
         });
     }
 
-    function renderizarMapaRelaciones(map) {
-        var nodes = map.nodes || [];
-        var edges = map.edges || [];
-        var $canvas = $('#relMapCanvas').empty();
+    function reconstruirMapaRelaciones() {
+        var nodes = relMapState.rawNodes;
+        var edges = relMapState.rawEdges;
 
         if (!nodes.length) {
-            $canvas.html('<div class="alert alert-info m-3">Este movimiento no tiene documentos relacionados adicionales.</div>');
+            $('#relMapCanvas').find('.rel-node-card, .rel-group-card').remove();
+            $('#relMapSvg').empty();
+            $('#relMapStats').text('0 documentos');
             return;
         }
 
-        var stageLabels = {
-            1: '1. Cotización',
-            2: '2. Orden de Venta',
-            3: '3. Entrega',
-            4: '4. Factura / Anticipo',
-            5: '5. Pagos / NC / Asientos'
-        };
-
-        var grouped = {};
+        // 1. Agrupar nodos por (stage, objType, isReserve)
+        var buckets = {};
         nodes.forEach(function (n) {
-            var st = n.stage || 5;
-            if (!grouped[st]) grouped[st] = [];
-            grouped[st].push(n);
+            var gk = `grp_${n.stage || 5}_${n.objType}_${n.isReserve ? 'R' : 'N'}`;
+            if (!buckets[gk]) buckets[gk] = [];
+            buckets[gk].push(n);
         });
 
-        Object.keys(grouped).sort().forEach(function (st) {
-            var $col = $(`<div class="rel-stage-col"><div class="rel-stage-title">${stageLabels[st] || 'Documentos'}</div></div>`);
+        var visibleItems   = [];
+        var nodeToVisualId = {};
 
-            grouped[st].forEach(function (n) {
-                var headerCls = `badge-${n.badge || 'secondary'}`;
+        Object.keys(buckets).forEach(function (gk) {
+            var list       = buckets[gk];
+            var isExpanded = !!relMapState.expandedGroups[gk];
+
+            if (list.length > relMapState.groupThreshold && !isExpanded) {
+                var currentNodes = list.filter(function (n) { return n.isCurrent; });
+                var otherNodes   = list.filter(function (n) { return !n.isCurrent; });
+
+                currentNodes.forEach(function (n) {
+                    visibleItems.push({ kind: 'node', id: n.id, stage: n.stage || 5, groupKey: gk, data: n });
+                    nodeToVisualId[n.id] = n.id;
+                });
+
+                if (otherNodes.length > 0) {
+                    var sumTotal = 0, sumSaldo = 0;
+                    otherNodes.forEach(function (n) {
+                        sumTotal += parseFloat(n.total || 0);
+                        sumSaldo += parseFloat(n.saldo || 0);
+                    });
+
+                    var sample = otherNodes[0];
+                    visibleItems.push({
+                        kind: 'group',
+                        id: gk,
+                        stage: sample.stage || 5,
+                        groupKey: gk,
+                        count: otherNodes.length,
+                        tipo: sample.tipo,
+                        badge: sample.badge,
+                        icon: sample.icon,
+                        moneda: sample.moneda || 'MXP',
+                        sumTotal: sumTotal,
+                        sumSaldo: sumSaldo,
+                        items: otherNodes
+                    });
+
+                    otherNodes.forEach(function (n) {
+                        nodeToVisualId[n.id] = gk;
+                    });
+                }
+            } else {
+                list.forEach(function (n) {
+                    visibleItems.push({
+                        kind: 'node',
+                        id: n.id,
+                        stage: n.stage || 5,
+                        groupKey: gk,
+                        canCollapse: list.length > relMapState.groupThreshold,
+                        data: n
+                    });
+                    nodeToVisualId[n.id] = n.id;
+                });
+            }
+        });
+
+        // 2. Remapear y fusionar aristas hacia nodos/grupos visibles
+        var edgeAgg = {};
+        edges.forEach(function (e) {
+            var vFrom = nodeToVisualId[e.from];
+            var vTo   = nodeToVisualId[e.to];
+            if (!vFrom || !vTo || vFrom === vTo) return;
+
+            var sig = `${vFrom}=>${vTo}|${e.type}`;
+            if (!edgeAgg[sig]) {
+                edgeAgg[sig] = { from: vFrom, to: vTo, type: e.type, labels: [], count: 0 };
+            }
+            edgeAgg[sig].count++;
+            if (e.label) edgeAgg[sig].labels.push(e.label);
+        });
+
+        var visibleEdges = Object.keys(edgeAgg).map(function (sig) {
+            var item = edgeAgg[sig];
+            return {
+                from: item.from,
+                to: item.to,
+                type: item.type,
+                label: item.count > 1 ? `${item.count} vínculos` : (item.labels[0] || '')
+            };
+        });
+
+        relMapState.visibleItems = visibleItems;
+        relMapState.visibleEdges = visibleEdges;
+
+        // 3. Layout automático inteligente en subcolumnas
+        var byStage = {};
+        visibleItems.forEach(function (it) {
+            var st = it.stage || 5;
+            if (!byStage[st]) byStage[st] = [];
+            byStage[st].push(it);
+        });
+
+        var cardW = 235, cardH = 148, gapX = 95, gapY = 26, subGapX = 28;
+        var maxRowsPerSubCol = 5;
+        var cursorX = 32;
+        var maxY = 460;
+
+        Object.keys(byStage).map(Number).sort(function (a, b) { return a - b; }).forEach(function (st) {
+            var colItems   = byStage[st];
+            var numSubCols = Math.max(1, Math.ceil(colItems.length / maxRowsPerSubCol));
+            var rowsPerCol = Math.ceil(colItems.length / numSubCols);
+
+            colItems.forEach(function (it, idx) {
+                var subCol = Math.floor(idx / rowsPerCol);
+                var row    = idx % rowsPerCol;
+
+                if (!relMapState.positions[it.id]) {
+                    relMapState.positions[it.id] = {
+                        x: cursorX + subCol * (cardW + subGapX),
+                        y: 28 + row * (cardH + gapY)
+                    };
+                }
+                var pos = relMapState.positions[it.id];
+                if (pos.y + cardH + 60 > maxY) maxY = pos.y + cardH + 60;
+            });
+
+            cursorX += numSubCols * cardW + (numSubCols - 1) * subGapX + gapX;
+        });
+
+        var maxX = Math.max(1050, cursorX + 40);
+        visibleItems.forEach(function (it) {
+            var p = relMapState.positions[it.id];
+            if (p) {
+                if (p.x + cardW + 80 > maxX) maxX = p.x + cardW + 80;
+                if (p.y + cardH + 80 > maxY) maxY = p.y + cardH + 80;
+            }
+        });
+
+        relMapState.canvasW = maxX;
+        relMapState.canvasH = maxY;
+        actualizarDimensionesCanvas();
+
+        // 4. Renderizar tarjetas en el DOM
+        var $canvas = $('#relMapCanvas');
+        $canvas.find('.rel-node-card, .rel-group-card').remove();
+
+        visibleItems.forEach(function (it) {
+            var pos = relMapState.positions[it.id];
+            var $el;
+
+            if (it.kind === 'group') {
+                $el = $(`
+                    <div class="rel-group-card" data-visual-id="${escHtml(it.id)}" style="left:${pos.x}px; top:${pos.y}px;">
+                        <div class="rel-node-header badge-${escHtml(it.badge || 'secondary')}">
+                            <span><i class="fas fa-layer-group mr-1"></i> ${escHtml(it.tipo)}</span>
+                            <span class="badge badge-light text-dark">${it.count}</span>
+                        </div>
+                        <div class="rel-node-body">
+                            <div class="text-muted mb-1"><b>${it.count} documentos agrupados</b></div>
+                            <div class="d-flex justify-content-between">
+                                <span class="text-muted">Suma Total:</span>
+                                <b>${fmtMoney(it.sumTotal)}</b>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <span class="text-muted">Suma Saldo:</span>
+                                <span class="${it.sumSaldo > 0.005 ? 'text-danger font-weight-bold' : 'text-muted'}">${fmtMoney(it.sumSaldo)}</span>
+                            </div>
+                            <div class="mt-2 pt-1 border-top text-center">
+                                <button type="button" class="btn btn-xs btn-corp-red btn-block btn-expand-group" data-gk="${escHtml(it.groupKey)}">
+                                    <i class="fas fa-expand-arrows-alt mr-1"></i> Expandir los ${it.count} cuadros
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `);
+
+                $el.find('.btn-expand-group').on('click', function (e) {
+                    e.stopPropagation();
+                    relMapState.expandedGroups[it.groupKey] = true;
+                    relMapState.positions = {};
+                    reconstruirMapaRelaciones();
+                });
+            } else {
+                var n          = it.data;
                 var currentCls = n.isCurrent ? 'is-current' : '';
                 var statusBadge = n.cancelado
                     ? '<span class="badge badge-dark">CANCELADO</span>'
-                    : (n.estatus === 'CERRADO' || n.estatus === 'APLICADO'
-                        ? `<span class="badge badge-success">${escHtml(n.estatus)}</span>`
-                        : `<span class="badge badge-warning">${escHtml(n.estatus)}</span>`);
+                    : `<span class="badge badge-${(n.estatus || '').indexOf('CERRAD') !== -1 || n.estatus === 'APLICADO' ? 'success' : 'warning'}">${escHtml(n.estatus)}</span>`;
 
-                var $card = $(`
-                    <div class="rel-node-card ${currentCls}" data-node-id="${escHtml(n.id)}"
-                         data-obj="${escHtml(n.objType)}" data-entry="${n.docEntry}" data-trans="${n.transId || 0}">
-                        <div class="rel-node-header ${headerCls}">
+                var collapseBtn = it.canCollapse
+                    ? `<button type="button" class="btn btn-link btn-xs p-0 text-secondary btn-collapse-grp mr-2" data-gk="${escHtml(it.groupKey)}" title="Volver a agrupar"><i class="fas fa-compress-arrows-alt"></i></button>`
+                    : '';
+
+                $el = $(`
+                    <div class="rel-node-card ${currentCls}" data-visual-id="${escHtml(it.id)}"
+                         data-obj="${escHtml(n.objType)}" data-entry="${n.docEntry}" data-trans="${n.transId || 0}"
+                         style="left:${pos.x}px; top:${pos.y}px;">
+                        <div class="rel-node-header badge-${escHtml(n.badge || 'secondary')}">
                             <span><i class="fas ${escHtml(n.icon || 'fa-file')} mr-1"></i> ${escHtml(n.tipo)}</span>
                             <span>#${escHtml(n.docNum)}</span>
                         </div>
@@ -839,37 +1177,100 @@
                             </div>
                             <div class="d-flex justify-content-between align-items-center mt-1 pt-1 border-top">
                                 ${statusBadge}
-                                <small class="text-primary"><i class="fas fa-eye"></i> Detalle</small>
+                                <div>
+                                    ${collapseBtn}
+                                    <button type="button" class="btn btn-link btn-xs p-0 text-primary font-weight-bold btn-open-detail">
+                                        <i class="fas fa-eye"></i> Detalle
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
                 `);
 
-                $card.on('click', function () {
-                    abrirDetalleDocumento($(this).data('obj'), $(this).data('entry'), $(this).data('trans'));
+                $el.find('.btn-open-detail').on('click', function (e) {
+                    e.stopPropagation();
+                    abrirDetalleDocumento(n.objType, n.docEntry, n.transId);
                 });
 
-                $col.append($card);
-            });
+                $el.find('.btn-collapse-grp').on('click', function (e) {
+                    e.stopPropagation();
+                    delete relMapState.expandedGroups[it.groupKey];
+                    relMapState.positions = {};
+                    reconstruirMapaRelaciones();
+                });
 
-            $canvas.append($col);
+                $el.on('dblclick', function (e) {
+                    e.stopPropagation();
+                    abrirDetalleDocumento(n.objType, n.docEntry, n.transId);
+                });
+            }
+
+            habilitarArrastreTarjeta($el, it.id);
+            $canvas.append($el);
         });
 
-        setTimeout(function () {
-            dibujarConectoresSVG(edges);
-        }, 60);
+        $('#relMapStats').text(`${nodes.length} documento(s) • ${visibleItems.length} cuadro(s) visibles`);
+        dibujarConectoresSVG();
     }
 
-    function dibujarConectoresSVG(edges) {
-        var wrapper = document.getElementById('relMapWrapper');
-        var canvas  = document.getElementById('relMapCanvas');
-        var svg     = document.getElementById('relMapSvg');
-        if (!wrapper || !canvas || !svg) return;
+    function habilitarArrastreTarjeta($el, visualId) {
+        $el.on('mousedown', function (e) {
+            if ($(e.target).closest('button').length) return;
+            e.preventDefault();
+            e.stopPropagation();
 
-        var width  = Math.max(wrapper.scrollWidth, canvas.scrollWidth + 40);
-        var height = Math.max(wrapper.scrollHeight, canvas.scrollHeight + 40);
-        svg.setAttribute('width', width);
-        svg.setAttribute('height', height);
+            var startX = e.clientX;
+            var startY = e.clientY;
+            var orig   = relMapState.positions[visualId] || {
+                x: parseFloat($el.css('left')) || 0,
+                y: parseFloat($el.css('top')) || 0
+            };
+
+            $el.addClass('is-dragging');
+
+            $(document).on('mousemove.reldrag', function (ev) {
+                var z  = relMapState.zoom || 1;
+                var nx = Math.max(10, Math.round(orig.x + (ev.clientX - startX) / z));
+                var ny = Math.max(10, Math.round(orig.y + (ev.clientY - startY) / z));
+
+                relMapState.positions[visualId] = { x: nx, y: ny };
+                $el.css({ left: nx + 'px', top: ny + 'px' });
+
+                var needResize = false;
+                if (nx + $el.outerWidth() + 80 > relMapState.canvasW) {
+                    relMapState.canvasW = nx + $el.outerWidth() + 120;
+                    needResize = true;
+                }
+                if (ny + $el.outerHeight() + 80 > relMapState.canvasH) {
+                    relMapState.canvasH = ny + $el.outerHeight() + 120;
+                    needResize = true;
+                }
+                if (needResize) actualizarDimensionesCanvas();
+
+                programarRedibujoSVG();
+            });
+
+            $(document).on('mouseup.reldrag', function () {
+                $el.removeClass('is-dragging');
+                $(document).off('mousemove.reldrag mouseup.reldrag');
+                dibujarConectoresSVG();
+            });
+        });
+    }
+
+    function programarRedibujoSVG() {
+        if (relMapState.rafId) return;
+        relMapState.rafId = window.requestAnimationFrame(function () {
+            relMapState.rafId = null;
+            dibujarConectoresSVG();
+        });
+    }
+
+    function dibujarConectoresSVG() {
+        var canvas = document.getElementById('relMapCanvas');
+        var svg    = document.getElementById('relMapSvg');
+        if (!canvas || !svg) return;
 
         var colorMap = {
             flow: '#6c757d',
@@ -878,7 +1279,7 @@
             recon: '#17a2b8'
         };
 
-        var defs = `
+        var pathsHtml = `
             <defs>
                 <marker id="arrow-flow" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#6c757d"/></marker>
                 <marker id="arrow-payment" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#28a745"/></marker>
@@ -887,41 +1288,32 @@
             </defs>
         `;
 
-        var wrapperRect = wrapper.getBoundingClientRect();
-        var pathsHtml   = defs;
-
-        edges.forEach(function (edge) {
-            var elFrom = canvas.querySelector(`[data-node-id="${edge.from}"]`);
-            var elTo   = canvas.querySelector(`[data-node-id="${edge.to}"]`);
+        relMapState.visibleEdges.forEach(function (edge) {
+            var elFrom = canvas.querySelector(`[data-visual-id="${edge.from}"]`);
+            var elTo   = canvas.querySelector(`[data-visual-id="${edge.to}"]`);
             if (!elFrom || !elTo) return;
 
-            var r1 = elFrom.getBoundingClientRect();
-            var r2 = elTo.getBoundingClientRect();
+            var x1L = elFrom.offsetLeft, y1T = elFrom.offsetTop, w1 = elFrom.offsetWidth, h1 = elFrom.offsetHeight;
+            var x2L = elTo.offsetLeft,   y2T = elTo.offsetTop,   w2 = elTo.offsetWidth,   h2 = elTo.offsetHeight;
 
-            var sameCol = Math.abs(r1.left - r2.left) < 30;
             var x1, y1, x2, y2, cx1, cy1, cx2, cy2;
+            var sameCol = Math.abs(x1L - x2L) < 40;
 
             if (sameCol) {
-                x1 = (r1.right - wrapperRect.left) + wrapper.scrollLeft;
-                y1 = (r1.top + r1.height / 2 - wrapperRect.top) + wrapper.scrollTop;
-                x2 = (r2.right - wrapperRect.left) + wrapper.scrollLeft;
-                y2 = (r2.top + r2.height / 2 - wrapperRect.top) + wrapper.scrollTop;
-                cx1 = x1 + 45; cy1 = y1;
-                cx2 = x2 + 45; cy2 = y2;
-            } else if (r1.left < r2.left) {
-                x1 = (r1.right - wrapperRect.left) + wrapper.scrollLeft;
-                y1 = (r1.top + r1.height / 2 - wrapperRect.top) + wrapper.scrollTop;
-                x2 = (r2.left - wrapperRect.left) + wrapper.scrollLeft;
-                y2 = (r2.top + r2.height / 2 - wrapperRect.top) + wrapper.scrollTop;
-                var dx = Math.max(35, (x2 - x1) / 2);
-                cx1 = x1 + dx; cy1 = y1;
-                cx2 = x2 - dx; cy2 = y2;
+                x1  = x1L + w1; y1 = y1T + h1 / 2;
+                x2  = x2L + w2; y2 = y2T + h2 / 2;
+                cx1 = x1 + 55;  cy1 = y1;
+                cx2 = x2 + 55;  cy2 = y2;
+            } else if (x1L + w1 <= x2L + 20) {
+                x1  = x1L + w1; y1 = y1T + h1 / 2;
+                x2  = x2L;      y2 = y2T + h2 / 2;
+                var dx = Math.max(45, (x2 - x1) / 2);
+                cx1 = x1 + dx;  cy1 = y1;
+                cx2 = x2 - dx;  cy2 = y2;
             } else {
-                x1 = (r1.left - wrapperRect.left) + wrapper.scrollLeft;
-                y1 = (r1.top + r1.height / 2 - wrapperRect.top) + wrapper.scrollTop;
-                x2 = (r2.right - wrapperRect.left) + wrapper.scrollLeft;
-                y2 = (r2.top + r2.height / 2 - wrapperRect.top) + wrapper.scrollTop;
-                var dx2 = Math.max(35, (x1 - x2) / 2);
+                x1  = x1L;      y1 = y1T + h1 / 2;
+                x2  = x2L + w2; y2 = y2T + h2 / 2;
+                var dx2 = Math.max(45, (x1 - x2) / 2);
                 cx1 = x1 - dx2; cy1 = y1;
                 cx2 = x2 + dx2; cy2 = y2;
             }
@@ -942,6 +1334,9 @@
         svg.innerHTML = pathsHtml;
     }
 
+    /* =========================================================================
+     * DETALLE DEL DOCUMENTO
+     * ========================================================================= */
     function abrirDetalleDocumento(objType, docEntry, transId) {
         $('#detailTitle').text('Cargando documento...');
         $('#detailBodyContent').empty();
@@ -987,7 +1382,6 @@
     }
 
     function construirHtmlDetalle(d) {
-        // Encabezado en grid
         var headerHtml = '<div class="row bg-light border rounded p-2 mb-3 small">';
         Object.keys(d.header || {}).forEach(function (k) {
             headerHtml += `<div class="col-md-4 col-sm-6 mb-1"><span class="text-muted">${escHtml(k)}:</span> <b>${escHtml(d.header[k] || '-')}</b></div>`;

@@ -961,13 +961,16 @@ $routes->group('admin', function ($routes) {
     $routes->post('typemtto/save', 'TypemttoController::save', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
     $routes->post('typemtto/delete', 'TypemttoController::delete', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers']);
 
-    $routes->group('clientStatementSAP', ['namespace' => 'julio101290\boilerplateservicelayer\Controllers'], function ($routes) {
-        $routes->get('/', 'ClientStatementSAPController::index');
-        $routes->post('getBranchesAjax', 'ClientStatementSAPController::getBranchesAjax');
-        $routes->get('searchClientsAjax', 'ClientStatementSAPController::searchClientsAjax');
-        $routes->post('getStatementAjax', 'ClientStatementSAPController::getStatementAjax');
-        $routes->post('getDocumentDetailAjax', 'ClientStatementSAPController::getDocumentDetailAjax');
-        $routes->post('getRelationshipMapAjax', 'ClientStatementSAPController::getRelationshipMapAjax');
-        $routes->get('report', 'ClientStatementSAPController::report');
-    });
+    $routes->group('clientStatementSAP', [
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers',
+        'filter' => 'permission:clientStatementSAP-permission',
+            ], function ($routes) {
+                $routes->get('/', 'ClientStatementSAPController::index');
+                $routes->post('getBranchesAjax', 'ClientStatementSAPController::getBranchesAjax');
+                $routes->get('searchClientsAjax', 'ClientStatementSAPController::searchClientsAjax');
+                $routes->post('getStatementAjax', 'ClientStatementSAPController::getStatementAjax');
+                $routes->post('getDocumentDetailAjax', 'ClientStatementSAPController::getDocumentDetailAjax');
+                $routes->post('getRelationshipMapAjax', 'ClientStatementSAPController::getRelationshipMapAjax');
+                $routes->get('report', 'ClientStatementSAPController::report');
+            });
 });
