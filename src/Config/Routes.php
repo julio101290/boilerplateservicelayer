@@ -973,4 +973,17 @@ $routes->group('admin', function ($routes) {
                 $routes->post('getRelationshipMapAjax', 'ClientStatementSAPController::getRelationshipMapAjax');
                 $routes->get('report', 'ClientStatementSAPController::report');
             });
+
+    $routes->group('supplierStatementSAP', [
+        'namespace' => 'julio101290\boilerplateservicelayer\Controllers',
+        'filter' => 'permission:supplierStatementSAP-permission',
+            ], function ($routes) {
+                $routes->get('/', 'SupplierStatementSAPController::index');
+                $routes->post('getBranchesAjax', 'SupplierStatementSAPController::getBranchesAjax');
+                $routes->get('searchSuppliersAjax', 'SupplierStatementSAPController::searchSuppliersAjax');
+                $routes->post('getStatementAjax', 'SupplierStatementSAPController::getStatementAjax');
+                $routes->post('getDocumentDetailAjax', 'SupplierStatementSAPController::getDocumentDetailAjax');
+                $routes->post('getRelationshipMapAjax', 'SupplierStatementSAPController::getRelationshipMapAjax');
+                $routes->get('report', 'SupplierStatementSAPController::report');
+            });
 });

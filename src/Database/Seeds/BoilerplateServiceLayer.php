@@ -58,7 +58,7 @@ class BoilerplateServiceLayer extends Seeder {
         $this->authorize->createPermission('sihistorial_eq-permission', 'Historico Saldo Inicial');
         $this->authorize->createPermission('mttoconfig-permission', 'Historico Saldo Inicial');
         $this->authorize->createPermission('clientStatementSAP-permission', 'clientStatementSAP-permission');
-        
+        $this->authorize->createPermission('supplierStatementSAP-permission', 'clientStatementSAP-permission');
         
         
         // Assign Permission to user
@@ -81,6 +81,7 @@ class BoilerplateServiceLayer extends Seeder {
         $this->authorize->addPermissionToUser('sihistorial_eq-permission', 1);
         $this->authorize->addPermissionToUser('mttoconfig-permission', 1);
         $this->authorize->addPermissionToUser('clientStatementSAP-permission', 1);
+        $this->authorize->addPermissionToUser('supplierStatementSAP-permission', 1);
         
     }
     public function down() {
