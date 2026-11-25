@@ -84,9 +84,10 @@ class InventoryMovementsSAPController extends BaseController
             '14' => ['H' => 'ORIN', 'L' => 'RIN1', 'name' => 'Nota Crédito Cliente',        'short' => 'NC-CLI',  'badge' => 'purple',    'group' => 'VENTAS',     'hasNumAtCard' => true,  'isTransfer' => false],
         ];
          * */
-       
+    
         
-               return [
+        
+                return [
             '59' => ['H' => 'OIGN', 'L' => 'IGN1', 'name' => 'Entrada de Mercancía (Inv.)', 'short' => 'ENT-INV', 'badge' => 'success',   'group' => 'INVENTARIO', 'hasNumAtCard' => false, 'isTransfer' => false],
             '60' => ['H' => 'OIGE', 'L' => 'IGE1', 'name' => 'Salida de Mercancía (Inv.)',  'short' => 'SAL-INV', 'badge' => 'danger',    'group' => 'INVENTARIO', 'hasNumAtCard' => false, 'isTransfer' => false],
             '67' => ['H' => 'OWTR', 'L' => 'WTR1', 'name' => 'Transferencia de Stock',      'short' => 'TRANSF',  'badge' => 'info',      'group' => 'INVENTARIO', 'hasNumAtCard' => false, 'isTransfer' => true],
@@ -95,7 +96,7 @@ class InventoryMovementsSAPController extends BaseController
             '21' => ['H' => 'ORPD', 'L' => 'RPD1', 'name' => 'Devolución de Mercancía',     'short' => 'DEV-COM', 'badge' => 'dark',      'group' => 'COMPRAS',    'hasNumAtCard' => true,  'isTransfer' => false],
             '18' => ['H' => 'OPCH', 'L' => 'PCH1', 'name' => 'Factura de Proveedor',        'short' => 'FAC-PRV', 'badge' => 'warning',   'group' => 'COMPRAS',    'hasNumAtCard' => true,  'isTransfer' => false],
             '19' => ['H' => 'ORPC', 'L' => 'RPC1', 'name' => 'Nota Crédito Proveedor',      'short' => 'NC-PRV',  'badge' => 'purple',    'group' => 'COMPRAS',    'hasNumAtCard' => true,  'isTransfer' => false],
-           
+            
         ];
     }
 
@@ -145,7 +146,7 @@ class InventoryMovementsSAPController extends BaseController
 
         $data = [
             'title'     => 'Reporte Detallado de Movimientos de Almacén y Compras SAP',
-            'subtitle'  => 'Entradas, salidas, transferencias, órdenes de compra, facturas, mapa de relaciones y log de modificaciones',
+            'subtitle'  => 'Entradas, salidas, transferencias, órdenes de compra, facturas, conciliación, mapa de relaciones y log de modificaciones',
             'empresas'  => $empresas,
             'idEmpresa' => (int) ($empresas[0]['id'] ?? 1),
             'fechaIni'  => date('Y-m-01'),
@@ -357,24 +358,25 @@ class InventoryMovementsSAPController extends BaseController
     }
 
     /**
-     * Consulta principal AJAX de movimientos detallados (con multiselects).
+     * Consulta principal AJAX de movimientos detallados (con multiselects y filtro de conciliación).
      */
     public function getMovementsAjax()
     {
         try {
             $params = [
-                'idUser'      => (int) user()->id,
-                'idEmpresa'   => (int) ($this->request->getPost('idEmpresa') ?? 1),
-                'bplId'       => trim((string) ($this->request->getPost('bplId') ?? 'TODOS')),
-                'fechaIni'    => trim((string) ($this->request->getPost('fechaIni') ?? date('Y-m-01'))),
-                'fechaFin'    => trim((string) ($this->request->getPost('fechaFin') ?? date('Y-m-d'))),
-                'tipoDocs'    => $this->normalizeMultiParam($this->request->getPost('tipoDocs')),
-                'almacenes'   => $this->normalizeMultiParam($this->request->getPost('almacenes')),
-                'articulos'   => $this->normalizeMultiParam($this->request->getPost('articulos')),
-                'proveedores' => $this->normalizeMultiParam($this->request->getPost('proveedores')),
-                'estatus'     => strtoupper(trim((string) ($this->request->getPost('estatus') ?? 'TODOS'))),
-                'folio'       => trim((string) ($this->request->getPost('folio') ?? '')),
-                'cancelados'  => strtoupper(trim((string) ($this->request->getPost('cancelados') ?? 'N'))),
+                'idUser'       => (int) user()->id,
+                'idEmpresa'    => (int) ($this->request->getPost('idEmpresa') ?? 1),
+                'bplId'        => trim((string) ($this->request->getPost('bplId') ?? 'TODOS')),
+                'fechaIni'     => trim((string) ($this->request->getPost('fechaIni') ?? date('Y-m-01'))),
+                'fechaFin'     => trim((string) ($this->request->getPost('fechaFin') ?? date('Y-m-d'))),
+                'tipoDocs'     => $this->normalizeMultiParam($this->request->getPost('tipoDocs')),
+                'almacenes'    => $this->normalizeMultiParam($this->request->getPost('almacenes')),
+                'articulos'    => $this->normalizeMultiParam($this->request->getPost('articulos')),
+                'proveedores'  => $this->normalizeMultiParam($this->request->getPost('proveedores')),
+                'estatus'      => strtoupper(trim((string) ($this->request->getPost('estatus') ?? 'TODOS'))),
+                'folio'        => trim((string) ($this->request->getPost('folio') ?? '')),
+                'cancelados'   => strtoupper(trim((string) ($this->request->getPost('cancelados') ?? 'N'))),
+                'conciliacion' => strtoupper(trim((string) ($this->request->getPost('conciliacion') ?? 'TODOS'))),
             ];
 
             $result = $this->buildMovementsDataset($params, 5000);
@@ -511,18 +513,19 @@ class InventoryMovementsSAPController extends BaseController
 
         try {
             $params = [
-                'idUser'      => (int) user()->id,
-                'idEmpresa'   => (int) ($this->request->getGet('idEmpresa') ?? 1),
-                'bplId'       => trim((string) ($this->request->getGet('bplId') ?? 'TODOS')),
-                'fechaIni'    => trim((string) ($this->request->getGet('fechaIni') ?? date('Y-m-01'))),
-                'fechaFin'    => trim((string) ($this->request->getGet('fechaFin') ?? date('Y-m-d'))),
-                'tipoDocs'    => $this->normalizeMultiParam($this->request->getGet('tipoDocs')),
-                'almacenes'   => $this->normalizeMultiParam($this->request->getGet('almacenes')),
-                'articulos'   => $this->normalizeMultiParam($this->request->getGet('articulos')),
-                'proveedores' => $this->normalizeMultiParam($this->request->getGet('proveedores')),
-                'estatus'     => strtoupper(trim((string) ($this->request->getGet('estatus') ?? 'TODOS'))),
-                'folio'       => trim((string) ($this->request->getGet('folio') ?? '')),
-                'cancelados'  => strtoupper(trim((string) ($this->request->getGet('cancelados') ?? 'N'))),
+                'idUser'       => (int) user()->id,
+                'idEmpresa'    => (int) ($this->request->getGet('idEmpresa') ?? 1),
+                'bplId'        => trim((string) ($this->request->getGet('bplId') ?? 'TODOS')),
+                'fechaIni'     => trim((string) ($this->request->getGet('fechaIni') ?? date('Y-m-01'))),
+                'fechaFin'     => trim((string) ($this->request->getGet('fechaFin') ?? date('Y-m-d'))),
+                'tipoDocs'     => $this->normalizeMultiParam($this->request->getGet('tipoDocs')),
+                'almacenes'    => $this->normalizeMultiParam($this->request->getGet('almacenes')),
+                'articulos'    => $this->normalizeMultiParam($this->request->getGet('articulos')),
+                'proveedores'  => $this->normalizeMultiParam($this->request->getGet('proveedores')),
+                'estatus'      => strtoupper(trim((string) ($this->request->getGet('estatus') ?? 'TODOS'))),
+                'folio'        => trim((string) ($this->request->getGet('folio') ?? '')),
+                'cancelados'   => strtoupper(trim((string) ($this->request->getGet('cancelados') ?? 'N'))),
+                'conciliacion' => strtoupper(trim((string) ($this->request->getGet('conciliacion') ?? 'TODOS'))),
             ];
 
             $dataset       = $this->buildMovementsDataset($params, 2500);
@@ -552,19 +555,25 @@ class InventoryMovementsSAPController extends BaseController
             $almacenTxt    = $this->summarizeFilterList($params['almacenes'], 'TODOS', 4);
             $articuloTxt   = $this->summarizeFilterList($params['articulos'], 'TODOS', 4);
             $proveedorTxt  = $this->summarizeFilterList($params['proveedores'], 'TODOS', 3);
+            $concilMap     = [
+                'TODOS'         => 'Todos',
+                'CONCILIADOS'   => 'Solo Conciliados',
+                'NO_CONCILIADOS' => 'Solo No Conciliados',
+            ];
+            $concilTxt     = $concilMap[$params['conciliacion']] ?? 'Todos';
             $fechaEmision  = date('Y-m-d H:i');
 
             $htmlHeader = <<<EOF
 <table cellpadding="3" cellspacing="0" style="width:100%; border-bottom: 2px solid #a82020;">
     <tr>
         <td style="width:22%; vertical-align:middle;">{$logoHtml}</td>
-        <td style="width:46%; text-align:center; vertical-align:middle;">
+        <td style="width:45%; text-align:center; vertical-align:middle;">
             <span style="font-size:12px; font-weight:bold; color:#a82020;">{$this->escPdf($nombreEmpresa)}</span><br>
             <span style="font-size:8px; color:#555555;">RFC: {$this->escPdf($rfcEmpresa)}</span><br>
             <span style="font-size:10px; font-weight:bold; color:#222222;">REPORTE DETALLADO DE MOVIMIENTOS DE ALMACÉN Y COMPRAS</span><br>
-            <span style="font-size:7.5px; color:#444444;">Sucursal: {$this->escPdf($sucursalTexto)}</span>
+            <span style="font-size:7.5px; color:#444444;">Sucursal: {$this->escPdf($sucursalTexto)} &nbsp;|&nbsp; Conciliación: {$this->escPdf($concilTxt)}</span>
         </td>
-        <td style="width:32%; text-align:right; font-size:7.2px; vertical-align:middle;">
+        <td style="width:33%; text-align:right; font-size:7.2px; vertical-align:middle;">
             <b>Periodo:</b> {$this->escPdf($params['fechaIni'])} al {$this->escPdf($params['fechaFin'])}<br>
             <b>Documentos:</b> {$this->escPdf($filtroDocTxt)}<br>
             <b>Almacén(es):</b> {$this->escPdf($almacenTxt)}<br>
@@ -599,44 +608,49 @@ EOF;
                 $i++;
                 $bg       = ($i % 2 === 0) ? '#f7f7f7' : '#ffffff';
                 $provInfo = $r['CardCode'] !== '' ? ($r['CardCode'] . ' - ' . $r['CardName']) : '-';
+                $concLbl  = $r['ESTATUS_CONCILIACION'] === 'NO_APLICA' ? 'N/A' : str_replace('_', ' ', $r['ESTATUS_CONCILIACION']);
 
                 $rowsHtml .= '
                 <tr style="background-color:' . $bg . ';">
-                    <td style="width:11%; text-align:left;"><b>' . $this->escPdf($r['TMA_NOMBRE']) . '</b></td>
+                    <td style="width:10%; text-align:left;"><b>' . $this->escPdf($r['TMA_NOMBRE']) . '</b></td>
+                    <td style="width:8%; text-align:left;">' . $this->escPdf(mb_substr($r['BPLName'], 0, 16)) . '</td>
                     <td style="width:5%; text-align:center;">' . $this->escPdf($r['ALM_CLAVE']) . '</td>
-                    <td style="width:11%; text-align:left;">' . $this->escPdf(mb_substr($r['ALM_NOMBRE'], 0, 22)) . '</td>
-                    <td style="width:6%; text-align:center;"><b>' . $this->escPdf($r['MAE_FOLIO']) . '</b></td>
+                    <td style="width:9%; text-align:left;">' . $this->escPdf(mb_substr($r['ALM_NOMBRE'], 0, 18)) . '</td>
+                    <td style="width:5.5%; text-align:center;"><b>' . $this->escPdf($r['MAE_FOLIO']) . '</b></td>
                     <td style="width:6%; text-align:center;">' . $this->escPdf($r['MAE_ESTATUS']) . '</td>
-                    <td style="width:7%; text-align:center;">' . $this->escPdf($r['MAE_FECHA']) . '</td>
-                    <td style="width:12%; text-align:left;">' . $this->escPdf(mb_substr($provInfo, 0, 26)) . '</td>
-                    <td style="width:8%; text-align:left;">' . $this->escPdf($r['ART_CLAVE']) . '</td>
-                    <td style="width:13%; text-align:left;">' . $this->escPdf(mb_substr($r['ART_NOMBRE'], 0, 28)) . '</td>
-                    <td style="width:7%; text-align:right;">' . $this->fmt($r['MAD_CANT'], 3) . '</td>
-                    <td style="width:7%; text-align:right;">' . $this->fmt($r['MAD_COSTO'], 4) . '</td>
-                    <td style="width:7%; text-align:right;">' . $this->fmt($r['MAD_PRECIO'], 4) . '</td>
+                    <td style="width:6.5%; text-align:center;">' . $this->escPdf($concLbl) . '</td>
+                    <td style="width:6.5%; text-align:center;">' . $this->escPdf($r['MAE_FECHA']) . '</td>
+                    <td style="width:10.5%; text-align:left;">' . $this->escPdf(mb_substr($provInfo, 0, 22)) . '</td>
+                    <td style="width:7%; text-align:left;">' . $this->escPdf($r['ART_CLAVE']) . '</td>
+                    <td style="width:10%; text-align:left;">' . $this->escPdf(mb_substr($r['ART_NOMBRE'], 0, 22)) . '</td>
+                    <td style="width:5.5%; text-align:right;">' . $this->fmt($r['MAD_CANT'], 3) . '</td>
+                    <td style="width:5.25%; text-align:right;">' . $this->fmt($r['MAD_COSTO'], 4) . '</td>
+                    <td style="width:5.25%; text-align:right;">' . $this->fmt($r['MAD_PRECIO'], 4) . '</td>
                 </tr>';
             }
 
             if ($rowsHtml === '') {
-                $rowsHtml = '<tr><td colspan="12" style="text-align:center; padding:10px;">No existen movimientos con los filtros seleccionados.</td></tr>';
+                $rowsHtml = '<tr><td colspan="14" style="text-align:center; padding:10px;">No existen movimientos con los filtros seleccionados.</td></tr>';
             }
 
             $htmlTable = <<<EOF
-<table cellpadding="2.3" cellspacing="0" border="0.2" style="width:100%; font-size:6.4px; border-color:#cccccc;">
+<table cellpadding="2" cellspacing="0" border="0.2" style="width:100%; font-size:6px; border-color:#cccccc;">
     <thead>
         <tr style="background-color:#a82020; color:#ffffff; text-align:center; font-weight:bold;">
-            <th style="width:11%;">Documento</th>
+            <th style="width:10%;">Documento</th>
+            <th style="width:8%;">Sucursal</th>
             <th style="width:5%;">Alm.</th>
-            <th style="width:11%;">Nombre Almacén</th>
-            <th style="width:6%;">Folio</th>
+            <th style="width:9%;">Nombre Almacén</th>
+            <th style="width:5.5%;">Folio</th>
             <th style="width:6%;">Estatus</th>
-            <th style="width:7%;">Fecha</th>
-            <th style="width:12%;">Proveedor / Socio</th>
-            <th style="width:8%;">Clave Art.</th>
-            <th style="width:13%;">Artículo</th>
-            <th style="width:7%;">Cantidad</th>
-            <th style="width:7%;">Costo</th>
-            <th style="width:7%;">Precio</th>
+            <th style="width:6.5%;">Concil.</th>
+            <th style="width:6.5%;">Fecha</th>
+            <th style="width:10.5%;">Proveedor / Socio</th>
+            <th style="width:7%;">Clave Art.</th>
+            <th style="width:10%;">Artículo</th>
+            <th style="width:5.5%;">Cantidad</th>
+            <th style="width:5.25%;">Costo</th>
+            <th style="width:5.25%;">Precio</th>
         </tr>
     </thead>
     <tbody>
@@ -648,7 +662,7 @@ EOF;
             $pdf = new \TCPDF('L', PDF_UNIT, 'LETTER', true, 'UTF-8', false);
             $pdf->setPrintHeader(false);
             $pdf->setPrintFooter(false);
-            $pdf->SetMargins(6, 7, 6);
+            $pdf->SetMargins(5, 7, 5);
             $pdf->SetAutoPageBreak(true, 9);
             $pdf->AddPage();
             $pdf->writeHTML($htmlHeader . $htmlTable, true, false, true, false, '');
@@ -684,18 +698,19 @@ EOF;
 
         try {
             $params = [
-                'idUser'      => (int) user()->id,
-                'idEmpresa'   => (int) ($this->request->getGet('idEmpresa') ?? 1),
-                'bplId'       => trim((string) ($this->request->getGet('bplId') ?? 'TODOS')),
-                'fechaIni'    => trim((string) ($this->request->getGet('fechaIni') ?? date('Y-m-01'))),
-                'fechaFin'    => trim((string) ($this->request->getGet('fechaFin') ?? date('Y-m-d'))),
-                'tipoDocs'    => $this->normalizeMultiParam($this->request->getGet('tipoDocs')),
-                'almacenes'   => $this->normalizeMultiParam($this->request->getGet('almacenes')),
-                'articulos'   => $this->normalizeMultiParam($this->request->getGet('articulos')),
-                'proveedores' => $this->normalizeMultiParam($this->request->getGet('proveedores')),
-                'estatus'     => strtoupper(trim((string) ($this->request->getGet('estatus') ?? 'TODOS'))),
-                'folio'       => trim((string) ($this->request->getGet('folio') ?? '')),
-                'cancelados'  => strtoupper(trim((string) ($this->request->getGet('cancelados') ?? 'N'))),
+                'idUser'       => (int) user()->id,
+                'idEmpresa'    => (int) ($this->request->getGet('idEmpresa') ?? 1),
+                'bplId'        => trim((string) ($this->request->getGet('bplId') ?? 'TODOS')),
+                'fechaIni'     => trim((string) ($this->request->getGet('fechaIni') ?? date('Y-m-01'))),
+                'fechaFin'     => trim((string) ($this->request->getGet('fechaFin') ?? date('Y-m-d'))),
+                'tipoDocs'     => $this->normalizeMultiParam($this->request->getGet('tipoDocs')),
+                'almacenes'    => $this->normalizeMultiParam($this->request->getGet('almacenes')),
+                'articulos'    => $this->normalizeMultiParam($this->request->getGet('articulos')),
+                'proveedores'  => $this->normalizeMultiParam($this->request->getGet('proveedores')),
+                'estatus'      => strtoupper(trim((string) ($this->request->getGet('estatus') ?? 'TODOS'))),
+                'folio'        => trim((string) ($this->request->getGet('folio') ?? '')),
+                'cancelados'   => strtoupper(trim((string) ($this->request->getGet('cancelados') ?? 'N'))),
+                'conciliacion' => strtoupper(trim((string) ($this->request->getGet('conciliacion') ?? 'TODOS'))),
             ];
 
             $dataset = $this->buildMovementsDataset($params, 25000);
@@ -705,10 +720,14 @@ EOF;
 
             fputcsv($fp, [
                 'TMA_NOMBRE',
+                'SUCURSAL',
                 'ALM_CLAVE',
                 'ALM_NOMBRE',
                 'MAE_FOLIO',
                 'MAE_ESTATUS',
+                'CONCILIACION',
+                'NUM_RECONCILIACION',
+                'SALDO_SIN_CONCILIAR',
                 'MAE_FECHA',
                 'PROV_CLAVE',
                 'PROV_NOMBRE',
@@ -719,17 +738,20 @@ EOF;
                 'MAD_COSTO',
                 'MAD_PRECIO',
                 'IMPORTE_LINEA',
-                'SUCURSAL',
                 'REFERENCIA',
             ]);
 
             foreach ($dataset['rows'] as $r) {
                 fputcsv($fp, [
                     $r['TMA_NOMBRE'],
+                    $r['BPLName'],
                     $r['ALM_CLAVE'],
                     $r['ALM_NOMBRE'],
                     $r['MAE_FOLIO'],
                     $r['MAE_ESTATUS'],
+                    $r['ESTATUS_CONCILIACION'],
+                    $r['RECON_NUMS'],
+                    $r['SALDO_PENDIENTE'],
                     $r['MAE_FECHA'],
                     $r['CardCode'],
                     $r['CardName'],
@@ -740,7 +762,6 @@ EOF;
                     $r['MAD_COSTO'],
                     $r['MAD_PRECIO'],
                     $r['IMPORTE'],
-                    $r['BPLName'],
                     $r['Referencia'],
                 ]);
             }
@@ -762,22 +783,23 @@ EOF;
     }
 
     /* =========================================================================
-     * DATASET PRINCIPAL DE MOVIMIENTOS (UNION ALL OPTIMIZADO EN HANA)
+     * DATASET PRINCIPAL DE MOVIMIENTOS (UNION ALL + CONCILIACIÓN JDT1/OITR/ITR1)
      * ========================================================================= */
     private function buildMovementsDataset(array $params, int $limitRows = 5000): array
     {
-        $idUser      = (int) $params['idUser'];
-        $idEmpresa   = (int) $params['idEmpresa'];
-        $bplId       = trim((string) $params['bplId']);
-        $fechaIni    = $this->sanitizeDate($params['fechaIni'], date('Y-m-01'));
-        $fechaFin    = $this->sanitizeDate($params['fechaFin'], date('Y-m-d'));
-        $tipoDocs    = $params['tipoDocs'] ?? [];
-        $almacenes   = $params['almacenes'] ?? [];
-        $articulos   = $params['articulos'] ?? [];
-        $proveedores = $params['proveedores'] ?? [];
-        $estatus     = strtoupper(trim((string) ($params['estatus'] ?? 'TODOS')));
-        $folio       = trim((string) ($params['folio'] ?? ''));
-        $cancelados  = strtoupper(trim((string) ($params['cancelados'] ?? 'N')));
+        $idUser       = (int) $params['idUser'];
+        $idEmpresa    = (int) $params['idEmpresa'];
+        $bplId        = trim((string) $params['bplId']);
+        $fechaIni     = $this->sanitizeDate($params['fechaIni'], date('Y-m-01'));
+        $fechaFin     = $this->sanitizeDate($params['fechaFin'], date('Y-m-d'));
+        $tipoDocs     = $params['tipoDocs'] ?? [];
+        $almacenes    = $params['almacenes'] ?? [];
+        $articulos    = $params['articulos'] ?? [];
+        $proveedores  = $params['proveedores'] ?? [];
+        $estatus      = strtoupper(trim((string) ($params['estatus'] ?? 'TODOS')));
+        $folio        = trim((string) ($params['folio'] ?? ''));
+        $cancelados   = strtoupper(trim((string) ($params['cancelados'] ?? 'N')));
+        $conciliacion = strtoupper(trim((string) ($params['conciliacion'] ?? 'TODOS')));
 
         if ($fechaIni > $fechaFin) {
             $tmp      = $fechaIni;
@@ -925,7 +947,10 @@ EOF;
                     IFNULL(l.\"StockPrice\", 0) AS \"MAD_COSTO\",
                     IFNULL(l.\"Price\", 0) AS \"MAD_PRECIO\",
                     IFNULL(l.\"LineTotal\", 0) AS \"IMPORTE\",
-                    IFNULL(b.\"BPLName\", '') AS \"BPLName\",
+                    COALESCE(
+                        NULLIF(b.\"BPLName\", ''),
+                        CASE WHEN IFNULL(h.\"BPLId\", 0) > 0 THEN 'Sucursal #' || CAST(h.\"BPLId\" AS NVARCHAR(20)) ELSE 'Sin Sucursal' END
+                    ) AS \"BPLName\",
                     IFNULL(h.\"CardCode\", '') AS \"CardCode\",
                     IFNULL(h.\"CardName\", '') AS \"CardName\",
                     {$refExpr} AS \"Referencia\"
@@ -946,12 +971,89 @@ EOF;
             ";
         }
 
+        // Filtro de conciliación (aplica únicamente a documentos conciliables en cuenta de socio)
+        $whereConciliacion = '';
+        if ($conciliacion === 'CONCILIADOS') {
+            $whereConciliacion = " AND \"ESTATUS_CONCILIACION\" = 'CONCILIADO' ";
+        } elseif ($conciliacion === 'NO_CONCILIADOS') {
+            $whereConciliacion = " AND \"ESTATUS_CONCILIACION\" IN ('NO_CONCILIADO', 'PARCIAL') ";
+        }
+
         $sqlLimit = $limitRows + 1;
-        $fullSql  = "
-            SELECT * FROM (
-                " . implode("\nUNION ALL\n", $unionParts) . "
-            ) AS movs
-            ORDER BY movs.\"MAE_FECHA\" ASC, movs.\"ObjType\" ASC, movs.\"DocEntry\" ASC, movs.\"LineNum\" ASC
+        $unionSql = implode("\nUNION ALL\n", $unionParts);
+
+        $fullSql = "
+            WITH movs_base AS (
+                {$unionSql}
+            ),
+            trans_scope AS (
+                SELECT DISTINCT \"TransId\", \"CardCode\"
+                FROM movs_base
+                WHERE \"TransId\" > 0
+                  AND \"CardCode\" <> ''
+            ),
+            jdt_bp AS (
+                SELECT
+                    j.\"TransId\",
+                    j.\"ShortName\",
+                    SUM(IFNULL(j.\"Debit\", 0) + IFNULL(j.\"Credit\", 0)) AS \"OrigAmt\",
+                    SUM(IFNULL(j.\"BalDueDeb\", 0) + IFNULL(j.\"BalDueCred\", 0)) AS \"OpenAmt\"
+                FROM \"JDT1\" j
+                INNER JOIN trans_scope ts
+                    ON ts.\"TransId\" = j.\"TransId\"
+                   AND ts.\"CardCode\" = j.\"ShortName\"
+                GROUP BY j.\"TransId\", j.\"ShortName\"
+            ),
+            recon_distinct AS (
+                SELECT DISTINCT
+                    r1.\"TransId\",
+                    r1.\"ShortName\",
+                    r0.\"ReconNum\"
+                FROM \"ITR1\" r1
+                INNER JOIN \"OITR\" r0
+                    ON r0.\"ReconNum\" = r1.\"ReconNum\"
+                   AND r0.\"Canceled\" = 'N'
+                INNER JOIN trans_scope ts
+                    ON ts.\"TransId\" = r1.\"TransId\"
+                   AND ts.\"CardCode\" = r1.\"ShortName\"
+            ),
+            recon_info AS (
+                SELECT
+                    rd.\"TransId\",
+                    rd.\"ShortName\",
+                    COUNT(*) AS \"ReconCount\",
+                    STRING_AGG(CAST(rd.\"ReconNum\" AS NVARCHAR(20)), ', ') AS \"ReconNums\"
+                FROM recon_distinct rd
+                GROUP BY rd.\"TransId\", rd.\"ShortName\"
+            ),
+            movs_final AS (
+                SELECT
+                    m.*,
+                    CASE
+                        WHEN jb.\"TransId\" IS NULL THEN 'NO_APLICA'
+                        WHEN ABS(IFNULL(jb.\"OpenAmt\", 0)) <= 0.005
+                             AND (IFNULL(ri.\"ReconCount\", 0) > 0 OR ABS(IFNULL(jb.\"OrigAmt\", 0)) <= 0.005)
+                            THEN 'CONCILIADO'
+                        WHEN IFNULL(ri.\"ReconCount\", 0) > 0
+                             AND ABS(IFNULL(jb.\"OpenAmt\", 0)) > 0.005
+                            THEN 'PARCIAL'
+                        ELSE 'NO_CONCILIADO'
+                    END AS \"ESTATUS_CONCILIACION\",
+                    IFNULL(ri.\"ReconNums\", '') AS \"RECON_NUMS\",
+                    IFNULL(jb.\"OpenAmt\", 0) AS \"SALDO_PENDIENTE\"
+                FROM movs_base m
+                LEFT JOIN jdt_bp jb
+                    ON jb.\"TransId\" = m.\"TransId\"
+                   AND jb.\"ShortName\" = m.\"CardCode\"
+                LEFT JOIN recon_info ri
+                    ON ri.\"TransId\" = m.\"TransId\"
+                   AND ri.\"ShortName\" = m.\"CardCode\"
+            )
+            SELECT *
+            FROM movs_final
+            WHERE 1 = 1
+            {$whereConciliacion}
+            ORDER BY \"MAE_FECHA\" ASC, \"ObjType\" ASC, \"DocEntry\" ASC, \"LineNum\" ASC
             LIMIT {$sqlLimit}
         ";
 
@@ -1000,29 +1102,32 @@ EOF;
                 $totalImporte  += $importe;
 
                 $rows[] = [
-                    'ObjType'     => $objType,
-                    'DocEntry'    => $docEntry,
-                    'TransId'     => $transId,
-                    'CodigoCorto' => $def['short'],
-                    'BadgeColor'  => $def['badge'],
-                    'TMA_NOMBRE'  => trim($this->toUtf8($r['TMA_NOMBRE'] ?? '')),
-                    'ALM_CLAVE'   => trim($this->toUtf8($r['ALM_CLAVE'] ?? '')),
-                    'ALM_NOMBRE'  => trim($this->toUtf8($r['ALM_NOMBRE'] ?? '')),
-                    'MAE_FOLIO'   => trim($this->toUtf8($r['MAE_FOLIO'] ?? '')),
-                    'MAE_ESTATUS' => $estatusTxt,
-                    'Cancelado'   => ($cancRaw === 'Y' || $cancRaw === 'C') ? 'S' : 'N',
-                    'MAE_FECHA'   => trim($this->toUtf8($r['MAE_FECHA'] ?? '')),
-                    'ART_CLAVE'   => trim($this->toUtf8($r['ART_CLAVE'] ?? '')),
-                    'ART_NOMBRE'  => trim($this->toUtf8($r['ART_NOMBRE'] ?? '')),
-                    'UNIDAD'      => trim($this->toUtf8($r['UNIDAD'] ?? '')),
-                    'MAD_CANT'    => $cant,
-                    'MAD_COSTO'   => $costo,
-                    'MAD_PRECIO'  => $precio,
-                    'IMPORTE'     => $importe,
-                    'BPLName'     => trim($this->toUtf8($r['BPLName'] ?? '')),
-                    'CardCode'    => trim($this->toUtf8($r['CardCode'] ?? '')),
-                    'CardName'    => trim($this->toUtf8($r['CardName'] ?? '')),
-                    'Referencia'  => trim($this->toUtf8($r['Referencia'] ?? '')),
+                    'ObjType'              => $objType,
+                    'DocEntry'             => $docEntry,
+                    'TransId'              => $transId,
+                    'CodigoCorto'          => $def['short'],
+                    'BadgeColor'           => $def['badge'],
+                    'TMA_NOMBRE'           => trim($this->toUtf8($r['TMA_NOMBRE'] ?? '')),
+                    'ALM_CLAVE'            => trim($this->toUtf8($r['ALM_CLAVE'] ?? '')),
+                    'ALM_NOMBRE'           => trim($this->toUtf8($r['ALM_NOMBRE'] ?? '')),
+                    'MAE_FOLIO'            => trim($this->toUtf8($r['MAE_FOLIO'] ?? '')),
+                    'MAE_ESTATUS'          => $estatusTxt,
+                    'ESTATUS_CONCILIACION' => trim($this->toUtf8($r['ESTATUS_CONCILIACION'] ?? 'NO_APLICA')),
+                    'RECON_NUMS'           => trim($this->toUtf8($r['RECON_NUMS'] ?? '')),
+                    'SALDO_PENDIENTE'      => round((float) ($r['SALDO_PENDIENTE'] ?? 0), 2),
+                    'Cancelado'            => ($cancRaw === 'Y' || $cancRaw === 'C') ? 'S' : 'N',
+                    'MAE_FECHA'            => trim($this->toUtf8($r['MAE_FECHA'] ?? '')),
+                    'ART_CLAVE'            => trim($this->toUtf8($r['ART_CLAVE'] ?? '')),
+                    'ART_NOMBRE'           => trim($this->toUtf8($r['ART_NOMBRE'] ?? '')),
+                    'UNIDAD'               => trim($this->toUtf8($r['UNIDAD'] ?? '')),
+                    'MAD_CANT'             => $cant,
+                    'MAD_COSTO'            => $costo,
+                    'MAD_PRECIO'           => $precio,
+                    'IMPORTE'              => $importe,
+                    'BPLName'              => trim($this->toUtf8($r['BPLName'] ?? '')),
+                    'CardCode'             => trim($this->toUtf8($r['CardCode'] ?? '')),
+                    'CardName'             => trim($this->toUtf8($r['CardName'] ?? '')),
+                    'Referencia'           => trim($this->toUtf8($r['Referencia'] ?? '')),
                 ];
             }
             odbc_free_result($rs);
@@ -1117,16 +1222,16 @@ EOF;
             $vatSum   = round((float) ($header['VatSum'] ?? 0), 2);
 
             return [
-                'mode'         => 'MARKETING',
-                'supportsLog'  => true,
-                'objType'      => $objType,
-                'tipo'         => $meta['name'],
-                'badge'        => $meta['badge'],
-                'docEntry'     => (int) $header['DocEntry'],
-                'docNum'       => trim($this->toUtf8($header['DocNum'] ?? '')),
-                'transId'      => 0,
-                'cardCode'     => '',
-                'header'       => [
+                'mode'        => 'MARKETING',
+                'supportsLog' => true,
+                'objType'     => $objType,
+                'tipo'        => $meta['name'],
+                'badge'       => $meta['badge'],
+                'docEntry'    => (int) $header['DocEntry'],
+                'docNum'      => trim($this->toUtf8($header['DocNum'] ?? '')),
+                'transId'     => 0,
+                'cardCode'    => '',
+                'header'      => [
                     'Fecha'           => trim($this->toUtf8($header['DocDate'] ?? '')),
                     'Fecha Requerida' => trim($this->toUtf8($header['ReqDate'] ?? '')),
                     'Solicitante'     => trim($this->toUtf8($header['Requester'] ?? '')) . ' - ' . trim($this->toUtf8($header['ReqName'] ?? '')),
@@ -1214,13 +1319,13 @@ EOF;
                 'transId'     => 0,
                 'cardCode'    => '',
                 'header'      => [
-                    'Fecha'        => trim($this->toUtf8($header['PostDate'] ?? '')),
-                    'Vencimiento'  => trim($this->toUtf8($header['DueDate'] ?? '')),
-                    'Producto'     => trim($this->toUtf8($header['ItemCode'] ?? '')) . ' - ' . trim($this->toUtf8($header['ProdName'] ?? '')),
-                    'Planificado'  => $this->fmt($header['PlannedQty'], 3) . ' / Completado: ' . $this->fmt($header['CmpltQty'], 3),
-                    'Almacén'      => trim($this->toUtf8($header['Warehouse'] ?? '')),
-                    'Estatus'      => $stMap[$header['Status'] ?? 'P'] ?? ($header['Status'] ?? ''),
-                    'Comentarios'  => trim($this->toUtf8($header['Comments'] ?? '')),
+                    'Fecha'       => trim($this->toUtf8($header['PostDate'] ?? '')),
+                    'Vencimiento' => trim($this->toUtf8($header['DueDate'] ?? '')),
+                    'Producto'    => trim($this->toUtf8($header['ItemCode'] ?? '')) . ' - ' . trim($this->toUtf8($header['ProdName'] ?? '')),
+                    'Planificado' => $this->fmt($header['PlannedQty'], 3) . ' / Completado: ' . $this->fmt($header['CmpltQty'], 3),
+                    'Almacén'     => trim($this->toUtf8($header['Warehouse'] ?? '')),
+                    'Estatus'     => $stMap[$header['Status'] ?? 'P'] ?? ($header['Status'] ?? ''),
+                    'Comentarios' => trim($this->toUtf8($header['Comments'] ?? '')),
                 ],
                 'totals' => [
                     'CostoTotal' => 0.0,
@@ -1396,7 +1501,6 @@ EOF;
         if ($objType === '46' || $objType === '24') {
             $isOut = ($objType === '46');
             $pH    = $isOut ? 'OVPM' : 'ORCT';
-            $pL    = $isOut ? 'VPM2' : 'RCT2';
             $meta  = $this->getObjTypeMeta($objType);
 
             $rsP = odbc_exec($conn, "
@@ -2231,8 +2335,8 @@ EOF;
         $rsAdoc            = @odbc_exec($conn, $sqlAdoc);
         if ($rsAdoc) {
             while ($r = odbc_fetch_array($rsAdoc)) {
-                $inst                      = (int) ($r['LogInstanc'] ?? 0);
-                $historicalHeaders[$inst]  = $this->normalizeLogHeaderRow($r, $inst, false);
+                $inst                     = (int) ($r['LogInstanc'] ?? 0);
+                $historicalHeaders[$inst] = $this->normalizeLogHeaderRow($r, $inst, false);
             }
             odbc_free_result($rsAdoc);
         }
@@ -2260,8 +2364,8 @@ EOF;
             $rsAdo1 = @odbc_exec($conn, $sqlAdo1);
             if ($rsAdo1) {
                 while ($r = odbc_fetch_array($rsAdo1)) {
-                    $inst = (int) ($r['LogInstanc'] ?? 0);
-                    $ln   = (int) ($r['LineNum'] ?? 0);
+                    $inst                        = (int) ($r['LogInstanc'] ?? 0);
+                    $ln                          = (int) ($r['LineNum'] ?? 0);
                     $historicalLines[$inst][$ln] = $this->normalizeLogLineRow($r);
                 }
                 odbc_free_result($rsAdo1);
@@ -2345,10 +2449,10 @@ EOF;
             $timeline[]   = $hdr;
         }
 
-        $currentInst        = count($timeline) + 1;
-        $liveHdr            = $this->normalizeLogHeaderRow($liveRow, $currentInst, true);
-        $liveHdr['lines']   = $liveLines;
-        $timeline[]         = $liveHdr;
+        $currentInst      = count($timeline) + 1;
+        $liveHdr          = $this->normalizeLogHeaderRow($liveRow, $currentInst, true);
+        $liveHdr['lines'] = $liveLines;
+        $timeline[]       = $liveHdr;
 
         $headerLabels = [
             'estatus'    => 'Estatus',

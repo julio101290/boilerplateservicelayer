@@ -370,23 +370,43 @@
                 </div>
             </div>
 
-            <!-- FILA 3: Multiselects (Proveedores, Artículos) + Botón Consultar -->
+            <!-- FILA 3: Multiselects (Proveedores, Artículos), Checks Conciliación y Botón Consultar -->
             <div class="form-row align-items-end pt-1">
-                <div class="form-group col-lg-5 col-md-6 col-12 mb-1">
+                <div class="form-group col-lg-3 col-md-6 col-12 mb-1">
                     <label class="mb-1 small font-weight-bold" style="color: var(--corp-red);">
                         <i class="fas fa-industry mr-1"></i> Proveedor(es) <span class="text-muted font-weight-normal">(vacío = Todos)</span>
                     </label>
                     <select class="form-control form-control-sm" id="filtroProveedor" multiple="multiple" style="width:100%;"></select>
                 </div>
 
-                <div class="form-group col-lg-5 col-md-6 col-12 mb-1">
+                <div class="form-group col-lg-3 col-md-6 col-12 mb-1">
                     <label class="mb-1 small font-weight-bold" style="color: var(--corp-red);">
                         <i class="fas fa-barcode mr-1"></i> Artículo(s) <span class="text-muted font-weight-normal">(vacío = Todos)</span>
                     </label>
                     <select class="form-control form-control-sm" id="filtroArticulo" multiple="multiple" style="width:100%;"></select>
                 </div>
 
-                <div class="form-group col-lg-2 col-md-12 col-12 mb-1">
+                <div class="form-group col-lg-4 col-md-8 col-12 mb-1">
+                    <label class="mb-1 small font-weight-bold d-block" style="color: var(--corp-red);">
+                        <i class="fas fa-check-double mr-1"></i> Conciliación <span class="text-muted font-weight-normal">(Docs. conciliables)</span>
+                    </label>
+                    <div class="d-flex flex-wrap align-items-center bg-white border rounded px-2" style="min-height: 31px; gap: 14px;">
+                        <div class="custom-control custom-checkbox mb-0">
+                            <input type="checkbox" class="custom-control-input chk-conciliacion" id="chkSoloConciliados" value="CONCILIADOS">
+                            <label class="custom-control-label small font-weight-bold text-success" for="chkSoloConciliados" style="cursor:pointer;">
+                                Solo Conciliados
+                            </label>
+                        </div>
+                        <div class="custom-control custom-checkbox mb-0">
+                            <input type="checkbox" class="custom-control-input chk-conciliacion" id="chkSoloNoConciliados" value="NO_CONCILIADOS">
+                            <label class="custom-control-label small font-weight-bold text-danger" for="chkSoloNoConciliados" style="cursor:pointer;">
+                                Solo No Conciliados
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group col-lg-2 col-md-4 col-12 mb-1">
                     <button type="button" class="btn btn-corp-red btn-sm btn-block font-weight-bold" id="btnConsultar">
                         <i class="fas fa-search mr-1"></i> Consultar
                     </button>
@@ -410,10 +430,12 @@
                     <tr>
                         <th>Acciones</th>
                         <th>Documento</th>
+                        <th>Sucursal</th>
                         <th>Alm. Clave</th>
                         <th>Nombre Almacén</th>
                         <th>Folio</th>
                         <th>Estatus</th>
+                        <th>Conciliación</th>
                         <th>Fecha</th>
                         <th>Proveedor / Socio</th>
                         <th>Clave Art.</th>
@@ -422,7 +444,6 @@
                         <th>Costo</th>
                         <th>Precio</th>
                         <th>Importe</th>
-                        <th>Sucursal</th>
                         <th>Referencia</th>
                     </tr>
                 </thead>
@@ -623,6 +644,13 @@
         inicializarControlesMapaRelaciones();
         cargarSucursales();
         cargarAlmacenes();
+
+        // Checkboxes mutuamente excluyentes de conciliación
+        $('.chk-conciliacion').on('change', function () {
+            if ($(this).is(':checked')) {
+                $('.chk-conciliacion').not(this).prop('checked', false);
+            }
+        });
 
         // Botones rápidos de grupos de documentos
         $('.btn-preset-docs').on('click', function () {
@@ -903,7 +931,7 @@
             scrollX: true,
             autoWidth: false,
             ordering: true,
-            order: [[6, 'asc'], [4, 'asc']],
+            order: [[8, 'asc'], [5, 'asc']],
             pageLength: 25,
             lengthMenu: [[25, 50, 100, 250, -1], [25, 50, 100, 250, "Todos"]],
             data: [],
@@ -939,6 +967,12 @@
                         return `<span class="badge badge-${row.BadgeColor} mr-1">${escHtml(row.CodigoCorto)}</span> ${escHtml(d)}`;
                     }
                 },
+                {
+                    data: 'BPLName',
+                    render: function (d) {
+                        return `<span class="font-weight-bold text-dark"><i class="fas fa-store text-muted mr-1"></i>${escHtml(d || 'Sin Sucursal')}</span>`;
+                    }
+                },
                 { data: 'ALM_CLAVE', className: 'text-center font-weight-bold' },
                 { data: 'ALM_NOMBRE' },
                 { data: 'MAE_FOLIO', className: 'text-center font-weight-bold' },
@@ -948,6 +982,25 @@
                     render: function (d) {
                         var map = { 'ABIERTO': 'warning', 'CERRADO': 'success', 'CANCELADO': 'dark' };
                         return `<span class="badge badge-${map[d] || 'secondary'}">${escHtml(d)}</span>`;
+                    }
+                },
+                {
+                    data: 'ESTATUS_CONCILIACION',
+                    className: 'text-center',
+                    render: function (d, type, row) {
+                        if (d === 'CONCILIADO') {
+                            var tip = row.RECON_NUMS ? `Reconciliación #${row.RECON_NUMS}` : 'Totalmente conciliado';
+                            return `<span class="badge badge-success" title="${escHtml(tip)}"><i class="fas fa-check mr-1"></i>CONCILIADO</span>`;
+                        }
+                        if (d === 'PARCIAL') {
+                            var tipP = `Saldo pend.: ${fmtMoney(row.SALDO_PENDIENTE)}` + (row.RECON_NUMS ? ` | Reconc. #${row.RECON_NUMS}` : '');
+                            return `<span class="badge badge-warning" title="${escHtml(tipP)}"><i class="fas fa-adjust mr-1"></i>PARCIAL</span>`;
+                        }
+                        if (d === 'NO_CONCILIADO') {
+                            var tipN = `Saldo sin conciliar: ${fmtMoney(row.SALDO_PENDIENTE)}`;
+                            return `<span class="badge badge-danger" title="${escHtml(tipN)}"><i class="fas fa-times mr-1"></i>NO CONCILIADO</span>`;
+                        }
+                        return `<span class="text-muted small" title="Documento no conciliable en cuenta de socio">N/A</span>`;
                     }
                 },
                 { data: 'MAE_FECHA', className: 'text-center' },
@@ -994,25 +1047,32 @@
                         return fmtNum(d, 2);
                     }
                 },
-                { data: 'BPLName' },
                 { data: 'Referencia' }
             ]
         });
     }
 
     function obtenerFiltros() {
+        var conciliacion = 'TODOS';
+        if ($('#chkSoloConciliados').is(':checked')) {
+            conciliacion = 'CONCILIADOS';
+        } else if ($('#chkSoloNoConciliados').is(':checked')) {
+            conciliacion = 'NO_CONCILIADOS';
+        }
+
         return {
-            idEmpresa:   $('#idEmpresa').val(),
-            bplId:       $('#filtroSucursal').val() || 'TODOS',
-            fechaIni:    $('#fechaIni').val(),
-            fechaFin:    $('#fechaFin').val(),
-            tipoDocs:    $('#filtroTipoDoc').val() || [],
-            almacenes:   $('#filtroAlmacen').val() || [],
-            articulos:   $('#filtroArticulo').val() || [],
-            proveedores: $('#filtroProveedor').val() || [],
-            estatus:     $('#filtroEstatus').val() || 'TODOS',
-            folio:       $('#filtroFolio').val() || '',
-            cancelados:  $('#filtroCancelados').val() || 'N'
+            idEmpresa:    $('#idEmpresa').val(),
+            bplId:        $('#filtroSucursal').val() || 'TODOS',
+            fechaIni:     $('#fechaIni').val(),
+            fechaFin:     $('#fechaFin').val(),
+            tipoDocs:     $('#filtroTipoDoc').val() || [],
+            almacenes:    $('#filtroAlmacen').val() || [],
+            articulos:    $('#filtroArticulo').val() || [],
+            proveedores:  $('#filtroProveedor').val() || [],
+            estatus:      $('#filtroEstatus').val() || 'TODOS',
+            folio:        $('#filtroFolio').val() || '',
+            cancelados:   $('#filtroCancelados').val() || 'N',
+            conciliacion: conciliacion
         };
     }
 
