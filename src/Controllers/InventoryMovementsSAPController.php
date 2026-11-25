@@ -68,6 +68,7 @@ class InventoryMovementsSAPController extends BaseController
      */
     private function getDocumentDefinitions(): array
     {
+        /*
         return [
             '59' => ['H' => 'OIGN', 'L' => 'IGN1', 'name' => 'Entrada de Mercancía (Inv.)', 'short' => 'ENT-INV', 'badge' => 'success',   'group' => 'INVENTARIO', 'hasNumAtCard' => false, 'isTransfer' => false],
             '60' => ['H' => 'OIGE', 'L' => 'IGE1', 'name' => 'Salida de Mercancía (Inv.)',  'short' => 'SAL-INV', 'badge' => 'danger',    'group' => 'INVENTARIO', 'hasNumAtCard' => false, 'isTransfer' => false],
@@ -81,6 +82,20 @@ class InventoryMovementsSAPController extends BaseController
             '16' => ['H' => 'ORDN', 'L' => 'RDN1', 'name' => 'Devolución (Ventas)',         'short' => 'DEV-VTA', 'badge' => 'info',      'group' => 'VENTAS',     'hasNumAtCard' => true,  'isTransfer' => false],
             '13' => ['H' => 'OINV', 'L' => 'INV1', 'name' => 'Factura de Cliente',          'short' => 'FAC-CLI', 'badge' => 'danger',    'group' => 'VENTAS',     'hasNumAtCard' => true,  'isTransfer' => false],
             '14' => ['H' => 'ORIN', 'L' => 'RIN1', 'name' => 'Nota Crédito Cliente',        'short' => 'NC-CLI',  'badge' => 'purple',    'group' => 'VENTAS',     'hasNumAtCard' => true,  'isTransfer' => false],
+        ];
+         * */
+       
+        
+               return [
+            '59' => ['H' => 'OIGN', 'L' => 'IGN1', 'name' => 'Entrada de Mercancía (Inv.)', 'short' => 'ENT-INV', 'badge' => 'success',   'group' => 'INVENTARIO', 'hasNumAtCard' => false, 'isTransfer' => false],
+            '60' => ['H' => 'OIGE', 'L' => 'IGE1', 'name' => 'Salida de Mercancía (Inv.)',  'short' => 'SAL-INV', 'badge' => 'danger',    'group' => 'INVENTARIO', 'hasNumAtCard' => false, 'isTransfer' => false],
+            '67' => ['H' => 'OWTR', 'L' => 'WTR1', 'name' => 'Transferencia de Stock',      'short' => 'TRANSF',  'badge' => 'info',      'group' => 'INVENTARIO', 'hasNumAtCard' => false, 'isTransfer' => true],
+            '22' => ['H' => 'OPOR', 'L' => 'POR1', 'name' => 'Orden de Compra',             'short' => 'OC',      'badge' => 'primary',   'group' => 'COMPRAS',    'hasNumAtCard' => true,  'isTransfer' => false],
+            '20' => ['H' => 'OPDN', 'L' => 'PDN1', 'name' => 'Entrada Mercancía OP',        'short' => 'EM-COM',  'badge' => 'success',   'group' => 'COMPRAS',    'hasNumAtCard' => true,  'isTransfer' => false],
+            '21' => ['H' => 'ORPD', 'L' => 'RPD1', 'name' => 'Devolución de Mercancía',     'short' => 'DEV-COM', 'badge' => 'dark',      'group' => 'COMPRAS',    'hasNumAtCard' => true,  'isTransfer' => false],
+            '18' => ['H' => 'OPCH', 'L' => 'PCH1', 'name' => 'Factura de Proveedor',        'short' => 'FAC-PRV', 'badge' => 'warning',   'group' => 'COMPRAS',    'hasNumAtCard' => true,  'isTransfer' => false],
+            '19' => ['H' => 'ORPC', 'L' => 'RPC1', 'name' => 'Nota Crédito Proveedor',      'short' => 'NC-PRV',  'badge' => 'purple',    'group' => 'COMPRAS',    'hasNumAtCard' => true,  'isTransfer' => false],
+           
         ];
     }
 
