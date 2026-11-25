@@ -987,9 +987,9 @@ $routes->group('admin', function ($routes) {
                 $routes->get('report', 'SupplierStatementSAPController::report');
             });
 
-    $routes->group('inventoryMovementsSAP', [
+$routes->group('inventoryMovementsSAP', [
         'namespace' => 'julio101290\boilerplateservicelayer\Controllers',
-        'filter' => 'permission:inventoryMovementsSAP-permission',
+        'filter'    => 'permission:inventoryMovementsSAP-permission',
             ], function ($routes) {
                 $routes->get('/', 'InventoryMovementsSAPController::index');
                 $routes->post('getBranchesAjax', 'InventoryMovementsSAPController::getBranchesAjax');
@@ -998,6 +998,8 @@ $routes->group('admin', function ($routes) {
                 $routes->get('searchSuppliersAjax', 'InventoryMovementsSAPController::searchSuppliersAjax');
                 $routes->post('getMovementsAjax', 'InventoryMovementsSAPController::getMovementsAjax');
                 $routes->post('getDocumentDetailAjax', 'InventoryMovementsSAPController::getDocumentDetailAjax');
+                $routes->post('getRelationshipMapAjax', 'InventoryMovementsSAPController::getRelationshipMapAjax');
+                $routes->post('getChangeLogAjax', 'InventoryMovementsSAPController::getChangeLogAjax');
                 $routes->get('report', 'InventoryMovementsSAPController::report');
                 $routes->get('exportCsv', 'InventoryMovementsSAPController::exportCsv');
             });
