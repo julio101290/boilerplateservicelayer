@@ -167,7 +167,7 @@
         line-height: 1.38;
     }
 
-    /* Log de Modificaciones (Timeline de versiones ADOC/ADO1) */
+    /* Log de Modificaciones (Timeline ADOC/ADO1 y Pagos AJDT) */
     .changelog-card {
         border-left: 4px solid #6c757d;
         border-radius: 5px;
@@ -202,7 +202,7 @@
         <div class="info-box shadow-sm">
             <span class="info-box-icon bg-corp-red"><i class="fas fa-boxes"></i></span>
             <div class="info-box-content">
-                <span class="info-box-text font-weight-bold">Partidas Encontradas</span>
+                <span class="info-box-text font-weight-bold">Partidas / Registros</span>
                 <span class="info-box-number h5 mb-0" id="kpiPartidas">0</span>
                 <small class="text-muted">Documentos únicos: <span id="kpiDocumentos">0</span></small>
             </div>
@@ -232,9 +232,9 @@
         <div class="info-box shadow-sm">
             <span class="info-box-icon bg-success"><i class="fas fa-dollar-sign"></i></span>
             <div class="info-box-content">
-                <span class="info-box-text font-weight-bold text-success">Importe Total (Precio)</span>
+                <span class="info-box-text font-weight-bold text-success">Importe Total</span>
                 <span class="info-box-number h5 mb-0 text-success" id="kpiImporte">$ 0.00</span>
-                <small class="text-muted">Subtotal de líneas consultadas</small>
+                <small class="text-muted">Subtotal líneas y pagos consultados</small>
             </div>
         </div>
     </div>
@@ -326,7 +326,7 @@
             <!-- FILA 2: Multiselects (Documentos y Almacenes) -->
             <div class="form-row align-items-end border-top pt-2 mt-1">
                 <div class="form-group col-lg-6 col-md-12 mb-2">
-                    <div class="d-flex justify-content-between align-items-center mb-1">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center mb-1" style="gap: 4px;">
                         <label class="mb-0 small font-weight-bold" style="color: var(--corp-red);">
                             <i class="fas fa-file-alt mr-1"></i> Tipo(s) de Documento <span class="text-muted font-weight-normal">(vacío = Todos)</span>
                         </label>
@@ -334,6 +334,7 @@
                             <button type="button" class="btn btn-outline-secondary quick-doc-btn btn-preset-docs" data-group="INVENTARIO">Inventario</button>
                             <button type="button" class="btn btn-outline-primary quick-doc-btn btn-preset-docs" data-group="COMPRAS">Compras</button>
                             <button type="button" class="btn btn-outline-info quick-doc-btn btn-preset-docs" data-group="VENTAS">Ventas</button>
+                            <button type="button" class="btn btn-outline-success quick-doc-btn btn-preset-docs" data-group="PAGOS">Pagos</button>
                             <button type="button" class="btn btn-outline-danger quick-doc-btn" id="btnLimpiarDocs">Limpiar</button>
                         </div>
                     </div>
@@ -359,12 +360,19 @@
                                 <?php endif; ?>
                             <?php endforeach; ?>
                         </optgroup>
+                        <optgroup label="Pagos / Tesorería">
+                            <?php foreach ($docTypes as $objKey => $docMeta) : ?>
+                                <?php if ($docMeta['group'] === 'PAGOS') : ?>
+                                    <option value="<?= esc($objKey) ?>" data-group="PAGOS"><?= esc($docMeta['short']) ?> - <?= esc($docMeta['name']) ?></option>
+                                <?php endif; ?>
+                            <?php endforeach; ?>
+                        </optgroup>
                     </select>
                 </div>
 
                 <div class="form-group col-lg-6 col-md-12 mb-2">
                     <label class="mb-1 small font-weight-bold" style="color: var(--corp-red);">
-                        <i class="fas fa-warehouse mr-1"></i> Almacén(es) <span class="text-muted font-weight-normal">(vacío = Todos)</span>
+                        <i class="fas fa-warehouse mr-1"></i> Almacén(es) <span class="text-muted font-weight-normal">(vacío = Todos; si filtras, omite pagos)</span>
                     </label>
                     <select class="form-control form-control-sm" id="filtroAlmacen" multiple="multiple" style="width:100%;"></select>
                 </div>
@@ -388,7 +396,7 @@
 
                 <div class="form-group col-lg-4 col-md-8 col-12 mb-1">
                     <label class="mb-1 small font-weight-bold d-block" style="color: var(--corp-red);">
-                        <i class="fas fa-check-double mr-1"></i> Conciliación <span class="text-muted font-weight-normal">(Docs. conciliables)</span>
+                        <i class="fas fa-check-double mr-1"></i> Conciliación <span class="text-muted font-weight-normal">(Facturas, NC y Pagos)</span>
                     </label>
                     <div class="d-flex flex-wrap align-items-center bg-white border rounded px-2" style="min-height: 31px; gap: 14px;">
                         <div class="custom-control custom-checkbox mb-0">
@@ -439,7 +447,7 @@
                         <th>Fecha</th>
                         <th>Proveedor / Socio</th>
                         <th>Clave Art.</th>
-                        <th>Artículo</th>
+                        <th>Artículo / Concepto</th>
                         <th>Cantidad</th>
                         <th>Costo</th>
                         <th>Precio</th>
@@ -560,7 +568,7 @@
     </div>
 </div>
 
-<!-- MODAL: LOG DE MODIFICACIONES (ADOC / ADO1) -->
+<!-- MODAL: LOG DE MODIFICACIONES (ADOC / ADO1 / AJDT) -->
 <div class="modal fade" id="modalChangeLog" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog modal-xl" role="document">
         <div class="modal-content">
@@ -575,7 +583,7 @@
             <div class="modal-body p-3" style="max-height: 78vh; overflow-y: auto;">
                 <div id="changeLogLoading" class="text-center py-5 d-none">
                     <i class="fas fa-spinner fa-spin fa-2x text-info"></i>
-                    <p class="mt-2 mb-0 text-muted">Consultando historial de versiones (ADOC / ADO1) en SAP HANA...</p>
+                    <p class="mt-2 mb-0 text-muted">Consultando historial de versiones en SAP HANA...</p>
                 </div>
                 <div id="changeLogBodyContent"></div>
             </div>
@@ -602,7 +610,6 @@
     var currentDetailRef = null;
     var currentLogRef    = null;
 
-    // Estado del motor interactivo del Mapa de Relaciones
     var relMapState = {
         rawNodes: [],
         rawEdges: [],
@@ -620,7 +627,8 @@
     var LOG_SUPPORTED_TYPES = [
         '1250000001', '59', '60', '67',
         '1470000113', '540000006', '22', '20', '21', '18', '19', '204',
-        '23', '17', '15', '16', '13', '14', '203'
+        '23', '17', '15', '16', '13', '14', '203',
+        '46', '24'
     ];
 
     $(document).ready(function () {
@@ -795,7 +803,6 @@
             }, 220);
         });
 
-        // Mantener scroll de Bootstrap cuando hay modales apilados
         $('#modalDocDetail, #modalChangeLog').on('hidden.bs.modal', function () {
             if ($('#modalRelMap').hasClass('show')) {
                 $('body').addClass('modal-open');
@@ -945,7 +952,11 @@
                     data: null,
                     orderable: false,
                     className: 'text-center',
-                    render: function () {
+                    render: function (d, type, row) {
+                        var hasLog = LOG_SUPPORTED_TYPES.indexOf(String(row.ObjType)) !== -1;
+                        var logBtn = hasLog
+                            ? `<button type="button" class="btn btn-outline-info btn-xs btn-ver-log" title="Log de Modificaciones"><i class="fas fa-history"></i></button>`
+                            : `<button type="button" class="btn btn-outline-secondary btn-xs" disabled title="Sin log disponible"><i class="fas fa-history"></i></button>`;
                         return `
                             <div class="btn-group btn-group-xs">
                                 <button type="button" class="btn btn-outline-danger btn-xs btn-ver-mapa" title="Mapa de Relaciones">
@@ -954,9 +965,7 @@
                                 <button type="button" class="btn btn-outline-dark btn-xs btn-ver-detalle" title="Ver Detalle del Documento">
                                     <i class="fas fa-eye"></i>
                                 </button>
-                                <button type="button" class="btn btn-outline-info btn-xs btn-ver-log" title="Log de Modificaciones (ADOC)">
-                                    <i class="fas fa-history"></i>
-                                </button>
+                                ${logBtn}
                             </div>
                         `;
                     }
@@ -1020,22 +1029,31 @@
                     className: 'text-right font-weight-bold',
                     render: function (d, type, row) {
                         if (type === 'sort' || type === 'type') return parseFloat(d || 0);
+                        if (row.ObjType === '46' || row.ObjType === '24') {
+                            return `<span class="text-muted">-</span>`;
+                        }
                         return `${fmtNum(d, 3)} <small class="text-muted">${escHtml(row.UNIDAD)}</small>`;
                     }
                 },
                 {
                     data: 'MAD_COSTO',
                     className: 'text-right text-info',
-                    render: function (d, type) {
+                    render: function (d, type, row) {
                         if (type === 'sort' || type === 'type') return parseFloat(d || 0);
+                        if (row.ObjType === '46' || row.ObjType === '24') {
+                            return `<span class="text-muted">-</span>`;
+                        }
                         return fmtNum(d, 4);
                     }
                 },
                 {
                     data: 'MAD_PRECIO',
                     className: 'text-right text-primary',
-                    render: function (d, type) {
+                    render: function (d, type, row) {
                         if (type === 'sort' || type === 'type') return parseFloat(d || 0);
+                        if (row.ObjType === '46' || row.ObjType === '24') {
+                            return `${fmtNum(d, 2)} <small class="text-muted">${escHtml(row.UNIDAD)}</small>`;
+                        }
                         return fmtNum(d, 5);
                     }
                 },
@@ -1126,7 +1144,6 @@
 
     /* =========================================================================
      * MOTOR INTERACTIVO DEL MAPA DE RELACIONES
-     * (Arrastrable + Paneo + Zoom + Pantalla Completa + Agrupar/Desagrupar)
      * ========================================================================= */
     function inicializarControlesMapaRelaciones() {
         $('#btnRelExpandAll').on('click', function () {
@@ -1160,7 +1177,6 @@
             setTimeout(dibujarConectoresSVG, 120);
         });
 
-        // Paneo arrastrando el fondo del canvas
         var panning = false, panStartX = 0, panStartY = 0, panScrollL = 0, panScrollT = 0;
         $('#relMapWrapper').on('mousedown', function (e) {
             if ($(e.target).closest('.rel-node-card, .rel-group-card').length) return;
@@ -1278,7 +1294,6 @@
             return;
         }
 
-        // 1. Agrupar nodos por (stage, objType, isReserve)
         var buckets = {};
         nodes.forEach(function (n) {
             var gk = `grp_${n.stage || 5}_${n.objType}_${n.isReserve ? 'R' : 'N'}`;
@@ -1344,7 +1359,6 @@
             }
         });
 
-        // 2. Remapear y fusionar aristas hacia nodos/grupos visibles
         var edgeAgg = {};
         edges.forEach(function (e) {
             var vFrom = nodeToVisualId[e.from];
@@ -1372,7 +1386,6 @@
         relMapState.visibleItems = visibleItems;
         relMapState.visibleEdges = visibleEdges;
 
-        // 3. Layout automático inteligente en subcolumnas
         var byStage = {};
         visibleItems.forEach(function (it) {
             var st = it.stage || 5;
@@ -1420,7 +1433,6 @@
         relMapState.canvasH = maxY;
         actualizarDimensionesCanvas();
 
-        // 4. Renderizar tarjetas en el DOM
         var $canvas = $('#relMapCanvas');
         $canvas.find('.rel-node-card, .rel-group-card').remove();
 
@@ -1869,7 +1881,7 @@
     }
 
     /* =========================================================================
-     * LOG DE MODIFICACIONES DEL DOCUMENTO (ADOC / ADO1 + DIFF DE VERSIONES)
+     * LOG DE MODIFICACIONES (ADOC/ADO1 Y PAGOS OVPM/ORCT/AJDT)
      * ========================================================================= */
     function abrirLogModificaciones(objType, docEntry, transId, cardCode, label) {
         currentLogRef = {
@@ -1943,7 +1955,7 @@
             html += `
                 <div class="alert alert-light border small py-2 mb-3">
                     <i class="fas fa-check-circle text-success mr-1"></i>
-                    Este documento no registra modificaciones posteriores en <b>ADOC</b> (solo existe la versión original de creación).
+                    Este documento no registra modificaciones posteriores en el historial de SAP (solo existe la versión original de creación).
                 </div>
             `;
         }
@@ -1955,6 +1967,9 @@
                 : '<span class="badge badge-warning mr-1">MODIFICACIÓN</span>';
             var curBadge = v.isCurrent ? '<span class="badge badge-danger mr-1">VERSIÓN ACTUAL</span>' : '';
             var snapId   = `logSnap_${v.version}_${idx}`;
+            var btnSnap  = v.linesCount > 0
+                ? `<button type="button" class="btn btn-xs btn-outline-secondary" data-toggle="collapse" data-target="#${snapId}"><i class="fas fa-list mr-1"></i> Partidas (${v.linesCount})</button>`
+                : '';
 
             html += `
                 <div class="card shadow-sm mb-2 changelog-card ${cardCls}">
@@ -1968,9 +1983,7 @@
                         </div>
                         <div class="mt-1 mt-md-0">
                             <span class="mr-2">Total: <b>${fmtMoney(v.docTotal)} ${escHtml(v.moneda)}</b></span>
-                            <button type="button" class="btn btn-xs btn-outline-secondary" data-toggle="collapse" data-target="#${snapId}">
-                                <i class="fas fa-list mr-1"></i> Partidas (${v.linesCount})
-                            </button>
+                            ${btnSnap}
                         </div>
                     </div>
                     <div class="card-body py-2 px-3 small">
@@ -2033,44 +2046,48 @@
                 }
             }
 
-            // Snapshot colapsable de partidas en esa versión
-            html += `
-                        <div class="collapse mt-2" id="${snapId}">
-                            <div class="table-responsive border rounded">
-                                <table class="table table-sm table-striped mb-0" style="font-size: 0.74rem;">
-                                    <thead class="bg-light text-center">
-                                        <tr>
-                                            <th>#</th>
-                                            <th>Artículo</th>
-                                            <th>Descripción</th>
-                                            <th>Almacén</th>
-                                            <th>Cantidad</th>
-                                            <th>Costo</th>
-                                            <th>Precio</th>
-                                            <th>Importe</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-            `;
-            (v.lines || []).forEach(function (ln) {
+            if (v.linesCount > 0) {
                 html += `
-                    <tr>
-                        <td class="text-center">${ln.lineNum + 1}</td>
-                        <td><b>${escHtml(ln.itemCode)}</b></td>
-                        <td>${escHtml(ln.dscription)}</td>
-                        <td class="text-center">${escHtml(ln.whsCode)}</td>
-                        <td class="text-right">${fmtNum(ln.quantity, 3)}</td>
-                        <td class="text-right text-info">${fmtNum(ln.stockPrice, 4)}</td>
-                        <td class="text-right text-primary">${fmtNum(ln.price, 5)}</td>
-                        <td class="text-right font-weight-bold">${fmtNum(ln.lineTotal, 2)}</td>
-                    </tr>
+                            <div class="collapse mt-2" id="${snapId}">
+                                <div class="table-responsive border rounded">
+                                    <table class="table table-sm table-striped mb-0" style="font-size: 0.74rem;">
+                                        <thead class="bg-light text-center">
+                                            <tr>
+                                                <th>#</th>
+                                                <th>Artículo</th>
+                                                <th>Descripción</th>
+                                                <th>Almacén</th>
+                                                <th>Cantidad</th>
+                                                <th>Costo</th>
+                                                <th>Precio</th>
+                                                <th>Importe</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
                 `;
-            });
-            html += `
-                                    </tbody>
-                                </table>
+                (v.lines || []).forEach(function (ln) {
+                    html += `
+                        <tr>
+                            <td class="text-center">${ln.lineNum + 1}</td>
+                            <td><b>${escHtml(ln.itemCode)}</b></td>
+                            <td>${escHtml(ln.dscription)}</td>
+                            <td class="text-center">${escHtml(ln.whsCode)}</td>
+                            <td class="text-right">${fmtNum(ln.quantity, 3)}</td>
+                            <td class="text-right text-info">${fmtNum(ln.stockPrice, 4)}</td>
+                            <td class="text-right text-primary">${fmtNum(ln.price, 5)}</td>
+                            <td class="text-right font-weight-bold">${fmtNum(ln.lineTotal, 2)}</td>
+                        </tr>
+                    `;
+                });
+                html += `
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
-                        </div>
+                `;
+            }
+
+            html += `
                     </div>
                 </div>
             `;
